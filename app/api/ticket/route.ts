@@ -40,18 +40,38 @@ async function generateTicketNumber() {
   return `${prefix}${number.toString().padStart(2, "0")}`;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await dbConnect();
-    const tickets = await Ticket.find({});
-    const response = NextResponse.json(tickets);
-    return setCorsHeaders(response);
+
+    const { searchParams } = new URL(req.url);
+    const queueId = searchParams.get("queueId");
+    const status = searchParams.get("status");
+
+    console.log(
+      "Received request with queueId:",
+      queueId,
+      "and status:",
+      status
+    );
+
+    let query: any = {};
+    if (queueId) query.queueId = queueId;
+    if (status) query.ticketStatus = status;
+
+    console.log("Executing query:", query);
+
+    const tickets = await Ticket.find(query).sort({ createdAt: 1 });
+
+    console.log("Found tickets:", tickets.length);
+
+    return NextResponse.json(tickets);
   } catch (error) {
-    const response = NextResponse.json(
+    console.error("Error fetching tickets:", error);
+    return NextResponse.json(
       { error: "Failed to fetch tickets" },
       { status: 500 }
     );
-    return setCorsHeaders(response);
   }
 }
 
@@ -60,9 +80,8 @@ export async function POST(req: NextRequest) {
     await dbConnect();
 
     const body = await req.json();
-    console.log("Received body:", body); // Debug received data
+    console.log("Received body:", body);
 
-    // Validate required fields
     if (!body.queueId || !body.issueDescription) {
       const response = NextResponse.json(
         {
@@ -76,8 +95,7 @@ export async function POST(req: NextRequest) {
 
     const ticketNo = await generateTicketNumber();
 
-    // Explicitly set ticketStatus during creation
-    const newTicket = await Ticket.create({
+    const newTicket = new Ticket({
       ticketNo,
       queueId: body.queueId,
       subItemId: body.subItemId,
@@ -85,13 +103,16 @@ export async function POST(req: NextRequest) {
       ticketStatus: "Not Served", // Explicitly set here
     });
 
-    console.log("Newly created ticket:", newTicket.toObject());
+    const savedTicket = await newTicket.save();
 
-    const savedTicket = await Ticket.findById(newTicket._id).lean();
-    console.log("Saved ticket from database:", savedTicket);
+    console.log("Newly created ticket:", savedTicket.toObject());
+
+    // Fetch the ticket again to ensure all fields are populated
+    const fetchedTicket = await Ticket.findById(savedTicket._id).lean();
+    console.log("Fetched ticket from database:", fetchedTicket);
 
     const response = NextResponse.json(
-      { success: true, data: savedTicket },
+      { success: true, data: fetchedTicket },
       { status: 201 }
     );
     return setCorsHeaders(response);
