@@ -10,6 +10,7 @@ import {
   ListTodo,
   Menu,
   Settings,
+  Building2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -36,6 +37,11 @@ const routes = [
     label: "Queues",
     icon: ListTodo,
     href: "/hospital/dashboard/queues",
+  },
+  {
+    label: "Upcoming-events",
+    icon: Building2,
+    href: "/hospital/dashboard/events",
   },
   {
     label: "Display Ads",

@@ -5,46 +5,46 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+// import {
+//   Select,
+//   SelectContent,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import Image from "next/image";
 
-const timezones = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Europe/Paris",
-  "Asia/Tokyo",
-  "Asia/Dubai",
-  "Australia/Sydney",
-];
+// const timezones = [
+//   "UTC",
+//   "America/New_York",
+//   "America/Chicago",
+//   "America/Denver",
+//   "America/Los_Angeles",
+//   "Europe/London",
+//   "Europe/Paris",
+//   "Asia/Tokyo",
+//   "Asia/Dubai",
+//   "Australia/Sydney",
+// ];
 
-const languages = [
-  { code: "en", name: "English" },
-  { code: "es", name: "Spanish" },
-  { code: "fr", name: "French" },
-  { code: "de", name: "German" },
-  { code: "ar", name: "Arabic" },
-  { code: "zh", name: "Chinese" },
-];
+// const languages = [
+//   { code: "en", name: "English" },
+//   { code: "es", name: "Spanish" },
+//   { code: "fr", name: "French" },
+//   { code: "de", name: "German" },
+//   { code: "ar", name: "Arabic" },
+//   { code: "zh", name: "Chinese" },
+// ];
 
 interface Settings {
   companyName: string;
   email: string;
   contact: string;
   address: string;
-  timezone: string;
-  defaultLanguage: string;
+  // timezone: string;
+  // defaultLanguage: string;
   notificationText?: string;
   logoImage?: string;
 }
@@ -133,7 +133,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>Localization</CardTitle>
           </CardHeader>
@@ -171,7 +171,7 @@ export default function SettingsPage() {
               </Select>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
 
         <Card>
           <CardHeader>
@@ -199,8 +199,8 @@ export default function SettingsPage() {
                   <Image
                     src={settings.logoImage}
                     alt="Company Logo"
-                    width={100}
-                    height={100}
+                    width={150}
+                    height={150}
                     className="rounded-md"
                   />
                 </div>
@@ -209,7 +209,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Button type="submit" size="lg">
+        <Button type="submit" size="lg" className="bg-[#0e4480]">
           Save Changes
         </Button>
       </form>

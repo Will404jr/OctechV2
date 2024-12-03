@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+//ad schema
 const adSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -10,16 +11,31 @@ const adSchema = new mongoose.Schema(
 
 export const Ad = mongoose.models.Ad || mongoose.model("Ad", adSchema);
 
+// event schema
+const eventSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    date: { type: Date, required: true },
+  },
+  { timestamps: true }
+);
+
+export const Event =
+  mongoose.models.Event || mongoose.model("Event", eventSchema);
+
 //queue schema
-const queueItemSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  subItems: [{ type: String }],
+const subMenuItemSchema = new mongoose.Schema({
+  name: { type: String, required: true }, // Sub-menu item name
+});
+
+const menuItemSchema = new mongoose.Schema({
+  name: { type: String, required: true }, // Menu item name
+  subMenuItems: [subMenuItemSchema], // Array of sub-menu items
 });
 
 const queueSchema = new mongoose.Schema(
   {
-    department: { type: String, required: true },
-    menuItems: [queueItemSchema],
+    menuItem: menuItemSchema, // A single menu item with sub-menu items
   },
   { timestamps: true }
 );
@@ -52,30 +68,39 @@ const roleSchema = new mongoose.Schema(
 export const Role = mongoose.models.Role || mongoose.model("Role", roleSchema);
 
 //user schema
-const userSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema(
+  {
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     image: { type: String },
-    role: { type: mongoose.Schema.Types.ObjectId, ref: 'HospitalRole', required: true },
+    role: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "HospitalRole",
+      required: true,
+    },
   },
-  { timestamps: true });
-  
-  export const User = mongoose.models.User || mongoose.model('User', userSchema);
+  { timestamps: true }
+);
+
+export const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 //settings schema
-const settingsSchema = new mongoose.Schema({
+const settingsSchema = new mongoose.Schema(
+  {
     companyName: { type: String, required: true },
     email: { type: String, required: true },
     contact: { type: String, required: true },
     address: { type: String, required: true },
-    timezone: { type: String, required: true },
-    defaultLanguage: { type: String, required: true },
-    notificationText: { type: String },
+    timezone: { type: String },
+    defaultLanguage: { type: String },
+    notificationText: { type: String, required: true },
     logoImage: { type: String },
   },
-  { timestamps: true });
-  
-  export const Settings = mongoose.models.Settings || mongoose.model('Settings', settingsSchema);
+  { timestamps: true }
+);
+
+export const Settings =
+  mongoose.models.Settings || mongoose.model("Settings", settingsSchema);

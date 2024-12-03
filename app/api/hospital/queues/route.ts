@@ -1,62 +1,86 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Queue } from "@/lib/models/hospital";
+
+// CORS middleware
+function setCorsHeaders(response: NextResponse) {
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  return response;
+}
+
+export async function OPTIONS() {
+  return setCorsHeaders(new NextResponse(null, { status: 204 }));
+}
 
 export async function GET() {
   try {
     await dbConnect();
     const queues = await Queue.find({});
-    return NextResponse.json(queues);
+    const response = NextResponse.json(queues);
+    return setCorsHeaders(response);
   } catch (error) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: "Failed to fetch queues" },
       { status: 500 }
     );
+    return setCorsHeaders(response);
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
-    const body = await req.json();
+    await dbConnect(); // Ensure database connection
 
-    if (!body.department) {
-      return NextResponse.json(
-        { error: "Department name is required" },
-        { status: 400 }
+    const body = await req.json(); // Parse incoming JSON
+
+    // Validate menuItem
+    if (
+      !body.menuItem ||
+      typeof body.menuItem.name !== "string" ||
+      !Array.isArray(body.menuItem.subMenuItems) ||
+      !body.menuItem.subMenuItems.every(
+        (subMenuItem: { name: any }) =>
+          subMenuItem.name && typeof subMenuItem.name === "string"
+      )
+    ) {
+      const response = NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or missing 'menuItem' or 'subMenuItems'",
+        },
+        { status: 400 } // HTTP 400 Bad Request
       );
+      return setCorsHeaders(response);
     }
 
-    if (!Array.isArray(body.menuItems) || body.menuItems.length === 0) {
-      return NextResponse.json(
-        { error: "At least one menu item is required" },
-        { status: 400 }
-      );
-    }
+    // Create a new queue document
+    const newQueue = await Queue.create(body);
 
-    // Validate menu items structure
-    for (const item of body.menuItems) {
-      if (!item.name) {
-        return NextResponse.json(
-          { error: "Each menu item must have a name" },
-          { status: 400 }
-        );
-      }
-      if (!Array.isArray(item.subItems)) {
-        return NextResponse.json(
-          { error: "Each menu item must have a subItems array" },
-          { status: 400 }
-        );
-      }
-    }
-
-    const queue = await Queue.create(body);
-    return NextResponse.json(queue, { status: 201 });
-  } catch (error) {
-    console.error("Create queue error:", error);
-    return NextResponse.json(
-      { error: "Failed to create queue" },
-      { status: 500 }
+    const response = NextResponse.json(
+      { success: true, data: newQueue },
+      { status: 201 } // HTTP 201 Created
     );
+    return setCorsHeaders(response);
+  } catch (error) {
+    console.error("Error creating queue:", error);
+
+    let response;
+    if (error instanceof Error) {
+      response = NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 } // HTTP 500 Internal Server Error
+      );
+    } else {
+      response = NextResponse.json(
+        { success: false, error: "An unknown error occurred" },
+        { status: 500 }
+      );
+    }
+    return setCorsHeaders(response);
   }
 }

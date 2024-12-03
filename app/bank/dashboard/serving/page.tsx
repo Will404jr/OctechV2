@@ -20,21 +20,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Play, Pause, SkipForward, Check } from "lucide-react";
-import { Loader2 } from "lucide-react";
+import { QueueSpinner } from "@/components/queue-spinner";
 
-interface Ticket {
+interface SubMenuItem {
   _id: string;
-  ticketNo: string;
-  subItemId: string;
-  issueDescription: string;
-  ticketStatus: "Not Served" | "Serving" | "Served";
+  name: string;
+}
+
+interface MenuItem {
+  _id: string;
+  name: string;
+  subMenuItems: SubMenuItem[];
 }
 
 interface QueueItem {
   _id: string;
-  menuItem: {
-    name: string;
-  };
+  menuItem: MenuItem;
+}
+
+interface Ticket {
+  _id: string;
+  ticketNo: string;
+  queueId: string;
+  subItemId: string;
+  issueDescription: string;
+  ticketStatus: "Not Served" | "Serving" | "Served";
 }
 
 export default function ServingPage() {
@@ -53,6 +63,12 @@ export default function ServingPage() {
   const [selectedQueueItem, setSelectedQueueItem] = useState<QueueItem | null>(
     null
   );
+
+  // New state for change queue functionality
+  const [isChangeQueueDialogOpen, setIsChangeQueueDialogOpen] = useState(false);
+  const [ticketToChange, setTicketToChange] = useState<Ticket | null>(null);
+  const [newQueueId, setNewQueueId] = useState("");
+  const [newSubItemId, setNewSubItemId] = useState("");
 
   useEffect(() => {
     fetchQueueItems();
@@ -167,10 +183,50 @@ export default function ServingPage() {
     }
   };
 
+  // Updated function to change queue and sub-menu item
+  const changeQueue = async (
+    ticketId: string,
+    newQueueId: string,
+    newSubItemId: string
+  ) => {
+    try {
+      const newQueue = queueItems.find((item) => item._id === newQueueId);
+      const newSubItem = newQueue?.menuItem.subMenuItems.find(
+        (subItem) => subItem._id === newSubItemId
+      );
+      const newIssueDescription = `${newQueue?.menuItem.name} - ${newSubItem?.name}`;
+
+      const response = await fetch(`/api/ticket/${ticketId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          queueId: newQueueId,
+          subItemId: newSubItemId,
+          issueDescription: newIssueDescription,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to change queue");
+      }
+      const updatedTicket = await response.json();
+      setCurrentTicket(updatedTicket.data);
+      await fetchQueuePreview();
+      setIsChangeQueueDialogOpen(false);
+      setTicketToChange(null);
+      setNewQueueId("");
+      setNewSubItemId("");
+    } catch (error) {
+      console.error("Error changing queue:", error);
+      setError("Failed to change queue. Please try again.");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
       </div>
     );
   }
@@ -229,7 +285,9 @@ export default function ServingPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="submit">Start Serving</Button>
+              <Button type="submit" className="bg-[#0e4480]">
+                Start Serving
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -259,6 +317,19 @@ export default function ServingPage() {
                   ? currentTicket.issueDescription
                   : "No active ticket"}
               </p>
+              {currentTicket && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => {
+                    setTicketToChange(currentTicket);
+                    setIsChangeQueueDialogOpen(true);
+                  }}
+                >
+                  Change Queue
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -351,6 +422,71 @@ export default function ServingPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog
+        open={isChangeQueueDialogOpen}
+        onOpenChange={setIsChangeQueueDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Queue</DialogTitle>
+            <DialogDescription>
+              Select a new queue for ticket {ticketToChange?.ticketNo}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="newQueue" className="text-right">
+                New Queue
+              </label>
+              <Select onValueChange={setNewQueueId} value={newQueueId}>
+                <SelectTrigger id="newQueue" className="col-span-3">
+                  <SelectValue placeholder="Select a new queue" />
+                </SelectTrigger>
+                <SelectContent>
+                  {queueItems.map((item) => (
+                    <SelectItem key={item._id} value={item._id}>
+                      {item.menuItem.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {newQueueId && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="newSubMenuItem" className="text-right">
+                  New menu
+                </label>
+                <Select onValueChange={setNewSubItemId} value={newSubItemId}>
+                  <SelectTrigger id="newSubMenuItem" className="col-span-3">
+                    <SelectValue placeholder="Select a new sub-menu item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {queueItems
+                      .find((item) => item._id === newQueueId)
+                      ?.menuItem.subMenuItems.map((subItem) => (
+                        <SelectItem key={subItem._id} value={subItem._id}>
+                          {subItem.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              className="bg-[#0e4480]"
+              onClick={() =>
+                changeQueue(ticketToChange!._id, newQueueId, newSubItemId)
+              }
+              disabled={!newQueueId || !newSubItemId}
+            >
+              Change Queue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

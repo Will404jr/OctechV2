@@ -99,9 +99,9 @@ const settingsSchema = new mongoose.Schema(
     email: { type: String, required: true },
     contact: { type: String, required: true },
     address: { type: String, required: true },
-    timezone: { type: String, required: true },
-    defaultLanguage: { type: String, required: true },
-    notificationText: { type: String },
+    timezone: { type: String },
+    defaultLanguage: { type: String },
+    notificationText: { type: String, required: true },
     logoImage: { type: String },
   },
   { timestamps: true }

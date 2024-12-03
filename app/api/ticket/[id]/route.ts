@@ -9,14 +9,27 @@ export async function PUT(
   try {
     await dbConnect();
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
 
-    const updatedTicket = await Ticket.findByIdAndUpdate(
-      id,
-      { ticketStatus: body.ticketStatus },
-      { new: true }
-    );
+    const updateData: {
+      ticketStatus?: string;
+      queueId?: string;
+      subItemId?: string;
+      issueDescription?: string;
+    } = {};
+
+    if (body.ticketStatus) updateData.ticketStatus = body.ticketStatus;
+    if (body.queueId) {
+      updateData.queueId = body.queueId;
+      updateData.subItemId = body.subItemId;
+      updateData.ticketStatus = "Not Served"; // Reset status when queue changes
+      updateData.issueDescription = body.issueDescription; // Update issueDescription
+    }
+
+    const updatedTicket = await Ticket.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
 
     if (!updatedTicket) {
       return NextResponse.json(

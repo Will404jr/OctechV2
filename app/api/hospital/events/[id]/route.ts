@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
-import { Branch } from "@/lib/models/bank";
+import { Event } from "@/lib/models/hospital";
 
 export async function PUT(
   req: Request,
@@ -11,21 +11,18 @@ export async function PUT(
   try {
     await connectDB();
     const data = await req.json();
-    const branch = await Branch.findByIdAndUpdate(params.id, data, {
+    const event = await Event.findByIdAndUpdate(params.id, data, {
       new: true,
     });
 
-    if (!branch) {
-      return NextResponse.json(
-        { message: "Branch not found" },
-        { status: 404 }
-      );
+    if (!event) {
+      return NextResponse.json({ message: "Event not found" }, { status: 404 });
     }
 
-    return NextResponse.json(branch);
+    return NextResponse.json(event);
   } catch (error) {
     return NextResponse.json(
-      { message: "Error updating branch" },
+      { message: "Error updating event" },
       { status: 500 }
     );
   }
@@ -37,19 +34,19 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    const branch = await Branch.findByIdAndDelete(params.id);
+    const event = await Event.findByIdAndDelete(params.id);
 
-    if (!branch) {
+    if (!event) {
       return NextResponse.json(
         { message: "Branch not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ message: "Branch deleted successfully" });
+    return NextResponse.json({ message: "Event deleted successfully" });
   } catch (error) {
     return NextResponse.json(
-      { message: "Error deleting branch" },
+      { message: "Error deleting event" },
       { status: 500 }
     );
   }
