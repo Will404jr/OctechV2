@@ -244,20 +244,15 @@ export default function QueuesPage() {
                   </CardTitle>
                   <div className="flex space-x-2">
                     <Button
-                      variant="ghost"
                       size="icon"
                       onClick={() => openEditDialog(queue)}
-                      className="h-8 w-8 text-blue-500 hover:text-blue-700"
+                      className="bg-[#3a72ec]"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                        >
+                        <Button variant="destructive" size="icon">
                           <Trash className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>

@@ -5,16 +5,19 @@ import { User } from "@/lib/models/bank";
 export async function GET() {
   try {
     await dbConnect();
-    const users = await User.find({});
+    const users = await User.find()
+      .populate("role", "name")
+      .populate("branch", "name")
+      .lean();
     return NextResponse.json(users);
   } catch (error) {
+    console.error("Error fetching users:", error);
     return NextResponse.json(
-      { error: "Failed to fetch Users" },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
 }
-
 export async function POST(req: NextRequest) {
   try {
     await dbConnect(); // Ensure the database is connected

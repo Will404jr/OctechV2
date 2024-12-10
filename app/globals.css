@@ -84,13 +84,13 @@
   }
 }
 
-.animate-marquee {
-  display: inline-block;
-  white-space: nowrap;
-  animation: marquee 20s linear infinite;
-}
-
 .marquee-container {
   width: 100%;
   overflow: hidden;
+}
+
+.marquee-content {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 20s linear infinite;
 }

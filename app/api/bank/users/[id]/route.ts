@@ -3,26 +3,33 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import { User } from "@/lib/models/bank";
+import dbConnect from "@/lib/db";
 
 export async function PUT(
-  req: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    await connectDB();
-    const data = await req.json();
-    const rate = await User.findByIdAndUpdate(params.id, data, {
-      new: true,
-    });
+    await dbConnect();
+    const { id } = params;
+    const body = await request.json();
 
-    if (!rate) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    const updatedUser = await User.findByIdAndUpdate(id, body, {
+      new: true,
+      runValidators: true,
+    })
+      .populate("role")
+      .populate("branch");
+
+    if (!updatedUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json(rate);
+    return NextResponse.json(updatedUser);
   } catch (error) {
+    console.error("Error updating user:", error);
     return NextResponse.json(
-      { message: "Error updating user" },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }

@@ -175,7 +175,7 @@ export default function DisplayAdsPage() {
                     {ad.name}
                   </CardTitle>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="icon"
                     onClick={() => deleteAd(ad._id)}
                     aria-label={`Delete ${ad.name}`}

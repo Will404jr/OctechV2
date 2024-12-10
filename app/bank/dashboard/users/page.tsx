@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Edit, Trash } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import {
   Table,
   TableBody,
@@ -31,6 +31,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { QueueSpinner } from "@/components/queue-spinner";
 
+interface RoleOrBranch {
+  _id: string;
+  name: string;
+}
+
 interface User {
   _id: string;
   firstName: string;
@@ -38,19 +43,31 @@ interface User {
   email: string;
   username: string;
   image: string;
-  role: string; // ObjectId or resolved value
-  branch: string; // ObjectId or resolved value
+  role: RoleOrBranch | null;
+  branch: RoleOrBranch | null;
 }
+
+interface Role extends RoleOrBranch {}
+interface Branch extends RoleOrBranch {}
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState([]); // For fetching role options
-  const [branches, setBranches] = useState([]); // For fetching branch options
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast();
-  const { register, handleSubmit, reset, setValue, watch } = useForm();
+  const { control, handleSubmit, reset } = useForm<User>({
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      username: "",
+      role: null,
+      branch: null,
+    },
+  });
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -92,11 +109,17 @@ export default function UsersPage() {
     fetchMetadata();
   }, []);
 
-  const onSubmit = async (data: Partial<User>) => {
+  const onSubmit = async (data: User) => {
     const method = editingUser ? "PUT" : "POST";
     const url = editingUser
       ? `/api/bank/users/${editingUser._id}`
       : "/api/bank/users";
+
+    const updatedData = {
+      ...data,
+      role: data.role?._id || null,
+      branch: data.branch?._id || null,
+    };
 
     try {
       const response = await fetch(url, {
@@ -104,7 +127,7 @@ export default function UsersPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(updatedData),
       });
 
       if (response.ok) {
@@ -113,7 +136,14 @@ export default function UsersPage() {
           description: editingUser ? "User updated" : "User created",
         });
         fetchUsers();
-        reset();
+        reset({
+          firstName: "",
+          lastName: "",
+          email: "",
+          username: "",
+          role: null,
+          branch: null,
+        });
         setIsOpen(false);
         setEditingUser(null);
       } else {
@@ -156,13 +186,36 @@ export default function UsersPage() {
     }
   };
 
+  const handleEdit = (user: User) => {
+    setEditingUser(user);
+    reset({
+      ...user,
+      role: user.role || null,
+      branch: user.branch || null,
+    });
+    setIsOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Users</h2>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button
+              className="bg-[#0e4480]"
+              onClick={() => {
+                setEditingUser(null);
+                reset({
+                  firstName: "",
+                  lastName: "",
+                  email: "",
+                  username: "",
+                  role: null,
+                  branch: null,
+                });
+              }}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add User
             </Button>
@@ -177,65 +230,153 @@ export default function UsersPage() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    {...register("firstName", { required: true })}
+                  <Controller
+                    name="firstName"
+                    control={control}
+                    rules={{ required: "First name is required" }}
+                    render={({ field, fieldState: { error } }) => (
+                      <>
+                        <Input id="firstName" {...field} />
+                        {error && (
+                          <p className="text-red-500 text-sm">
+                            {error.message}
+                          </p>
+                        )}
+                      </>
+                    )}
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    {...register("lastName", { required: true })}
+                  <Controller
+                    name="lastName"
+                    control={control}
+                    rules={{ required: "Last name is required" }}
+                    render={({ field, fieldState: { error } }) => (
+                      <>
+                        <Input id="lastName" {...field} />
+                        {error && (
+                          <p className="text-red-500 text-sm">
+                            {error.message}
+                          </p>
+                        )}
+                      </>
+                    )}
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    {...register("email", { required: true })}
+                  <Controller
+                    name="email"
+                    control={control}
+                    rules={{
+                      required: "Email is required",
+                      pattern: {
+                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                        message: "Invalid email address",
+                      },
+                    }}
+                    render={({ field, fieldState: { error } }) => (
+                      <>
+                        <Input id="email" type="email" {...field} />
+                        {error && (
+                          <p className="text-red-500 text-sm">
+                            {error.message}
+                          </p>
+                        )}
+                      </>
+                    )}
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    {...register("username", { required: true })}
+                  <Controller
+                    name="username"
+                    control={control}
+                    rules={{ required: "Username is required" }}
+                    render={({ field, fieldState: { error } }) => (
+                      <>
+                        <Input id="username" {...field} />
+                        {error && (
+                          <p className="text-red-500 text-sm">
+                            {error.message}
+                          </p>
+                        )}
+                      </>
+                    )}
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="role">Role</Label>
-                  <Select onValueChange={(value) => setValue("role", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role: any) => (
-                        <SelectItem key={role._id} value={role._id}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    name="role"
+                    control={control}
+                    rules={{ required: "Role is required" }}
+                    render={({ field, fieldState: { error } }) => (
+                      <>
+                        <Select
+                          onValueChange={(value) =>
+                            field.onChange(
+                              roles.find((role) => role._id === value) || null
+                            )
+                          }
+                          value={field.value?._id || ""}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roles.map((role) => (
+                              <SelectItem key={role._id} value={role._id}>
+                                {role.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {error && (
+                          <p className="text-red-500 text-sm">
+                            {error.message}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="branch">Branch</Label>
-                  <Select onValueChange={(value) => setValue("branch", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map((branch: any) => (
-                        <SelectItem key={branch._id} value={branch._id}>
-                          {branch.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    name="branch"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        onValueChange={(value) =>
+                          field.onChange(
+                            value === "no-branch"
+                              ? null
+                              : branches.find(
+                                  (branch) => branch._id === value
+                                ) || null
+                          )
+                        }
+                        value={field.value?._id || "no-branch"}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select branch" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no-branch">No Branch</SelectItem>
+                          {branches.map((branch) => (
+                            <SelectItem key={branch._id} value={branch._id}>
+                              {branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </div>
               </div>
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full bg-[#0e4480]">
                 {editingUser ? "Update User" : "Create User"}
               </Button>
             </form>
@@ -269,16 +410,13 @@ export default function UsersPage() {
                 <TableCell>{user.lastName}</TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell>{user.username}</TableCell>
-                <TableCell>{user.role}</TableCell>
-                <TableCell>{user.branch}</TableCell>
+                <TableCell>{user.role?.name || "No Role Assigned"}</TableCell>
+                <TableCell>{user.branch?.name || "N/A"}</TableCell>
                 <TableCell>
                   <Button
                     size="sm"
                     className="mr-2 bg-[#3a72ec]"
-                    onClick={() => {
-                      setEditingUser(user);
-                      setIsOpen(true);
-                    }}
+                    onClick={() => handleEdit(user)}
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
