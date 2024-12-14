@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 export interface SessionData {
   userId?: string;
   isLoggedIn: boolean;
+  role?: string;
+  permissions?: Record<string, boolean>;
 }
 
 const sessionOptions = {

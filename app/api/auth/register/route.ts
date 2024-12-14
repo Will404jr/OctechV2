@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { User } from "@/lib/models/User";
+import { Admin } from "@/lib/models/admin";
 import { getSession } from "@/lib/session";
 import bcrypt from "bcryptjs";
 
@@ -9,17 +9,17 @@ export async function POST(request: Request) {
     await dbConnect();
 
     // Parse and validate request data
-    const { email, password, name } = await request.json();
-    if (!email || !password || !name) {
+    const { email, password, username } = await request.json();
+    if (!email || !password || !username) {
       return NextResponse.json(
-        { error: "Name, email, and password are required" },
+        { error: "Username, email, and password are required" },
         { status: 400 }
       );
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    // Check if admin already exists
+    const existingAdmin = await Admin.findOne({ email });
+    if (existingAdmin) {
       return NextResponse.json(
         { error: "Email already exists" },
         { status: 400 }
@@ -29,16 +29,16 @@ export async function POST(request: Request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create the new user
-    const user = await User.create({
-      name,
+    // Create the new admin
+    const admin = await Admin.create({
+      username,
       email,
-      password: hashedPassword, // Use hashed password
+      password: hashedPassword, // Save the hashed password
     });
 
     // Initialize session
     const session = await getSession();
-    session.userId = user._id.toString();
+    session.userId = admin._id.toString();
     session.isLoggedIn = true;
     await session.save();
 

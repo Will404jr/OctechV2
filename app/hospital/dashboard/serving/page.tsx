@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,14 @@ interface Ticket {
   ticketStatus: "Not Served" | "Serving" | "Served";
 }
 
+interface ActiveRoom {
+  roomNumber: number;
+  queueId: {
+    _id: string;
+    menuItem: MenuItem;
+  };
+}
+
 export default function ServingPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(true);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
@@ -54,6 +62,7 @@ export default function ServingPage() {
   const [counterNumber, setCounterNumber] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [roomFetchError, setRoomFetchError] = useState<string | null>(null);
 
   const [currentTicket, setCurrentTicket] = useState<Ticket | null>(null);
   const [queuePreview, setQueuePreview] = useState<Ticket[]>([]);
@@ -64,15 +73,48 @@ export default function ServingPage() {
     null
   );
 
-  // New state for change queue functionality
   const [isChangeQueueDialogOpen, setIsChangeQueueDialogOpen] = useState(false);
   const [ticketToChange, setTicketToChange] = useState<Ticket | null>(null);
   const [newQueueId, setNewQueueId] = useState("");
   const [newSubItemId, setNewSubItemId] = useState("");
 
+  const [activeRoom, setActiveRoom] = useState<ActiveRoom | null>(null);
+  const [isChangeRoomDialogOpen, setIsChangeRoomDialogOpen] = useState(false);
+  const [newRoomNumber, setNewRoomNumber] = useState("");
+
+  const fetchQueuePreview = useCallback(async () => {
+    if (!selectedQueueId) return;
+
+    try {
+      console.log("Fetching queue preview for queueId:", selectedQueueId);
+      const response = await fetch(
+        `/api/ticket?queueId=${selectedQueueId}&status=Not Served`
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log("Fetched queue preview data:", data);
+      setQueuePreview(data.slice(0, 3));
+      setQueueStatus(data.length);
+    } catch (error) {
+      console.error("Error fetching queue preview:", error);
+      setError("Failed to fetch tickets. Please try again.");
+    }
+  }, [selectedQueueId]);
+
   useEffect(() => {
     fetchQueueItems();
+    fetchActiveRoom();
   }, []);
+
+  useEffect(() => {
+    if (selectedQueueId) {
+      fetchQueuePreview();
+      const intervalId = setInterval(fetchQueuePreview, 5000); // Poll every 5 seconds
+      return () => clearInterval(intervalId);
+    }
+  }, [selectedQueueId, fetchQueuePreview]);
 
   const fetchQueueItems = async () => {
     try {
@@ -90,35 +132,59 @@ export default function ServingPage() {
     }
   };
 
-  const handleDialogSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedQueueId && counterNumber) {
-      setIsDialogOpen(false);
-      const selected = queueItems.find((item) => item._id === selectedQueueId);
-      setSelectedQueueItem(selected || null);
-      fetchQueuePreview().catch((err) => {
-        console.error("Error in handleDialogSubmit:", err);
-        setError("An error occurred while fetching tickets. Please try again.");
-      });
-    }
-  };
-
-  const fetchQueuePreview = async () => {
+  const fetchActiveRoom = async () => {
     try {
-      console.log("Fetching queue preview for queueId:", selectedQueueId);
-      const response = await fetch(
-        `/api/ticket?queueId=${selectedQueueId}&status=Not Served`
-      );
+      setRoomFetchError(null);
+      const response = await fetch("/api/hospital/room");
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      console.log("Fetched queue preview data:", data);
-      setQueuePreview(data.slice(0, 3));
-      setQueueStatus(data.length);
+      if (data.room) {
+        setActiveRoom(data.room);
+        setSelectedQueueId(data.room.queueId._id);
+        setCounterNumber(data.room.roomNumber.toString());
+        setIsDialogOpen(false);
+      } else {
+        setIsDialogOpen(true);
+      }
     } catch (error) {
-      console.error("Error fetching queue preview:", error);
-      setError("Failed to fetch tickets. Please try again.");
+      console.error("Error fetching active room:", error);
+      setRoomFetchError("Failed to fetch active room. Please try again.");
+      setIsDialogOpen(true);
+    }
+  };
+
+  const handleDialogSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedQueueId && counterNumber) {
+      try {
+        const response = await fetch("/api/hospital/room", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            roomNumber: parseInt(counterNumber),
+            queueId: selectedQueueId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create room");
+        }
+
+        const data = await response.json();
+        setActiveRoom(data.room);
+        setIsDialogOpen(false);
+        const selected = queueItems.find(
+          (item) => item._id === selectedQueueId
+        );
+        setSelectedQueueItem(selected || null);
+      } catch (error) {
+        console.error("Error creating room:", error);
+        setError("Failed to start serving. Please try again.");
+      }
     }
   };
 
@@ -183,7 +249,6 @@ export default function ServingPage() {
     }
   };
 
-  // Updated function to change queue and sub-menu item
   const changeQueue = async (
     ticketId: string,
     newQueueId: string,
@@ -223,6 +288,40 @@ export default function ServingPage() {
     }
   };
 
+  const handleChangeRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedQueueId && newRoomNumber) {
+      try {
+        const response = await fetch("/api/hospital/room", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            roomNumber: parseInt(newRoomNumber),
+            queueId: selectedQueueId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update room");
+        }
+
+        const data = await response.json();
+        setActiveRoom(data.room);
+        setCounterNumber(newRoomNumber);
+        setIsChangeRoomDialogOpen(false);
+        const selected = queueItems.find(
+          (item) => item._id === selectedQueueId
+        );
+        setSelectedQueueItem(selected || null);
+      } catch (error) {
+        console.error("Error updating room:", error);
+        setError("Failed to update room. Please try again.");
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -246,7 +345,7 @@ export default function ServingPage() {
           <DialogHeader>
             <DialogTitle>Select Serving Details</DialogTitle>
             <DialogDescription>
-              Choose a queue item and enter the counter number to start serving.
+              Choose a queue item and enter the room number to start serving.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleDialogSubmit}>
@@ -273,7 +372,7 @@ export default function ServingPage() {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <label htmlFor="counterNumber" className="text-right">
-                  Counter
+                  Room
                 </label>
                 <Input
                   id="counterNumber"
@@ -293,14 +392,30 @@ export default function ServingPage() {
         </DialogContent>
       </Dialog>
 
+      {roomFetchError && (
+        <div
+          className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
+          role="alert"
+        >
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{roomFetchError}</span>
+        </div>
+      )}
       <div className="container mx-auto py-10 space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Serving Station</h2>
-          <p className="text-muted-foreground">
-            Managing{" "}
-            {selectedQueueItem ? selectedQueueItem.menuItem.name : "queue"} at
-            Counter {counterNumber}
-          </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">
+              Serving Station
+            </h2>
+            <p className="text-muted-foreground">
+              Managing{" "}
+              {selectedQueueItem ? selectedQueueItem.menuItem.name : "queue"} at
+              Counter {counterNumber}
+            </p>
+          </div>
+          <Button onClick={() => setIsChangeRoomDialogOpen(true)}>
+            Change Room
+          </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -485,6 +600,61 @@ export default function ServingPage() {
               Change Queue
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isChangeRoomDialogOpen}
+        onOpenChange={setIsChangeRoomDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Room</DialogTitle>
+            <DialogDescription>
+              Select a new queue and enter a new room number.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleChangeRoom}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="newQueueItem" className="text-right">
+                  New Queue
+                </label>
+                <Select
+                  onValueChange={setSelectedQueueId}
+                  value={selectedQueueId}
+                >
+                  <SelectTrigger id="newQueueItem" className="col-span-3">
+                    <SelectValue placeholder="Select a queue item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {queueItems.map((item) => (
+                      <SelectItem key={item._id} value={item._id}>
+                        {item.menuItem.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="newRoomNumber" className="text-right">
+                  New Room
+                </label>
+                <Input
+                  id="newRoomNumber"
+                  type="number"
+                  value={newRoomNumber}
+                  onChange={(e) => setNewRoomNumber(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" className="bg-[#0e4480]">
+                Update Room
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </>

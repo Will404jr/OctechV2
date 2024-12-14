@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 //ad schema
 const adSchema = new mongoose.Schema(
@@ -48,18 +49,13 @@ const roleSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     permissions: {
-      viewUsers: { type: Boolean, default: false },
-      manageUsers: { type: Boolean, default: false },
-      viewRoles: { type: Boolean, default: false },
-      manageRoles: { type: Boolean, default: false },
-      viewServing: { type: Boolean, default: false },
-      manageServing: { type: Boolean, default: false },
-      viewQueues: { type: Boolean, default: false },
-      manageQueues: { type: Boolean, default: false },
-      viewAds: { type: Boolean, default: false },
-      manageAds: { type: Boolean, default: false },
-      viewSettings: { type: Boolean, default: false },
-      manageSettings: { type: Boolean, default: false },
+      Staff: { type: Boolean, default: false },
+      Roles: { type: Boolean, default: false },
+      Serving: { type: Boolean, default: false },
+      Queues: { type: Boolean, default: false },
+      UpcomingEvents: { type: Boolean, default: false },
+      Ads: { type: Boolean, default: false },
+      Settings: { type: Boolean, default: false },
     },
   },
   { timestamps: true }
@@ -67,8 +63,8 @@ const roleSchema = new mongoose.Schema(
 
 export const Role = mongoose.models.Role || mongoose.model("Role", roleSchema);
 
-//user schema
-const userSchema = new mongoose.Schema(
+//staff schema
+const staffSchema = new mongoose.Schema(
   {
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
@@ -76,16 +72,28 @@ const userSchema = new mongoose.Schema(
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     image: { type: String },
-    role: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "HospitalRole",
-      required: true,
-    },
+    role: { type: mongoose.Schema.Types.ObjectId, ref: "Role", required: true },
   },
   { timestamps: true }
 );
 
-export const User = mongoose.models.User || mongoose.model("User", userSchema);
+// Hash password before saving
+staffSchema.pre("save", async function (next) {
+  if (this.isModified("password") && this.password) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
+});
+
+// Method to compare password
+staffSchema.methods.comparePassword = async function (
+  candidatePassword: string
+) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+export const Staff =
+  mongoose.models.Staff || mongoose.model("Staff", staffSchema);
 
 //settings schema
 const settingsSchema = new mongoose.Schema(
@@ -104,3 +112,24 @@ const settingsSchema = new mongoose.Schema(
 
 export const Settings =
   mongoose.models.Settings || mongoose.model("Settings", settingsSchema);
+
+// room schema
+const roomSchema = new mongoose.Schema(
+  {
+    staffId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Staff",
+      required: true,
+    },
+    roomNumber: { type: Number, required: true },
+    queueId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Queue",
+      required: true,
+    },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);

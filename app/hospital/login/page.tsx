@@ -39,7 +39,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch("/api/hospital/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -51,7 +51,7 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
-        router.push("/bank/dashboard");
+        router.push("/hospital/dashboard");
       } else {
         const errorData = await response.json();
         toast({

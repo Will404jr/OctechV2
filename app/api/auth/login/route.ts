@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { User } from "@/lib/models/User";
+import { User } from "@/lib/models/bank";
 import { Branch } from "@/lib/models/bank";
+import { Admin } from "@/lib/models/admin";
 import { getSession } from "@/lib/session";
 import ActiveDirectory from "activedirectory2";
 
@@ -27,7 +28,10 @@ export async function POST(request: Request) {
         baseDN: branch.databaseName,
         username: branch.databaseUser,
         password: branch.databasePassword,
+        tlsOptions: { rejectUnauthorized: false }, // Add this line to bypass SSL certificate verification
       };
+
+      console.log("AD Config:", JSON.stringify(config, null, 2));
 
       const ad = new ActiveDirectory(config);
 
@@ -35,15 +39,16 @@ export async function POST(request: Request) {
         ad.authenticate(username, password, async (err, auth) => {
           if (err) {
             console.error("AD Authentication error:", err);
+            console.error("AD Error details:", JSON.stringify(err, null, 2));
             resolve(
               NextResponse.json(
-                { error: "Authentication failed" },
+                {
+                  error: `Authentication failed: ${"Unknown error"}`,
+                },
                 { status: 401 }
               )
             );
-          }
-
-          if (auth) {
+          } else if (auth) {
             const session = await getSession();
             session.userId = user._id.toString();
             session.isLoggedIn = true;
@@ -61,15 +66,15 @@ export async function POST(request: Request) {
       });
     } else {
       // Original email/password authentication
-      const user = await User.findOne({ email });
-      if (!user) {
+      const admin = await Admin.findOne({ email });
+      if (!admin) {
         return NextResponse.json(
           { error: "Invalid credentials" },
           { status: 401 }
         );
       }
 
-      const isValidPassword = await user.comparePassword(password);
+      const isValidPassword = await admin.comparePassword(password);
       if (!isValidPassword) {
         return NextResponse.json(
           { error: "Invalid credentials" },
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
       }
 
       const session = await getSession();
-      session.userId = user._id.toString();
+      session.userId = admin._id.toString();
       session.isLoggedIn = true;
       await session.save();
 

@@ -1,37 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Event } from "@/lib/models/hospital";
+import { Staff } from "@/lib/models/hospital";
 
 export async function GET() {
   try {
     await dbConnect();
-    const events = await Event.find({});
-    return NextResponse.json(events);
+    const users = await Staff.find().populate("role", "name").lean();
+    return NextResponse.json(users);
   } catch (error) {
+    console.error("Error fetching staff:", error);
     return NextResponse.json(
-      { error: "Failed to fetch events" },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
 }
-
 export async function POST(req: NextRequest) {
   try {
     await dbConnect(); // Ensure the database is connected
 
     const body = await req.json(); // Parse the incoming JSON body
 
-    // Create a new event record
-    const newEvent = await Event.create(body);
+    // Create a new branch record
+    const newStaff = await Staff.create(body);
 
     return NextResponse.json(
-      { success: true, data: newEvent },
+      { success: true, data: newStaff },
       { status: 201 } // HTTP 201 Created
     );
   } catch (error) {
-    console.error("Error creating event:", error);
+    console.error("Error creating staff:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to create event" },
+      { success: false, error: "Failed to create staff" },
       { status: 500 } // HTTP 500 Internal Server Error
     );
   }

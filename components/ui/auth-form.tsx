@@ -24,17 +24,17 @@ export function AuthForm({ mode }: AuthFormProps) {
     const data = Object.fromEntries(formData);
 
     try {
-      const response = await fetch(`/api/auth/${mode}`, {
+      const response = await fetch(`/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
       if (!response.ok) {
-        throw new Error("Authentication failed");
+        throw new Error("Registration failed");
       }
 
-      window.location.href = "/dashboard";
+      window.location.href = "/bank/dashboard";
     } catch (error) {
       toast({
         title: "Error",
@@ -62,12 +62,12 @@ export function AuthForm({ mode }: AuthFormProps) {
       <form onSubmit={handleSubmit} className="space-y-4">
         {mode === "register" && (
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="username">Name</Label>
             <div className="relative">
               <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                id="name"
-                name="name"
+                id="username"
+                name="username"
                 placeholder="John Doe"
                 required
                 className="pl-10"
