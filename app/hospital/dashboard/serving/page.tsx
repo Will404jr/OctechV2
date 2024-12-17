@@ -199,18 +199,33 @@ export default function ServingPage() {
 
   const fetchNextTicket = async () => {
     try {
-      const response = await fetch(
-        `/api/ticket?queueId=${selectedQueueId}&status=Not Served`
+      // Check if there's a currently serving ticket
+      const servingResponse = await fetch(
+        `/api/ticket?queueId=${selectedQueueId}&status=Serving`
       );
-      if (!response.ok) {
-        throw new Error("Failed to fetch next ticket");
+      if (!servingResponse.ok) {
+        throw new Error("Failed to fetch serving ticket");
       }
-      const data = await response.json();
-      if (data.length > 0) {
-        setCurrentTicket(data[0]);
-        await updateTicketStatus(data[0]._id, "Serving");
+      const servingData = await servingResponse.json();
+
+      if (servingData.length > 0) {
+        // If there's a serving ticket, use it
+        setCurrentTicket(servingData[0]);
       } else {
-        setCurrentTicket(null);
+        // If no serving ticket, fetch the next 'Not Served' ticket
+        const response = await fetch(
+          `/api/ticket?queueId=${selectedQueueId}&status=Not Served`
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch next ticket");
+        }
+        const data = await response.json();
+        if (data.length > 0) {
+          setCurrentTicket(data[0]);
+          await updateTicketStatus(data[0]._id, "Serving");
+        } else {
+          setCurrentTicket(null);
+        }
       }
       await fetchQueuePreview();
     } catch (error) {
@@ -221,11 +236,7 @@ export default function ServingPage() {
   const markAsServed = async () => {
     if (currentTicket) {
       await updateTicketStatus(currentTicket._id, "Served");
-      if (isServing) {
-        await fetchNextTicket();
-      } else {
-        setCurrentTicket(null);
-      }
+      await fetchNextTicket();
     }
   };
 
@@ -321,6 +332,29 @@ export default function ServingPage() {
       }
     }
   };
+
+  useEffect(() => {
+    const fetchServingTicket = async () => {
+      if (selectedQueueId) {
+        try {
+          const response = await fetch(
+            `/api/ticket?queueId=${selectedQueueId}&status=Serving`
+          );
+          if (!response.ok) {
+            throw new Error("Failed to fetch serving ticket");
+          }
+          const data = await response.json();
+          if (data.length > 0) {
+            setCurrentTicket(data[0]);
+          }
+        } catch (error) {
+          console.error("Error fetching serving ticket:", error);
+        }
+      }
+    };
+
+    fetchServingTicket();
+  }, [selectedQueueId]);
 
   if (isLoading) {
     return (
@@ -495,7 +529,12 @@ export default function ServingPage() {
             size="lg"
             variant="secondary"
             className="w-full"
-            onClick={fetchNextTicket}
+            onClick={async () => {
+              if (currentTicket) {
+                await updateTicketStatus(currentTicket._id, "Served");
+              }
+              await fetchNextTicket();
+            }}
             disabled={!isServing}
           >
             <SkipForward className="mr-2 h-4 w-4" />

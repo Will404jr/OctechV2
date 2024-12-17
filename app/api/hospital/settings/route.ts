@@ -21,35 +21,63 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    const formData = await req.formData();
-    const settingsData: Record<string, string> = {};
 
-    for (const [key, value] of Array.from(formData.entries())) {
-      if (key === "logoImage" && value instanceof Blob) {
-        const buffer = Buffer.from(await value.arrayBuffer());
-        const filename =
-          Date.now() + "-logo" + path.extname(value.name || ".png");
-        const filepath = path.join(
-          process.cwd(),
-          "public",
-          "uploads",
-          filename
-        );
-        await writeFile(filepath, buffer);
-        settingsData[key] = `/uploads/${filename}`;
-      } else {
-        settingsData[key] = value.toString();
-      }
+    let body;
+    const contentType = req.headers.get("content-type");
+    if (contentType && contentType.includes("multipart/form-data")) {
+      body = await req.formData();
+    } else {
+      body = await req.json();
     }
 
-    const newSettings = new Settings(settingsData);
-    await newSettings.save();
+    const settingsData: Record<string, string> = {};
 
-    return NextResponse.json(newSettings);
+    if (body instanceof FormData) {
+      for (const [key, value] of Array.from(body.entries())) {
+        if (key === "logoImage" && value instanceof Blob) {
+          try {
+            const buffer = Buffer.from(await value.arrayBuffer());
+            const filename =
+              Date.now() + "-logo" + path.extname(value.name || ".png");
+            const filepath = path.join(
+              process.cwd(),
+              "public",
+              "uploads",
+              filename
+            );
+            await writeFile(filepath, buffer);
+            settingsData[key] = `/uploads/${filename}`;
+          } catch (fileError) {
+            console.error("Error saving logo file:", fileError);
+            return NextResponse.json(
+              { error: "Failed to save logo file" },
+              { status: 500 }
+            );
+          }
+        } else {
+          settingsData[key] = value.toString();
+        }
+      }
+    } else {
+      Object.assign(settingsData, body);
+    }
+
+    let existingSettings = await Settings.findOne();
+    if (existingSettings) {
+      // Update existing settings
+      Object.assign(existingSettings, settingsData);
+      await existingSettings.save();
+    } else {
+      // Create new settings
+      existingSettings = new Settings(settingsData);
+      await existingSettings.save();
+    }
+
+    return NextResponse.json(existingSettings);
   } catch (error) {
-    console.error("Error creating settings:", error);
+    console.error("Error saving settings:", error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: "Failed to save settings. Please try again." },
       { status: 500 }
     );
   }

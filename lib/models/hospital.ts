@@ -98,6 +98,7 @@ export const Staff =
 //settings schema
 const settingsSchema = new mongoose.Schema(
   {
+    companyType: { type: String, required: true },
     companyName: { type: String, required: true },
     email: { type: String, required: true },
     contact: { type: String, required: true },
@@ -106,9 +107,48 @@ const settingsSchema = new mongoose.Schema(
     defaultLanguage: { type: String },
     notificationText: { type: String, required: true },
     logoImage: { type: String },
+    password: {
+      type: String,
+      required: true,
+    },
+    kioskUsername: { type: String, required: true },
+    kioskPassword: {
+      type: String,
+      required: true,
+    },
   },
   { timestamps: true }
 );
+
+// Hash password before saving
+settingsSchema.pre("save", async function (next) {
+  if (this.isModified("password") && this.password) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
+});
+
+// Method to compare password
+settingsSchema.methods.comparePassword = async function (
+  candidatePassword: string
+) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Hash password before saving
+settingsSchema.pre("save", async function (next) {
+  if (this.isModified("kioskPassword") && this.kioskPassword) {
+    this.kioskPassword = await bcrypt.hash(this.kioskPassword, 10);
+  }
+  next();
+});
+
+// Method to compare password
+settingsSchema.methods.comparePassword = async function (
+  candidatePassword: string
+) {
+  return bcrypt.compare(candidatePassword, this.kioskPassword);
+};
 
 export const Settings =
   mongoose.models.Settings || mongoose.model("Settings", settingsSchema);
