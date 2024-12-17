@@ -19,6 +19,11 @@ const ticketSchema = new mongoose.Schema(
       default: "Not Served",
       required: true,
     },
+    roomId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      default: null,
+    },
   },
   { timestamps: true }
 );

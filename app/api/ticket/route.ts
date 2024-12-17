@@ -61,9 +61,17 @@ export async function GET(req: NextRequest) {
 
     console.log("Executing query:", query);
 
-    const tickets = await Ticket.find(query).sort({ createdAt: 1 });
+    const tickets = await Ticket.find(query)
+      .populate("roomId")
+      .sort({ createdAt: 1 });
 
     console.log("Found tickets:", tickets.length);
+    console.log(
+      "Sample ticket:",
+      tickets.length > 0
+        ? JSON.stringify(tickets[0], null, 2)
+        : "No tickets found"
+    );
 
     return NextResponse.json(tickets);
   } catch (error) {
