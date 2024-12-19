@@ -68,10 +68,12 @@ export function Sidebar() {
   const [userPermissions, setUserPermissions] = useState<
     Record<string, boolean>
   >({});
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserPermissions = async () => {
       try {
+        setIsLoading(true);
         const response = await fetch("/api/hospital/permissions");
         if (response.ok) {
           const data = await response.json();
@@ -84,6 +86,8 @@ export function Sidebar() {
         }
       } catch (error) {
         console.error("Error fetching user permissions:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -93,6 +97,12 @@ export function Sidebar() {
   const filteredRoutes = routes.filter(
     (route) => userPermissions[route.permission]
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full">Loading...</div>
+    );
+  }
 
   return (
     <div className="space-y-4 py-4 flex flex-col h-full bg-white border-r">

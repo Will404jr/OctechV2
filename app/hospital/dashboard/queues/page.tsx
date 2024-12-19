@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { QueueSpinner } from "@/components/queue-spinner";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Types
 interface SubMenuItem {
@@ -155,156 +156,163 @@ export default function QueuesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">Queue Management</h2>
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) {
-              setEditingQueue(null);
-              reset();
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="bg-[#0e4480]">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Queue Menu
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[525px]">
-            <DialogHeader>
-              <DialogTitle>
-                {editingQueue ? "Edit" : "Create"} Queue Menu
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                <Card>
-                  <CardContent className="space-y-4 pt-4">
-                    <div>
-                      <Label>Menu Item Name</Label>
-                      <Input
-                        {...register("menuItem.name")}
-                        placeholder="e.g., Teller Services"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Sub Items</Label>
-                      {menuItem.subMenuItems.map((subItem, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            {...register(`menuItem.subMenuItems.${index}.name`)}
-                            placeholder="e.g., Deposit"
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeSubItem(index)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+    <ProtectedRoute requiredPermission="Queues">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold tracking-tight">
+            Queue Management
+          </h2>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) {
+                setEditingQueue(null);
+                reset();
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button className="bg-[#0e4480]">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Queue Menu
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[525px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingQueue ? "Edit" : "Create"} Queue Menu
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                  <Card>
+                    <CardContent className="space-y-4 pt-4">
+                      <div>
+                        <Label>Menu Item Name</Label>
+                        <Input
+                          {...register("menuItem.name")}
+                          placeholder="e.g., Teller Services"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sub Items</Label>
+                        {menuItem.subMenuItems.map((subItem, index) => (
+                          <div key={index} className="flex gap-2">
+                            <Input
+                              {...register(
+                                `menuItem.subMenuItems.${index}.name`
+                              )}
+                              placeholder="e.g., Deposit"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeSubItem(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addSubItem}
+                        >
+                          Add Sub Item
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+                <Button type="submit" className="bg-[#0e4480]">
+                  {editingQueue ? "Update" : "Create"} Queue Menu
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center min-h-[200px]">
+            <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {queues.length > 0 ? (
+              queues.map((queue) => (
+                <Card key={queue._id} className="overflow-hidden">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-lg font-semibold">
+                      {queue.menuItem.name}
+                    </CardTitle>
+                    <div className="flex space-x-2">
                       <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addSubItem}
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditDialog(queue)}
+                        className="h-8 w-8 text-blue-500 hover:text-blue-700"
                       >
-                        Add Sub Item
+                        <Edit className="h-4 w-4" />
                       </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will
+                              permanently delete the queue and all its menu
+                              items.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteQueue(queue._id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-muted-foreground">
+                        Sub Items:
+                      </h4>
+                      <ul className="list-disc list-inside text-sm space-y-1">
+                        {queue.menuItem.subMenuItems.map((subItem, index) => (
+                          <li key={index} className="text-gray-700">
+                            {subItem.name}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </CardContent>
                 </Card>
-              </div>
-              <Button type="submit" className="bg-[#0e4480]">
-                {editingQueue ? "Update" : "Create"} Queue Menu
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+              ))
+            ) : (
+              <p className="text-muted-foreground col-span-full text-center">
+                No queues available. Create one to get started.
+              </p>
+            )}
+          </div>
+        )}
       </div>
-
-      {isLoading ? (
-        <div className="flex justify-center items-center min-h-[200px]">
-          <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {queues.length > 0 ? (
-            queues.map((queue) => (
-              <Card key={queue._id} className="overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-lg font-semibold">
-                    {queue.menuItem.name}
-                  </CardTitle>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEditDialog(queue)}
-                      className="h-8 w-8 text-blue-500 hover:text-blue-700"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                        >
-                          <Trash className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently
-                            delete the queue and all its menu items.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteQueue(queue._id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-muted-foreground">
-                      Sub Items:
-                    </h4>
-                    <ul className="list-disc list-inside text-sm space-y-1">
-                      {queue.menuItem.subMenuItems.map((subItem, index) => (
-                        <li key={index} className="text-gray-700">
-                          {subItem.name}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : (
-            <p className="text-muted-foreground col-span-full text-center">
-              No queues available. Create one to get started.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
+    </ProtectedRoute>
   );
 }

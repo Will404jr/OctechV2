@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 const settingsFormSchema = z.object({
   companyType: z.enum(["Hospital", "Bank"], {
@@ -110,6 +111,7 @@ function LogoUpload({ field, form }: { field: any; form: any }) {
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsFormSchema),
@@ -156,6 +158,7 @@ export default function SettingsPage() {
         title: "Settings saved",
         description: "Your hospital settings have been successfully updated.",
       });
+      router.push("/hospital/login");
     } catch (error) {
       console.error("Error saving settings:", error);
       toast({

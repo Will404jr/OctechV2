@@ -4,17 +4,33 @@ import path from "path";
 import { Settings } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 
+// CORS middleware
+function setCorsHeaders(response: NextResponse) {
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  return response;
+}
+
+export async function OPTIONS() {
+  return setCorsHeaders(new NextResponse(null, { status: 204 }));
+}
+
 export async function GET() {
   try {
     await dbConnect();
     const settings = await Settings.findOne();
-    return NextResponse.json(settings || {});
+    const response = NextResponse.json(settings);
+    return setCorsHeaders(response);
   } catch (error) {
-    console.error("Error fetching settings:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
+    const response = NextResponse.json(
+      { error: "Failed to fetch settings" },
       { status: 500 }
     );
+    return setCorsHeaders(response);
   }
 }
 
@@ -49,10 +65,11 @@ export async function POST(req: NextRequest) {
             settingsData[key] = `/uploads/${filename}`;
           } catch (fileError) {
             console.error("Error saving logo file:", fileError);
-            return NextResponse.json(
+            const errorResponse = NextResponse.json(
               { error: "Failed to save logo file" },
               { status: 500 }
             );
+            return setCorsHeaders(errorResponse);
           }
         } else {
           settingsData[key] = value.toString();
@@ -73,13 +90,15 @@ export async function POST(req: NextRequest) {
       await existingSettings.save();
     }
 
-    return NextResponse.json(existingSettings);
+    const response = NextResponse.json(existingSettings);
+    return setCorsHeaders(response);
   } catch (error) {
     console.error("Error saving settings:", error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: "Failed to save settings. Please try again." },
       { status: 500 }
     );
+    return setCorsHeaders(errorResponse);
   }
 }
 

@@ -17,6 +17,7 @@ import { useForm } from "react-hook-form";
 import AdCarousel from "./AdCarousel";
 import { Ad } from "./Ad";
 import { QueueSpinner } from "@/components/queue-spinner";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 
@@ -105,111 +106,113 @@ export default function DisplayAdsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">Display Ads</h2>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#0e4480]">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Advertisement
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add New Advertisement</DialogTitle>
-            </DialogHeader>
-            <form
-              onSubmit={handleSubmit(onSubmit)}
-              className="space-y-4"
-              encType="multipart/form-data"
-            >
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Ad Name</Label>
-                  <Input id="name" {...register("name")} required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="image">Image</Label>
-                  <Input
-                    id="image"
-                    type="file"
-                    {...register("image", {
-                      required: true,
-                      validate: {
-                        fileSize: (value) => validateFileSize(value[0]),
-                      },
-                    })}
-                    accept="image/*"
-                  />
-                  {errors.image && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.image.type === "fileSize"
-                        ? "File size should not exceed 4MB"
-                        : "Image is required"}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <Button type="submit" className="w-full bg-[#0e4480]">
-                Create Advertisement
+    <ProtectedRoute requiredPermission="Ads">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold tracking-tight">Display Ads</h2>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-[#0e4480]">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Advertisement
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
-        </div>
-      ) : (
-        <>
-          <AdCarousel ads={ads} />
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {ads.map((ad: Ad) => (
-              <Card key={ad._id}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {ad.name}
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteAd(ad._id)}
-                    aria-label={`Delete ${ad.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="aspect-video relative rounded-lg overflow-hidden bg-muted">
-                    {ad.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={ad.image}
-                        alt={ad.name}
-                        className="object-cover w-full h-full"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <ImageIcon className="h-12 w-12 text-muted-foreground" />
-                      </div>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Add New Advertisement</DialogTitle>
+              </DialogHeader>
+              <form
+                onSubmit={handleSubmit(onSubmit)}
+                className="space-y-4"
+                encType="multipart/form-data"
+              >
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Ad Name</Label>
+                    <Input id="name" {...register("name")} required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="image">Image</Label>
+                    <Input
+                      id="image"
+                      type="file"
+                      {...register("image", {
+                        required: true,
+                        validate: {
+                          fileSize: (value) => validateFileSize(value[0]),
+                        },
+                      })}
+                      accept="image/*"
+                    />
+                    {errors.image && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {errors.image.type === "fileSize"
+                          ? "File size should not exceed 4MB"
+                          : "Image is required"}
+                      </p>
                     )}
                   </div>
-                  <div className="mt-4 text-sm text-muted-foreground">
-                    <p>
-                      <strong>Added:</strong>{" "}
-                      {new Date(ad.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+                <Button type="submit" className="w-full bg-[#0e4480]">
+                  Create Advertisement
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
           </div>
-        </>
-      )}
-    </div>
+        ) : (
+          <>
+            <AdCarousel ads={ads} />
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {ads.map((ad: Ad) => (
+                <Card key={ad._id}>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      {ad.name}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteAd(ad._id)}
+                      aria-label={`Delete ${ad.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="aspect-video relative rounded-lg overflow-hidden bg-muted">
+                      {ad.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={ad.image}
+                          alt={ad.name}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-4 text-sm text-muted-foreground">
+                      <p>
+                        <strong>Added:</strong>{" "}
+                        {new Date(ad.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </ProtectedRoute>
   );
 }

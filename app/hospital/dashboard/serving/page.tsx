@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Play, Pause, SkipForward, Check } from "lucide-react";
 import { QueueSpinner } from "@/components/queue-spinner";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 interface SubMenuItem {
   _id: string;
@@ -373,7 +374,7 @@ export default function ServingPage() {
   }
 
   return (
-    <>
+    <ProtectedRoute requiredPermission="Serving">
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -696,6 +697,6 @@ export default function ServingPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </>
+    </ProtectedRoute>
   );
 }

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { QueueSpinner } from "@/components/queue-spinner";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 interface RoleOrBranch {
   _id: string;
@@ -190,226 +191,230 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">Staff</h2>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button
-              className="bg-[#0e4480]"
-              onClick={() => {
-                setEditingStaff(null);
-                reset({
-                  firstName: "",
-                  lastName: "",
-                  email: "",
-                  username: "",
-                  password: "",
-                  role: null,
-                });
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Staff
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>
-                {editingStaff ? "Edit Staff" : "Add Staff"}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Controller
-                    name="firstName"
-                    control={control}
-                    rules={{ required: "First name is required" }}
-                    render={({ field, fieldState: { error } }) => (
-                      <>
-                        <Input id="firstName" {...field} />
-                        {error && (
-                          <p className="text-red-500 text-sm">
-                            {error.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Controller
-                    name="lastName"
-                    control={control}
-                    rules={{ required: "Last name is required" }}
-                    render={({ field, fieldState: { error } }) => (
-                      <>
-                        <Input id="lastName" {...field} />
-                        {error && (
-                          <p className="text-red-500 text-sm">
-                            {error.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Controller
-                    name="email"
-                    control={control}
-                    rules={{
-                      required: "Email is required",
-                      pattern: {
-                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                        message: "Invalid email address",
-                      },
-                    }}
-                    render={({ field, fieldState: { error } }) => (
-                      <>
-                        <Input id="email" type="email" {...field} />
-                        {error && (
-                          <p className="text-red-500 text-sm">
-                            {error.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Controller
-                    name="username"
-                    control={control}
-                    rules={{ required: "Username is required" }}
-                    render={({ field, fieldState: { error } }) => (
-                      <>
-                        <Input id="username" {...field} />
-                        {error && (
-                          <p className="text-red-500 text-sm">
-                            {error.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Controller
-                    name="role"
-                    control={control}
-                    rules={{ required: "Role is required" }}
-                    render={({ field, fieldState: { error } }) => (
-                      <>
-                        <Select
-                          onValueChange={(value) =>
-                            field.onChange(
-                              roles.find((role) => role._id === value) || null
-                            )
-                          }
-                          value={field.value?._id || ""}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roles.map((role) => (
-                              <SelectItem key={role._id} value={role._id}>
-                                {role.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {error && (
-                          <p className="text-red-500 text-sm">
-                            {error.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Controller
-                    name="password"
-                    control={control}
-                    rules={{ required: "Password is required" }}
-                    render={({ field, fieldState: { error } }) => (
-                      <>
-                        <Input id="password" {...field} />
-                        {error && (
-                          <p className="text-red-500 text-sm">
-                            {error.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-              </div>
-              <Button type="submit" className="w-full bg-[#0e4480]">
-                {editingStaff ? "Update Staff" : "Create Staff"}
+    <ProtectedRoute requiredPermission="Staff">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold tracking-tight">Staff</h2>
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button
+                className="bg-[#0e4480]"
+                onClick={() => {
+                  setEditingStaff(null);
+                  reset({
+                    firstName: "",
+                    lastName: "",
+                    email: "",
+                    username: "",
+                    password: "",
+                    role: null,
+                  });
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Staff
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center items-center h-48">
-          <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingStaff ? "Edit Staff" : "Add Staff"}
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Controller
+                      name="firstName"
+                      control={control}
+                      rules={{ required: "First name is required" }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Input id="firstName" {...field} />
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Controller
+                      name="lastName"
+                      control={control}
+                      rules={{ required: "Last name is required" }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Input id="lastName" {...field} />
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Controller
+                      name="email"
+                      control={control}
+                      rules={{
+                        required: "Email is required",
+                        pattern: {
+                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          message: "Invalid email address",
+                        },
+                      }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Input id="email" type="email" {...field} />
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Controller
+                      name="username"
+                      control={control}
+                      rules={{ required: "Username is required" }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Input id="username" {...field} />
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Controller
+                      name="role"
+                      control={control}
+                      rules={{ required: "Role is required" }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Select
+                            onValueChange={(value) =>
+                              field.onChange(
+                                roles.find((role) => role._id === value) || null
+                              )
+                            }
+                            value={field.value?._id || ""}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {roles.map((role) => (
+                                <SelectItem key={role._id} value={role._id}>
+                                  {role.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Controller
+                      name="password"
+                      control={control}
+                      rules={{ required: "Password is required" }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Input id="password" {...field} />
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full bg-[#0e4480]">
+                  {editingStaff ? "Update Staff" : "Create Staff"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
-      ) : staff.length === 0 ? (
-        <p className="text-center text-gray-500">No staff available.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>First Name</TableHead>
-              <TableHead>Last Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Username</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {staff.map((staff) => (
-              <TableRow key={staff._id}>
-                <TableCell>{staff.firstName}</TableCell>
-                <TableCell>{staff.lastName}</TableCell>
-                <TableCell>{staff.email}</TableCell>
-                <TableCell>{staff.username}</TableCell>
-                <TableCell>{staff.role?.name || "No Role Assigned"}</TableCell>
 
-                <TableCell>
-                  <Button
-                    size="sm"
-                    className="mr-2 bg-[#3a72ec]"
-                    onClick={() => handleEdit(staff)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDelete(staff._id)}
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </TableCell>
+        {isLoading ? (
+          <div className="flex justify-center items-center h-48">
+            <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
+          </div>
+        ) : staff.length === 0 ? (
+          <p className="text-center text-gray-500">No staff available.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>First Name</TableHead>
+                <TableHead>Last Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </div>
+            </TableHeader>
+            <TableBody>
+              {staff.map((staff) => (
+                <TableRow key={staff._id}>
+                  <TableCell>{staff.firstName}</TableCell>
+                  <TableCell>{staff.lastName}</TableCell>
+                  <TableCell>{staff.email}</TableCell>
+                  <TableCell>{staff.username}</TableCell>
+                  <TableCell>
+                    {staff.role?.name || "No Role Assigned"}
+                  </TableCell>
+
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      className="mr-2 bg-[#3a72ec]"
+                      onClick={() => handleEdit(staff)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(staff._id)}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+    </ProtectedRoute>
   );
 }

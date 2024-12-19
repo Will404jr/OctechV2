@@ -20,17 +20,15 @@ import { useToast } from "@/hooks/use-toast";
 interface LoginFormData {
   email: string;
   password: string;
-  username: string;
 }
 
 const defaultValues: LoginFormData = {
   email: "",
   password: "",
-  username: "",
 };
 
 export default function LoginPage() {
-  const [isActiveDirectory, setIsActiveDirectory] = useState(false);
+  const [isAdminLogin, setIsAdminLogin] = useState(false);
   const { control, handleSubmit } = useForm<LoginFormData>({
     defaultValues,
   });
@@ -46,12 +44,14 @@ export default function LoginPage() {
         },
         body: JSON.stringify({
           ...data,
-          isActiveDirectory,
+          isAdminLogin,
         }),
       });
 
       if (response.ok) {
-        router.push("/hospital/dashboard");
+        router.push(
+          isAdminLogin ? "/hospital/dashboard" : "/hospital/dashboard"
+        );
       } else {
         const errorData = await response.json();
         toast({
@@ -75,93 +75,82 @@ export default function LoginPage() {
       <Card className="w-[350px]">
         <CardHeader>
           <CardTitle>Login</CardTitle>
-          <CardDescription>Choose your login method</CardDescription>
+          <CardDescription>Enter your credentials to log in</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs
-            defaultValue="email"
-            onValueChange={(value) => setIsActiveDirectory(value === "ad")}
+            defaultValue="staff"
+            onValueChange={(value) => setIsAdminLogin(value === "admin")}
           >
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="email">Email</TabsTrigger>
-              <TabsTrigger value="ad">Active Directory</TabsTrigger>
+              <TabsTrigger value="staff">Staff</TabsTrigger>
+              <TabsTrigger value="admin">Admin</TabsTrigger>
             </TabsList>
-            <TabsContent value="email">
+            <TabsContent value="staff">
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="staff-email">Email</Label>
                   <Controller
                     name="email"
                     control={control}
                     rules={{ required: "Email is required" }}
                     render={({ field }) => (
                       <Input
-                        id="email"
+                        id="staff-email"
                         type="email"
                         placeholder="m@example.com"
                         {...field}
-                        value={field.value || ""}
                       />
                     )}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="staff-password">Password</Label>
                   <Controller
                     name="password"
                     control={control}
                     rules={{ required: "Password is required" }}
                     render={({ field }) => (
-                      <Input
-                        id="password"
-                        type="password"
-                        {...field}
-                        value={field.value || ""}
-                      />
+                      <Input id="staff-password" type="password" {...field} />
                     )}
                   />
                 </div>
                 <Button type="submit" className="w-full">
-                  Login
+                  Staff Login
                 </Button>
               </form>
             </TabsContent>
-            <TabsContent value="ad">
+            <TabsContent value="admin">
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="admin-email">Admin Email</Label>
                   <Controller
-                    name="username"
+                    name="email"
                     control={control}
-                    rules={{ required: "Username is required" }}
+                    rules={{ required: "Admin email is required" }}
                     render={({ field }) => (
                       <Input
-                        id="username"
-                        placeholder="johndoe"
+                        id="admin-email"
+                        type="email"
+                        placeholder="admin@example.com"
                         {...field}
-                        value={field.value || ""}
                       />
                     )}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="admin-password">Admin Password</Label>
                   <Controller
                     name="password"
                     control={control}
-                    rules={{ required: "Password is required" }}
+                    rules={{ required: "Admin password is required" }}
                     render={({ field }) => (
-                      <Input
-                        id="password"
-                        type="password"
-                        {...field}
-                        value={field.value || ""}
-                      />
+                      <Input id="admin-password" type="password" {...field} />
                     )}
                   />
                 </div>
                 <Button type="submit" className="w-full">
-                  Login
+                  Admin Login
                 </Button>
               </form>
             </TabsContent>

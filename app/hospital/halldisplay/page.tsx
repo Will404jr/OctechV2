@@ -25,6 +25,7 @@ import {
   CarouselContent,
   CarouselItem,
 } from "@/components/ui/carousel";
+import { Marquee } from "@/components/Marquee";
 
 interface Ticket {
   _id: string;
@@ -263,7 +264,6 @@ export default function HallDisplay() {
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuItem>Logout</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -350,11 +350,12 @@ export default function HallDisplay() {
       </main>
 
       <footer className="bg-[#0e4480] text-white p-2 overflow-hidden">
-        <div className="marquee-container">
+        {/* <div className="marquee-container">
           <div className="marquee-content">
-            {settings?.notificationText || "Welcome to Octech Bank"}
+            {settings?.notificationText || "Welcome dear patient"}
           </div>
-        </div>
+        </div> */}
+        <Marquee text={settings?.notificationText || "Welcome dear patient"} />
       </footer>
     </div>
   );

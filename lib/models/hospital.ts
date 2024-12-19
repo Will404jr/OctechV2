@@ -125,28 +125,23 @@ settingsSchema.pre("save", async function (next) {
   if (this.isModified("password") && this.password) {
     this.password = await bcrypt.hash(this.password, 10);
   }
-  next();
-});
-
-// Method to compare password
-settingsSchema.methods.comparePassword = async function (
-  candidatePassword: string
-) {
-  return bcrypt.compare(candidatePassword, this.password);
-};
-
-// Hash password before saving
-settingsSchema.pre("save", async function (next) {
   if (this.isModified("kioskPassword") && this.kioskPassword) {
     this.kioskPassword = await bcrypt.hash(this.kioskPassword, 10);
   }
   next();
 });
 
-// Method to compare password
-settingsSchema.methods.comparePassword = async function (
+settingsSchema.methods.compareAdminPassword = async function (
   candidatePassword: string
 ) {
+  console.log("Candidate Password:", candidatePassword);
+  console.log("Stored Password:", this.password);
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+settingsSchema.methods.compareKioskPassword = async function (
+  candidatePassword: string
+): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.kioskPassword);
 };
 
