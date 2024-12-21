@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { Play, Pause, SkipForward, Check } from "lucide-react";
 import { QueueSpinner } from "@/components/queue-spinner";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 interface SubMenuItem {
   _id: string;
@@ -288,7 +287,16 @@ export default function ServingPage() {
         throw new Error("Failed to change queue");
       }
       const updatedTicket = await response.json();
-      setCurrentTicket(updatedTicket.data);
+
+      // If the current ticket was changed to a different queue, remove it
+      if (
+        currentTicket &&
+        currentTicket._id === ticketId &&
+        newQueueId !== selectedQueueId
+      ) {
+        setCurrentTicket(null);
+      }
+
       await fetchQueuePreview();
       setIsChangeQueueDialogOpen(false);
       setTicketToChange(null);
@@ -374,7 +382,7 @@ export default function ServingPage() {
   }
 
   return (
-    <ProtectedRoute requiredPermission="Serving">
+    <>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -530,12 +538,7 @@ export default function ServingPage() {
             size="lg"
             variant="secondary"
             className="w-full"
-            onClick={async () => {
-              if (currentTicket) {
-                await updateTicketStatus(currentTicket._id, "Served");
-              }
-              await fetchNextTicket();
-            }}
+            onClick={fetchNextTicket}
             disabled={!isServing}
           >
             <SkipForward className="mr-2 h-4 w-4" />
@@ -697,6 +700,6 @@ export default function ServingPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </ProtectedRoute>
+    </>
   );
 }

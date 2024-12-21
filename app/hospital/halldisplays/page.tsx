@@ -26,11 +26,25 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { Marquee } from "@/components/Marquee";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Ticket {
   _id: string;
   ticketNo: string;
   ticketStatus: string;
+  queueId: string;
   roomId: {
     _id: string;
     roomNumber: number;
@@ -53,13 +67,23 @@ interface Settings {
   notificationText: string;
 }
 
+interface Queue {
+  _id: string;
+  menuItem: {
+    name: string;
+  };
+}
+
 export default function HallDisplay() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [queues, setQueues] = useState<Queue[]>([]);
+  const [selectedQueue, setSelectedQueue] = useState<string | null>(null);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
+  const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(true);
   const isPlaying = useRef(false);
   const audioContext = useRef<AudioContext | null>(null);
   const announcedTickets = useRef<Set<string>>(new Set());
@@ -159,9 +183,11 @@ export default function HallDisplay() {
   );
 
   const fetchData = useCallback(async () => {
+    if (!selectedQueue) return;
+
     try {
       const [ticketsRes, eventsRes, adsRes, settingsRes] = await Promise.all([
-        fetch("/api/ticket?status=Serving"),
+        fetch(`/api/ticket?status=Serving&queueId=${selectedQueue}`),
         fetch("/api/hospital/events"),
         fetch("/api/hospital/ads"),
         fetch("/api/hospital/settings"),
@@ -195,14 +221,29 @@ export default function HallDisplay() {
     } catch (error) {
       console.error("Error fetching data:", error);
     }
-  }, [announceTicket]);
+  }, [selectedQueue, announceTicket]);
+
+  const fetchQueues = useCallback(async () => {
+    try {
+      const response = await fetch("/api/hospital/queues");
+      const queuesData = await response.json();
+      setQueues(queuesData);
+    } catch (error) {
+      console.error("Error fetching queues:", error);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchData();
-    const intervalId = setInterval(fetchData, 5000);
+    fetchQueues();
+  }, [fetchQueues]);
 
-    return () => clearInterval(intervalId);
-  }, [fetchData]);
+  useEffect(() => {
+    if (selectedQueue) {
+      fetchData();
+      const intervalId = setInterval(fetchData, 5000);
+      return () => clearInterval(intervalId);
+    }
+  }, [fetchData, selectedQueue]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -221,8 +262,33 @@ export default function HallDisplay() {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  const handleQueueSelect = (queueId: string) => {
+    setSelectedQueue(queueId);
+    setIsQueueDialogOpen(false);
+  };
+
   return (
     <div className="flex flex-col h-screen">
+      <Dialog open={isQueueDialogOpen} onOpenChange={setIsQueueDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select a Queue</DialogTitle>
+          </DialogHeader>
+          <Select onValueChange={handleQueueSelect}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a queue" />
+            </SelectTrigger>
+            <SelectContent>
+              {queues.map((queue) => (
+                <SelectItem key={queue._id} value={queue._id}>
+                  {queue.menuItem.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </DialogContent>
+      </Dialog>
+
       <header className="bg-[#0e4480] text-white p-4 flex justify-between items-center">
         <div className="text-2xl font-bold">Octech</div>
         <div className="flex items-center gap-4">
