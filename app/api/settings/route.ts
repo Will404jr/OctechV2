@@ -3,11 +3,15 @@ import { writeFile } from "fs/promises";
 import path from "path";
 import { Settings } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 // CORS middleware
 function setCorsHeaders(response: NextResponse) {
   response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.headers.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS, PUT"
+  );
   response.headers.set(
     "Access-Control-Allow-Headers",
     "Content-Type, Authorization"
@@ -22,7 +26,9 @@ export async function OPTIONS() {
 export async function GET() {
   try {
     await dbConnect();
-    const settings = await Settings.findOne();
+    const settings = await Settings.findOne().select(
+      "-password -kioskPassword"
+    );
     const response = NextResponse.json(settings);
     return setCorsHeaders(response);
   } catch (error) {
@@ -71,12 +77,24 @@ export async function POST(req: NextRequest) {
             );
             return setCorsHeaders(errorResponse);
           }
+        } else if (key === "password" || key === "kioskPassword") {
+          if (value) {
+            settingsData[key] = await bcrypt.hash(value.toString(), 10);
+          }
         } else {
           settingsData[key] = value.toString();
         }
       }
     } else {
-      Object.assign(settingsData, body);
+      for (const [key, value] of Object.entries(body)) {
+        if (key === "password" || key === "kioskPassword") {
+          if (value) {
+            settingsData[key] = await bcrypt.hash(value as string, 10);
+          }
+        } else {
+          settingsData[key] = value as string;
+        }
+      }
     }
 
     let existingSettings = await Settings.findOne();
@@ -121,6 +139,10 @@ export async function PUT(req: NextRequest) {
         );
         await writeFile(filepath, buffer);
         settingsData[key] = `/uploads/${filename}`;
+      } else if (key === "password" || key === "kioskPassword") {
+        if (value) {
+          settingsData[key] = await bcrypt.hash(value.toString(), 10);
+        }
       } else {
         settingsData[key] = value.toString();
       }
@@ -129,7 +151,7 @@ export async function PUT(req: NextRequest) {
     const updatedSettings = await Settings.findOneAndUpdate({}, settingsData, {
       new: true,
       upsert: true,
-    });
+    }).select("-password -kioskPassword");
 
     return NextResponse.json(updatedSettings);
   } catch (error) {

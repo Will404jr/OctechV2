@@ -3,7 +3,7 @@ import { ClientSideNavigation } from "./ClientSideNavigation";
 
 async function getSettings() {
   try {
-    const res = await fetch("http://localhost:3000/api/hospital/settings", {
+    const res = await fetch("http://localhost:3000/api/settings", {
       cache: "no-store",
     });
     if (!res.ok) throw new Error("Failed to fetch settings");
@@ -19,7 +19,7 @@ export default async function HomePage() {
   const settings = await getSettings();
 
   if (!settings) {
-    redirect("/hospital/settingsForm");
+    redirect("/settingsForm");
   }
 
   return <ClientSideNavigation settings={settings} />;

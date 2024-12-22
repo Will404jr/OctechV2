@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import Octech from "@/public/octech.jpg";
+import { QueueSpinner } from "@/components/queue-spinner";
 
 const routes = [
   {
@@ -100,7 +101,9 @@ export function Sidebar() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-full">Loading...</div>
+      <div className="flex justify-center items-center">
+        <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
+      </div>
     );
   }
 

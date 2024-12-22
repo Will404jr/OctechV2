@@ -34,24 +34,35 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-const settingsFormSchema = z.object({
-  companyType: z.enum(["Hospital", "Bank"], {
-    required_error: "Please select a company type",
-  }),
-  companyName: z.string().min(1, "Company name is required"),
-  email: z.string().email("Invalid email address"),
-  contact: z.string().min(1, "Contact number is required"),
-  address: z.string().min(1, "Address is required"),
-  timezone: z.string().optional(),
-  defaultLanguage: z.string().optional(),
-  notificationText: z.string().min(1, "Notification text is required"),
-  logoImage: z.any().optional(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  kioskUsername: z.string().min(1, "Kiosk username is required"),
-  kioskPassword: z
-    .string()
-    .min(8, "Kiosk password must be at least 8 characters"),
-});
+const settingsFormSchema = z
+  .object({
+    companyType: z.enum(["Hospital", "Bank"], {
+      required_error: "Please select a company type",
+    }),
+    companyName: z.string().min(1, "Company name is required"),
+    email: z.string().email("Invalid email address"),
+    contact: z.string().min(1, "Contact number is required"),
+    address: z.string().min(1, "Address is required"),
+    timezone: z.string().optional(),
+    defaultLanguage: z.string().optional(),
+    notificationText: z.string().min(1, "Notification text is required"),
+    logoImage: z.any().optional(),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    kioskUsername: z.string().optional(),
+    kioskPassword: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.companyType === "Hospital") {
+        return data.kioskUsername && data.kioskPassword;
+      }
+      return true;
+    },
+    {
+      message: "Kiosk username and password are required for hospitals",
+      path: ["kioskUsername", "kioskPassword"],
+    }
+  );
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
 
@@ -131,6 +142,8 @@ export default function SettingsPage() {
     },
   });
 
+  const companyType = form.watch("companyType");
+
   async function onSubmit(data: SettingsFormValues) {
     setIsLoading(true);
     try {
@@ -138,7 +151,7 @@ export default function SettingsPage() {
       Object.entries(data).forEach(([key, value]) => {
         if (key === "logoImage" && value instanceof File) {
           formData.append(key, value);
-        } else {
+        } else if (value !== undefined && value !== null) {
           formData.append(key, value as string);
         }
       });
@@ -156,7 +169,7 @@ export default function SettingsPage() {
       const result = await response.json();
       toast({
         title: "Settings saved",
-        description: "Your hospital settings have been successfully updated.",
+        description: "Your company settings have been successfully updated.",
       });
       router.push("/hospital/login");
     } catch (error) {
@@ -177,9 +190,9 @@ export default function SettingsPage() {
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
-        <CardTitle>Hospital Settings</CardTitle>
+        <CardTitle>Company Settings</CardTitle>
         <CardDescription>
-          Configure your hospital's general settings and kiosk access.
+          Configure your company's general settings and access details.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -376,39 +389,41 @@ export default function SettingsPage() {
                 )}
               />
             </div>
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Kiosk Access</h3>
-              <FormField
-                control={form.control}
-                name="kioskUsername"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kiosk Username</FormLabel>
-                    <FormControl>
-                      <Input placeholder="kiosk_user" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="kioskPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kiosk Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {companyType === "Hospital" && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Kiosk Access</h3>
+                <FormField
+                  control={form.control}
+                  name="kioskUsername"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Kiosk Username</FormLabel>
+                      <FormControl>
+                        <Input placeholder="kiosk_user" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="kioskPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Kiosk Password</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="••••••••"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
           </form>
         </Form>
       </CardContent>

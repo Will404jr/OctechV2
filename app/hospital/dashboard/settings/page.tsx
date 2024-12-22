@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ interface Settings {
   timezone: string;
   defaultLanguage: string;
   notificationText: string;
-  logoImage: string;
+  logoImage: string | File;
   password: string;
   kioskUsername: string;
   kioskPassword: string;
@@ -47,6 +47,7 @@ export default function SettingsDisplayPage() {
   const [showKioskPassword, setShowKioskPassword] = useState(false);
   const { register, handleSubmit, setValue, watch } = useForm<Settings>();
   const { toast } = useToast();
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchSettings();
@@ -54,7 +55,7 @@ export default function SettingsDisplayPage() {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch("/api/hospital/settings");
+      const response = await fetch("/api/settings");
       if (response.ok) {
         const data = await response.json();
         setSettings(data);
@@ -82,16 +83,22 @@ export default function SettingsDisplayPage() {
           if (data[key as keyof Settings]) {
             formData.append(key, data[key as keyof Settings] as string);
           }
-        } else if (key !== "logoImage") {
+        } else if (key === "logoImage") {
+          if (data.logoImage instanceof File) {
+            formData.append("logoImage", data.logoImage);
+          } else if (
+            settings?.logoImage &&
+            typeof settings.logoImage === "string"
+          ) {
+            // If no new file is selected, keep the existing logo
+            formData.append("logoImage", settings.logoImage);
+          }
+        } else {
           formData.append(key, data[key as keyof Settings] as string);
         }
       });
 
-      if (data.logoImage && data.logoImage[0]) {
-        formData.append("logoImage", data.logoImage[0]);
-      }
-
-      const response = await fetch("/api/hospital/settings", {
+      const response = await fetch("/api/settings", {
         method: "PUT",
         body: formData,
       });
@@ -124,11 +131,18 @@ export default function SettingsDisplayPage() {
     }
   };
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setValue("logoImage", e.target.files[0]);
+    }
+  };
+
   return (
     <ProtectedRoute requiredPermission="Settings">
       <div className="container mx-auto py-10">
         <h1 className="text-3xl font-bold mb-6">Settings Display</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          {/* General Information Card */}
           <Card>
             <CardHeader>
               <CardTitle>General Information</CardTitle>
@@ -170,6 +184,7 @@ export default function SettingsDisplayPage() {
             </CardContent>
           </Card>
 
+          {/* Localization Card */}
           <Card>
             <CardHeader>
               <CardTitle>Localization</CardTitle>
@@ -218,6 +233,7 @@ export default function SettingsDisplayPage() {
             </CardContent>
           </Card>
 
+          {/* Display Settings Card */}
           <Card>
             <CardHeader>
               <CardTitle>Display Settings</CardTitle>
@@ -239,12 +255,17 @@ export default function SettingsDisplayPage() {
                   id="logoImage"
                   type="file"
                   accept="image/*"
-                  {...register("logoImage")}
+                  ref={logoInputRef}
+                  onChange={handleLogoChange}
                 />
                 {settings?.logoImage && (
                   <div className="mt-2">
                     <Image
-                      src={settings.logoImage}
+                      src={
+                        typeof settings.logoImage === "string"
+                          ? settings.logoImage
+                          : URL.createObjectURL(settings.logoImage)
+                      }
                       alt="Company Logo"
                       width={150}
                       height={150}
@@ -256,6 +277,7 @@ export default function SettingsDisplayPage() {
             </CardContent>
           </Card>
 
+          {/* Admin Access Card */}
           <Card>
             <CardHeader>
               <CardTitle>Admin Access</CardTitle>
@@ -286,6 +308,7 @@ export default function SettingsDisplayPage() {
             </CardContent>
           </Card>
 
+          {/* Kiosk Access Card */}
           <Card>
             <CardHeader>
               <CardTitle>Kiosk Access</CardTitle>

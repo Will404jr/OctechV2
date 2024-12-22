@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { QueueSpinner } from "@/components/queue-spinner";
 
 type Settings = {
   companyType: "Hospital" | "Bank";
@@ -13,7 +14,7 @@ export function ClientSideNavigation({ settings }: { settings: Settings }) {
 
   useEffect(() => {
     if (!settings) {
-      router.push("/hospital/settingsForm");
+      router.push("/settingsForm");
     } else if (settings.companyType === "Hospital") {
       router.push("/hospital/login");
     } else if (settings.companyType === "Bank") {
@@ -27,7 +28,7 @@ export function ClientSideNavigation({ settings }: { settings: Settings }) {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        Loading...
+        <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
       </div>
     );
   }
