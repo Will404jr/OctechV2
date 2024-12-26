@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Play, Pause, SkipForward, Check } from "lucide-react";
+import { Play, Pause, SkipForward, Check, PhoneCall } from "lucide-react";
 import { QueueSpinner } from "@/components/queue-spinner";
 
 interface SubMenuItem {
@@ -38,6 +38,11 @@ interface QueueItem {
   menuItem: MenuItem;
 }
 
+interface QueueItem {
+  _id: string;
+  menuItem: MenuItem;
+}
+
 interface Ticket {
   _id: string;
   ticketNo: string;
@@ -45,6 +50,7 @@ interface Ticket {
   subItemId: string;
   issueDescription: string;
   ticketStatus: "Not Served" | "Serving" | "Served";
+  callAgain?: boolean; // Added callAgain property
 }
 
 interface ActiveRoom {
@@ -81,6 +87,7 @@ export default function ServingPage() {
   const [activeRoom, setActiveRoom] = useState<ActiveRoom | null>(null);
   const [isChangeRoomDialogOpen, setIsChangeRoomDialogOpen] = useState(false);
   const [newRoomNumber, setNewRoomNumber] = useState("");
+  const [isPaused, setIsPaused] = useState(false);
 
   const fetchQueuePreview = useCallback(async () => {
     if (!selectedQueueId) return;
@@ -190,14 +197,21 @@ export default function ServingPage() {
 
   const startServing = async () => {
     setIsServing(true);
+    setIsPaused(false);
     await fetchNextTicket();
   };
 
   const pauseServing = () => {
-    setIsServing(false);
+    setIsPaused(true);
+  };
+
+  const resumeServing = () => {
+    setIsPaused(false);
   };
 
   const fetchNextTicket = async () => {
+    if (isPaused) return;
+
     try {
       // Check if there's a currently serving ticket
       const servingResponse = await fetch(
@@ -236,7 +250,11 @@ export default function ServingPage() {
   const markAsServed = async () => {
     if (currentTicket) {
       await updateTicketStatus(currentTicket._id, "Served");
-      await fetchNextTicket();
+      if (!isPaused) {
+        await fetchNextTicket();
+      } else {
+        setCurrentTicket(null);
+      }
     }
   };
 
@@ -365,6 +383,31 @@ export default function ServingPage() {
     fetchServingTicket();
   }, [selectedQueueId]);
 
+  const callAgain = async () => {
+    if (currentTicket) {
+      try {
+        const response = await fetch(`/api/ticket/${currentTicket._id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ callAgain: true }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to call ticket again");
+        }
+
+        // Optionally, you can update the local state or refetch the current ticket
+        // to reflect the change immediately in the UI
+        setCurrentTicket({ ...currentTicket, callAgain: true });
+      } catch (error) {
+        console.error("Error calling ticket again:", error);
+        // Handle the error (e.g., show an error message to the user)
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -476,17 +519,22 @@ export default function ServingPage() {
                   : "No active ticket"}
               </p>
               {currentTicket && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => {
-                    setTicketToChange(currentTicket);
-                    setIsChangeQueueDialogOpen(true);
-                  }}
-                >
-                  Change Queue
-                </Button>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTicketToChange(currentTicket);
+                      setIsChangeQueueDialogOpen(true);
+                    }}
+                  >
+                    Change Queue
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={callAgain}>
+                    <PhoneCall className="mr-2 h-4 w-4" />
+                    Call Again
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -519,27 +567,27 @@ export default function ServingPage() {
             size="lg"
             className="w-full"
             onClick={startServing}
-            disabled={isServing}
+            disabled={isServing && !isPaused}
           >
             <Play className="mr-2 h-4 w-4" />
-            Start Serving
+            {isServing && isPaused ? "Resume Serving" : "Start Serving"}
           </Button>
           <Button
             size="lg"
             variant="outline"
             className="w-full"
-            onClick={pauseServing}
+            onClick={isPaused ? resumeServing : pauseServing}
             disabled={!isServing}
           >
             <Pause className="mr-2 h-4 w-4" />
-            Pause
+            {isPaused ? "Resume" : "Pause"}
           </Button>
           <Button
             size="lg"
             variant="secondary"
             className="w-full"
             onClick={fetchNextTicket}
-            disabled={!isServing}
+            disabled={!isServing || isPaused}
           >
             <SkipForward className="mr-2 h-4 w-4" />
             Next Customer

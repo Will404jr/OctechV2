@@ -6,6 +6,11 @@ const adSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     image: { type: String, required: true },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+    },
   },
   { timestamps: true }
 );
@@ -214,7 +219,7 @@ const counterSchema = new mongoose.Schema(
 );
 
 export const Counter =
-  mongoose.models.Counter || mongoose.model("counter", counterSchema);
+  mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
 // Ticket schema
 const ticketSchema = new mongoose.Schema(

@@ -26,6 +26,8 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { Marquee } from "@/components/Marquee";
+import { Toast, ToastProvider, ToastViewport } from "@/components/ui/toast";
+import { useToast } from "@/hooks/use-toast";
 
 interface Ticket {
   _id: string;
@@ -35,6 +37,7 @@ interface Ticket {
     _id: string;
     roomNumber: number;
   } | null;
+  callAgain: boolean;
 }
 
 interface Event {
@@ -64,6 +67,7 @@ export default function HallDisplay() {
   const audioContext = useRef<AudioContext | null>(null);
   const announcedTickets = useRef<Set<string>>(new Set());
   const announcementQueue = useRef<Ticket[]>([]);
+  const { toast } = useToast();
 
   const initializeAudioContext = () => {
     if (!audioContext.current) {
@@ -132,6 +136,13 @@ export default function HallDisplay() {
       const ticketNumber = ticket.ticketNo;
       const roomNumber = ticket.roomId.roomNumber.toString();
 
+      // Show toast notification
+      toast({
+        title: `Ticket ${ticketNumber}`,
+        description: `Please proceed to Room ${roomNumber}`,
+        duration: 5000,
+      });
+
       const audioFiles = [
         "/audio/alert.wav",
         "/audio/TicketNumber.wav",
@@ -147,6 +158,17 @@ export default function HallDisplay() {
       isPlaying.current = false;
       announcedTickets.current.add(ticket._id);
 
+      // If this was a "call again" announcement, update the ticket
+      if (ticket.callAgain) {
+        await fetch(`/api/ticket/${ticket._id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ callAgain: false }),
+        });
+      }
+
       // Check if there are more tickets in the queue
       if (announcementQueue.current.length > 0) {
         const nextTicket = announcementQueue.current.shift();
@@ -155,7 +177,7 @@ export default function HallDisplay() {
         }
       }
     },
-    [playAudio, isMuted]
+    [playAudio, isMuted, toast]
   );
 
   const fetchData = useCallback(async () => {
@@ -164,7 +186,7 @@ export default function HallDisplay() {
         fetch("/api/ticket?status=Serving"),
         fetch("/api/hospital/events"),
         fetch("/api/hospital/ads"),
-        fetch("/api/hospital/settings"),
+        fetch("/api/settings"),
       ]);
 
       const ticketsData: Ticket[] = await ticketsRes.json();
@@ -179,9 +201,9 @@ export default function HallDisplay() {
       setAds(adsData);
       setSettings(settingsData);
 
-      // Announce new tickets
+      // Announce new tickets and tickets with callAgain set to true
       ticketsData.forEach((ticket) => {
-        if (!announcedTickets.current.has(ticket._id)) {
+        if (!announcedTickets.current.has(ticket._id) || ticket.callAgain) {
           announceTicket(ticket);
         }
       });
@@ -222,120 +244,126 @@ export default function HallDisplay() {
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="bg-[#0e4480] text-white p-4 flex justify-between items-center">
-        <div className="text-2xl font-bold">Octech</div>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleMute}
-            className="text-white hover:text-white/80"
-          >
-            {isMuted ? (
-              <VolumeX className="h-6 w-6" />
-            ) : (
-              <Volume2 className="h-6 w-6" />
-            )}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center border">
-                <User className="h-4 w-4 text-black" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Logout</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
+    <ToastProvider>
+      <div className="flex flex-col h-screen">
+        <header className="bg-[#0e4480] text-white p-4 flex justify-between items-center">
+          <div className="text-2xl font-bold">Octech</div>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMute}
+              className="text-white hover:text-white/80"
+            >
+              {isMuted ? (
+                <VolumeX className="h-6 w-6" />
+              ) : (
+                <Volume2 className="h-6 w-6" />
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center border">
+                  <User className="h-4 w-4 text-black" />
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>Profile</DropdownMenuItem>
+                <DropdownMenuItem>Logout</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
 
-      <main className="flex-grow flex p-4 space-x-4 overflow-hidden">
-        <Card className="w-1/5 overflow-auto">
-          <CardContent>
-            <h2 className="text-xl font-bold mb-2 pt-2">Serving Tickets</h2>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ticket</TableHead>
-                  <TableHead className="text-center"></TableHead>
-                  <TableHead>Room</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tickets.map((ticket) => (
-                  <TableRow key={ticket._id}>
-                    <TableCell>{ticket.ticketNo}</TableCell>
-                    <TableCell className="text-center">
-                      <ArrowRight className="mx-auto text-blue-500" />
-                    </TableCell>
-                    <TableCell>
-                      {ticket.roomId ? ticket.roomId.roomNumber : "N/A"}
-                    </TableCell>
+        <main className="flex-grow flex p-4 space-x-4 overflow-hidden">
+          <Card className="w-1/5 overflow-auto">
+            <CardContent>
+              <h2 className="text-xl font-bold mb-2 pt-2">Serving Tickets</h2>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ticket</TableHead>
+                    <TableHead className="text-center"></TableHead>
+                    <TableHead>Room</TableHead>
                   </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tickets.map((ticket) => (
+                    <TableRow key={ticket._id}>
+                      <TableCell>{ticket.ticketNo}</TableCell>
+                      <TableCell className="text-center">
+                        <ArrowRight className="mx-auto text-blue-500" />
+                      </TableCell>
+                      <TableCell>
+                        {ticket.roomId ? ticket.roomId.roomNumber : "N/A"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <div className="w-3/5 overflow-hidden">
+            <Carousel className="w-full h-full">
+              <CarouselContent className="h-full">
+                {ads.map((ad, index) => (
+                  <CarouselItem
+                    key={ad._id}
+                    className={`h-full ${
+                      index === currentAdIndex ? "" : "hidden"
+                    }`}
+                  >
+                    <div className="w-full h-full">
+                      <img
+                        src={ad.image}
+                        alt={ad.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </CarouselItem>
                 ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              </CarouselContent>
+            </Carousel>
+          </div>
 
-        <div className="w-3/5 overflow-hidden">
-          <Carousel className="w-full h-full">
-            <CarouselContent className="h-full">
-              {ads.map((ad, index) => (
-                <CarouselItem
-                  key={ad._id}
-                  className={`h-full ${
-                    index === currentAdIndex ? "" : "hidden"
-                  }`}
-                >
-                  <div className="w-full h-full">
-                    <img
-                      src={ad.image}
-                      alt={ad.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </div>
-
-        <Card className="w-1/5 overflow-auto">
-          <CardContent>
-            <h2 className="text-xl font-bold mb-4 pt-2">Announcements</h2>
-            <div className="space-y-4">
-              {events.map((event) => (
-                <div
-                  key={event._id}
-                  className="bg-gray-100 rounded-lg p-4 transition-all hover:shadow-md"
-                >
-                  <div className="flex items-start space-x-3">
-                    <Calendar className="w-5 h-5 text-blue-500 mt-1" />
-                    <div>
-                      <h3 className="font-semibold text-lg leading-tight">
-                        {event.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {formatDate(event.date)}
-                      </p>
+          <Card className="w-1/5 overflow-auto">
+            <CardContent>
+              <h2 className="text-xl font-bold mb-4 pt-2">Announcements</h2>
+              <div className="space-y-4">
+                {events.map((event) => (
+                  <div
+                    key={event._id}
+                    className="bg-gray-100 rounded-lg p-4 transition-all hover:shadow-md"
+                  >
+                    <div className="flex items-start space-x-3">
+                      <Calendar className="w-5 h-5 text-blue-500 mt-1" />
+                      <div>
+                        <h3 className="font-semibold text-lg leading-tight">
+                          {event.title}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {formatDate(event.date)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </main>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </main>
 
-      <footer className="bg-[#0e4480] text-white p-2 overflow-hidden">
-        <Marquee text={settings?.notificationText || "Welcome dear patient"} />
-      </footer>
-    </div>
+        <footer className="bg-[#0e4480] text-white p-2 overflow-hidden">
+          <Marquee
+            text={settings?.notificationText || "Welcome dear patient"}
+          />
+        </footer>
+
+        <ToastViewport className="fixed top-4 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 w-[350px] max-w-[100vw] m-0 z-[100] outline-none" />
+      </div>
+    </ToastProvider>
   );
 }

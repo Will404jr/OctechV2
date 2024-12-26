@@ -82,7 +82,7 @@ export function Sidebar() {
     const fetchUserPermissions = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch("/api/bank/permissions");
+        const response = await fetch("/api/hospital/permissions");
         if (response.ok) {
           const data = await response.json();
           setUserPermissions(data.permissions || {});

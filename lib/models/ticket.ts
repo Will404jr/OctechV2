@@ -24,6 +24,7 @@ const ticketSchema = new mongoose.Schema(
       ref: "Room",
       default: null,
     },
+    callAgain: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

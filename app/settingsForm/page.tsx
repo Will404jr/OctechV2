@@ -156,7 +156,7 @@ export default function SettingsPage() {
         }
       });
 
-      const response = await fetch("/api/hospital/settings", {
+      const response = await fetch("/api/settings", {
         method: "POST",
         body: formData,
       });
@@ -171,7 +171,13 @@ export default function SettingsPage() {
         title: "Settings saved",
         description: "Your company settings have been successfully updated.",
       });
-      router.push("/hospital/login");
+
+      // Navigate based on company type
+      if (data.companyType === "Bank") {
+        router.push("/bank/login");
+      } else {
+        router.push("/hospital/login");
+      }
     } catch (error) {
       console.error("Error saving settings:", error);
       toast({

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { User, Settings } from "@/lib/models/bank";
+import { User } from "@/lib/models/bank";
+import { Settings } from "@/lib/models/hospital";
 import { getSession } from "@/lib/session";
 
 interface LoginRequestBody {

@@ -111,10 +111,10 @@ const settingsSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    kioskUsername: { type: String, required: true },
+    kioskUsername: { type: String, required: false },
     kioskPassword: {
       type: String,
-      required: true,
+      required: false,
     },
   },
   { timestamps: true }

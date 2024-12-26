@@ -32,6 +32,10 @@ interface Branch {
   databaseName: string;
   databaseUser: string;
   databasePassword: string;
+  kioskUsername: string;
+  kioskPassword: string;
+  hallDisplayUsername: string;
+  hallDisplayPassword: string;
 }
 
 export default function BranchPage() {
@@ -153,6 +157,12 @@ export default function BranchPage() {
       databaseUser: formData.get("databaseUser")?.toString() || undefined,
       databasePassword:
         formData.get("databasePassword")?.toString() || undefined,
+      kioskUsername: formData.get("kioskUsername")?.toString() || undefined,
+      kioskPassword: formData.get("kioskPassword")?.toString() || undefined,
+      hallDisplayUsername:
+        formData.get("hallDisplayUsername")?.toString() || undefined,
+      hallDisplayPassword:
+        formData.get("hallDisplayPassword")?.toString() || undefined,
     };
 
     if (editingBranch) {
@@ -251,6 +261,52 @@ export default function BranchPage() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="kioskUsername">Kiosk Username</Label>
+                  <Input
+                    id="kioskUsername"
+                    name="kioskUsername"
+                    defaultValue={editingBranch?.kioskUsername || ""}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="kioskPassword">Kiosk Password</Label>
+                  <Input
+                    id="kioskPassword"
+                    name="kioskPassword"
+                    type="password"
+                    defaultValue={editingBranch?.kioskPassword || ""}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="hallDisplayUsername">
+                    Hall Display Username
+                  </Label>
+                  <Input
+                    id="hallDisplayUsername"
+                    name="hallDisplayUsername"
+                    defaultValue={editingBranch?.hallDisplayUsername || ""}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hallDisplayPassword">
+                    Hall Display Password
+                  </Label>
+                  <Input
+                    id="hallDisplayPassword"
+                    name="hallDisplayPassword"
+                    type="password"
+                    defaultValue={editingBranch?.hallDisplayPassword || ""}
+                    required
+                  />
+                </div>
+              </div>
               <Button type="submit" className="w-full bg-[#0e4480]">
                 {editingBranch ? "Update" : "Create"} Branch
               </Button>
@@ -274,6 +330,8 @@ export default function BranchPage() {
               <TableHead>Network Address</TableHead>
               <TableHead>Database Name</TableHead>
               <TableHead>Database Host</TableHead>
+              <TableHead>Kiosk Username</TableHead>
+              <TableHead>Hall Display Username</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -285,6 +343,8 @@ export default function BranchPage() {
                 <TableCell>{branch.localNetworkAddress}</TableCell>
                 <TableCell>{branch.databaseName}</TableCell>
                 <TableCell>{branch.databaseHost}</TableCell>
+                <TableCell>{branch.kioskUsername}</TableCell>
+                <TableCell>{branch.hallDisplayUsername}</TableCell>
                 <TableCell>
                   <Button
                     size="sm"

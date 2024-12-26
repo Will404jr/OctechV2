@@ -2,11 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Staff } from "@/lib/models/hospital";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await dbConnect();
-    const users = await Staff.find().populate("role", "name").lean();
-    return NextResponse.json(users);
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (id) {
+      const staff = await Staff.findById(id).select("username").lean();
+      if (!staff) {
+        return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+      }
+      return NextResponse.json(staff);
+    } else {
+      const users = await Staff.find().populate("role", "name").lean();
+      return NextResponse.json(users);
+    }
   } catch (error) {
     console.error("Error fetching staff:", error);
     return NextResponse.json(
@@ -15,6 +26,7 @@ export async function GET() {
     );
   }
 }
+
 export async function POST(req: NextRequest) {
   try {
     await dbConnect(); // Ensure the database is connected

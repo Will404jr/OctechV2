@@ -25,6 +25,7 @@ export async function PUT(
       subItemId?: string;
       issueDescription?: string;
       roomId?: string | null;
+      callAgain?: boolean;
     } = {};
 
     if (body.ticketStatus) {
@@ -53,6 +54,10 @@ export async function PUT(
       updateData.ticketStatus = "Not Served"; // Reset status when queue changes
       updateData.issueDescription = body.issueDescription;
       updateData.roomId = null; // Reset roomId when queue changes
+    }
+
+    if (body.callAgain !== undefined) {
+      updateData.callAgain = body.callAgain;
     }
 
     const updatedTicket = await Ticket.findByIdAndUpdate(id, updateData, {
