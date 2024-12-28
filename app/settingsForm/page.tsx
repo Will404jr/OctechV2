@@ -151,10 +151,18 @@ export default function SettingsPage() {
       Object.entries(data).forEach(([key, value]) => {
         if (key === "logoImage" && value instanceof File) {
           formData.append(key, value);
-        } else if (value !== undefined && value !== null) {
+        } else if (value !== undefined && value !== null && value !== "") {
           formData.append(key, value as string);
         }
       });
+
+      // Explicitly add kioskUsername and kioskPassword if they exist
+      if (data.kioskUsername) {
+        formData.append("kioskUsername", data.kioskUsername);
+      }
+      if (data.kioskPassword) {
+        formData.append("kioskPassword", data.kioskPassword);
+      }
 
       const response = await fetch("/api/settings", {
         method: "POST",

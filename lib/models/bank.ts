@@ -204,7 +204,7 @@ const counterSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Staff",
+      ref: "User",
       required: true,
     },
     counterNumber: { type: Number, required: true },
@@ -243,7 +243,7 @@ const ticketSchema = new mongoose.Schema(
     },
     counterId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Room",
+      ref: "Counter",
       default: null,
     },
     branchId: {
@@ -251,6 +251,7 @@ const ticketSchema = new mongoose.Schema(
       ref: "Branch",
       required: true,
     },
+    callAgain: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

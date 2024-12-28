@@ -3,4 +3,5 @@ export interface Ad {
   name: string;
   image: string;
   createdAt: string;
+  branchId: string;
 }

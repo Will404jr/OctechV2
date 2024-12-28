@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Play, Pause, SkipForward, Check } from "lucide-react";
+import { Play, Pause, SkipForward, Check, PhoneCall } from "lucide-react";
 import { QueueSpinner } from "@/components/queue-spinner";
 
 interface SubMenuItem {
@@ -38,6 +38,11 @@ interface QueueItem {
   menuItem: MenuItem;
 }
 
+interface QueueItem {
+  _id: string;
+  menuItem: MenuItem;
+}
+
 interface Ticket {
   _id: string;
   ticketNo: string;
@@ -45,6 +50,7 @@ interface Ticket {
   subItemId: string;
   issueDescription: string;
   ticketStatus: "Not Served" | "Serving" | "Served";
+  callAgain?: boolean; // Added callAgain property
 }
 
 interface ActiveCounter {
@@ -86,14 +92,16 @@ export default function ServingPage() {
   const [isChangeCounterDialogOpen, setIsChangeCounterDialogOpen] =
     useState(false);
   const [newCounterNumber, setNewCounterNumber] = useState("");
+  const [isPaused, setIsPaused] = useState(false);
+  const [userBranchId, setUserBranchId] = useState<string | null>(null); // Added userBranchId state
 
   const fetchQueuePreview = useCallback(async () => {
-    if (!selectedQueueId) return;
+    if (!selectedQueueId || !userBranchId) return;
 
     try {
       console.log("Fetching queue preview for queueId:", selectedQueueId);
       const response = await fetch(
-        `/api/ticket?queueId=${selectedQueueId}&status=Not Served`
+        `/api/bank/ticket?queueId=${selectedQueueId}&status=Not Served&branchId=${userBranchId}`
       );
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -105,8 +113,10 @@ export default function ServingPage() {
     } catch (error) {
       console.error("Error fetching queue preview:", error);
       setError("Failed to fetch tickets. Please try again.");
+      setQueuePreview([]);
+      setQueueStatus(0);
     }
-  }, [selectedQueueId]);
+  }, [selectedQueueId, userBranchId]);
 
   useEffect(() => {
     fetchQueueItems();
@@ -162,6 +172,12 @@ export default function ServingPage() {
 
   const handleDialogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userBranchId) {
+      setError(
+        "You don't have permission to serve tickets. Please contact your administrator."
+      );
+      return;
+    }
     if (selectedQueueId && counterNumber) {
       try {
         const response = await fetch("/api/bank/counter", {
@@ -172,6 +188,7 @@ export default function ServingPage() {
           body: JSON.stringify({
             counterNumber: parseInt(counterNumber),
             queueId: selectedQueueId,
+            branchId: userBranchId, // Added branchId
           }),
         });
 
@@ -195,18 +212,25 @@ export default function ServingPage() {
 
   const startServing = async () => {
     setIsServing(true);
+    setIsPaused(false);
     await fetchNextTicket();
   };
 
   const pauseServing = () => {
-    setIsServing(false);
+    setIsPaused(true);
+  };
+
+  const resumeServing = () => {
+    setIsPaused(false);
   };
 
   const fetchNextTicket = async () => {
+    if (isPaused || !userBranchId) return;
+
     try {
       // Check if there's a currently serving ticket
       const servingResponse = await fetch(
-        `/api/ticket?queueId=${selectedQueueId}&status=Serving`
+        `/api/bank/ticket?queueId=${selectedQueueId}&status=Serving&branchId=${userBranchId}`
       );
       if (!servingResponse.ok) {
         throw new Error("Failed to fetch serving ticket");
@@ -219,7 +243,7 @@ export default function ServingPage() {
       } else {
         // If no serving ticket, fetch the next 'Not Served' ticket
         const response = await fetch(
-          `/api/ticket?queueId=${selectedQueueId}&status=Not Served`
+          `/api/bank/ticket?queueId=${selectedQueueId}&status=Not Served&branchId=${userBranchId}`
         );
         if (!response.ok) {
           throw new Error("Failed to fetch next ticket");
@@ -240,29 +264,45 @@ export default function ServingPage() {
 
   const markAsServed = async () => {
     if (currentTicket) {
-      await updateTicketStatus(currentTicket._id, "Served");
-      await fetchNextTicket();
+      try {
+        const response = await updateTicketStatus(currentTicket._id, "Served");
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Ticket marked as served:", data);
+
+        if (!isPaused) {
+          await fetchNextTicket();
+        } else {
+          setCurrentTicket(null);
+        }
+      } catch (error) {
+        console.error("Error marking ticket as served:", error);
+        setError("Failed to mark ticket as served. Please try again.");
+      }
     }
   };
 
   const updateTicketStatus = async (
     ticketId: string,
     status: "Serving" | "Served"
-  ) => {
-    try {
-      const response = await fetch(`/api/ticket/${ticketId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ticketStatus: status }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to update ticket status");
-      }
-    } catch (error) {
-      console.error("Error updating ticket status:", error);
+  ): Promise<Response> => {
+    const response = await fetch(`/api/bank/ticket/${ticketId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ticketStatus: status }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error updating ticket status:", errorData);
+      throw new Error(errorData.error || "Failed to update ticket status");
     }
+
+    return response;
   };
 
   const changeQueue = async (
@@ -277,7 +317,7 @@ export default function ServingPage() {
       );
       const newIssueDescription = `${newQueue?.menuItem.name} - ${newSubItem?.name}`;
 
-      const response = await fetch(`/api/ticket/${ticketId}`, {
+      const response = await fetch(`/api/bank/ticket/${ticketId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -349,10 +389,10 @@ export default function ServingPage() {
 
   useEffect(() => {
     const fetchServingTicket = async () => {
-      if (selectedQueueId) {
+      if (selectedQueueId && userBranchId) {
         try {
           const response = await fetch(
-            `/api/ticket?queueId=${selectedQueueId}&status=Serving`
+            `/api/bank/ticket?queueId=${selectedQueueId}&status=Serving&branchId=${userBranchId}`
           );
           if (!response.ok) {
             throw new Error("Failed to fetch serving ticket");
@@ -368,7 +408,50 @@ export default function ServingPage() {
     };
 
     fetchServingTicket();
-  }, [selectedQueueId]);
+  }, [selectedQueueId, userBranchId]);
+
+  useEffect(() => {
+    const fetchUserSession = async () => {
+      try {
+        const response = await fetch("/api/session");
+        if (!response.ok) {
+          throw new Error("Failed to fetch user session");
+        }
+        const sessionData = await response.json();
+        setUserBranchId(sessionData.branchId);
+      } catch (error) {
+        console.error("Error fetching user session:", error);
+        setError("Failed to fetch user session. Please try again.");
+      }
+    };
+
+    fetchUserSession();
+  }, []);
+
+  const callAgain = async () => {
+    if (currentTicket) {
+      try {
+        const response = await fetch(`/api/bank/ticket/${currentTicket._id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ callAgain: true }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to call ticket again");
+        }
+
+        // Optionally, you can update the local state or refetch the current ticket
+        // to reflect the change immediately in the UI
+        setCurrentTicket({ ...currentTicket, callAgain: true });
+      } catch (error) {
+        console.error("Error calling ticket again:", error);
+        // Handle the error (e.g., show an error message to the user)
+      }
+    }
+  };
 
   if (isLoading) {
     return (
@@ -393,7 +476,7 @@ export default function ServingPage() {
           <DialogHeader>
             <DialogTitle>Select Serving Details</DialogTitle>
             <DialogDescription>
-              Choose a queue item and enter the room number to start serving.
+              Choose a queue item and enter the counter number to start serving.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleDialogSubmit}>
@@ -481,17 +564,22 @@ export default function ServingPage() {
                   : "No active ticket"}
               </p>
               {currentTicket && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => {
-                    setTicketToChange(currentTicket);
-                    setIsChangeQueueDialogOpen(true);
-                  }}
-                >
-                  Change Queue
-                </Button>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTicketToChange(currentTicket);
+                      setIsChangeQueueDialogOpen(true);
+                    }}
+                  >
+                    Change Queue
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={callAgain}>
+                    <PhoneCall className="mr-2 h-4 w-4" />
+                    Call Again
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -524,27 +612,27 @@ export default function ServingPage() {
             size="lg"
             className="w-full"
             onClick={startServing}
-            disabled={isServing}
+            disabled={isServing && !isPaused}
           >
             <Play className="mr-2 h-4 w-4" />
-            Start Serving
+            {isServing && isPaused ? "Resume Serving" : "Start Serving"}
           </Button>
           <Button
             size="lg"
             variant="outline"
             className="w-full"
-            onClick={pauseServing}
+            onClick={isPaused ? resumeServing : pauseServing}
             disabled={!isServing}
           >
             <Pause className="mr-2 h-4 w-4" />
-            Pause
+            {isPaused ? "Resume" : "Pause"}
           </Button>
           <Button
             size="lg"
             variant="secondary"
             className="w-full"
             onClick={fetchNextTicket}
-            disabled={!isServing}
+            disabled={!isServing || isPaused}
           >
             <SkipForward className="mr-2 h-4 w-4" />
             Next Customer
@@ -699,7 +787,7 @@ export default function ServingPage() {
             </div>
             <DialogFooter>
               <Button type="submit" className="bg-[#0e4480]">
-                Update Room
+                Update Counter
               </Button>
             </DialogFooter>
           </form>

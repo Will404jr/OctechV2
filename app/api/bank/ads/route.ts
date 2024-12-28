@@ -23,10 +23,11 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const name = formData.get("name") as string;
     const image = formData.get("image") as File;
+    const branchId = formData.get("branchId") as string;
 
-    if (!name || !image) {
+    if (!name || !image || !branchId) {
       return NextResponse.json(
-        { error: "Name and image are required" },
+        { error: "Name, branchId and image are required" },
         { status: 400 }
       );
     }
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
 
     const newAd = new Ad({
       name,
+      branchId,
       image: `/uploads/${filename}`,
     });
 

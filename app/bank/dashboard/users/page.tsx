@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Edit, Trash } from "lucide-react";
+import { Plus, Edit, Trash, Eye, EyeOff } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import {
   Table,
@@ -45,6 +45,7 @@ interface User {
   image: string;
   role: RoleOrBranch | null;
   branch: RoleOrBranch | null;
+  password?: string; // Add this line
 }
 
 interface Role extends RoleOrBranch {}
@@ -57,13 +58,17 @@ export default function UsersPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
-  const { control, handleSubmit, reset } = useForm<User>({
+  const { control, handleSubmit, reset } = useForm<
+    User & { password?: string }
+  >({
     defaultValues: {
       firstName: "",
       lastName: "",
       email: "",
       username: "",
+      password: "",
       role: null,
       branch: null,
     },
@@ -109,7 +114,7 @@ export default function UsersPage() {
     fetchMetadata();
   }, []);
 
-  const onSubmit = async (data: User) => {
+  const onSubmit = async (data: User & { password?: string }) => {
     const method = editingUser ? "PUT" : "POST";
     const url = editingUser
       ? `/api/bank/users/${editingUser._id}`
@@ -120,6 +125,11 @@ export default function UsersPage() {
       role: data.role?._id || null,
       branch: data.branch?._id || null,
     };
+
+    // Remove password field if it's empty (for editing)
+    if (!data.password) {
+      delete updatedData.password;
+    }
 
     try {
       const response = await fetch(url, {
@@ -141,6 +151,7 @@ export default function UsersPage() {
           lastName: "",
           email: "",
           username: "",
+          password: "",
           role: null,
           branch: null,
         });
@@ -192,6 +203,7 @@ export default function UsersPage() {
       ...user,
       role: user.role || null,
       branch: user.branch || null,
+      password: "", // Add this line
     });
     setIsOpen(true);
   };
@@ -211,6 +223,7 @@ export default function UsersPage() {
                   lastName: "",
                   email: "",
                   username: "",
+                  password: "",
                   role: null,
                   branch: null,
                 });
@@ -305,6 +318,56 @@ export default function UsersPage() {
                       </>
                     )}
                   />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">
+                    {editingUser ? "Update Password" : "Password"}
+                  </Label>
+                  <div className="relative">
+                    <Controller
+                      name="password"
+                      control={control}
+                      rules={{
+                        required: editingUser ? false : "Password is required",
+                        minLength: {
+                          value: 8,
+                          message: "Password must be at least 8 characters",
+                        },
+                      }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Input
+                            id="password"
+                            type={showPassword ? "text" : "password"}
+                            {...field}
+                            placeholder={
+                              editingUser
+                                ? "Leave blank to keep current password"
+                                : "Enter password"
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="role">Role</Label>

@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash,
+  MapPin,
+  Database,
+  User,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,13 +22,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { QueueSpinner } from "@/components/queue-spinner";
 
@@ -147,7 +155,7 @@ export default function BranchPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    const branchData = {
+    const branchData: Partial<Branch> = {
       name: formData.get("name")?.toString() || undefined,
       address: formData.get("address")?.toString() || undefined,
       localNetworkAddress:
@@ -155,15 +163,21 @@ export default function BranchPage() {
       databaseHost: formData.get("databaseHost")?.toString() || undefined,
       databaseName: formData.get("databaseName")?.toString() || undefined,
       databaseUser: formData.get("databaseUser")?.toString() || undefined,
-      databasePassword:
-        formData.get("databasePassword")?.toString() || undefined,
       kioskUsername: formData.get("kioskUsername")?.toString() || undefined,
-      kioskPassword: formData.get("kioskPassword")?.toString() || undefined,
       hallDisplayUsername:
         formData.get("hallDisplayUsername")?.toString() || undefined,
-      hallDisplayPassword:
-        formData.get("hallDisplayPassword")?.toString() || undefined,
     };
+
+    // Only include password fields if they are not empty
+    const databasePassword = formData.get("databasePassword")?.toString();
+    if (databasePassword) branchData.databasePassword = databasePassword;
+
+    const kioskPassword = formData.get("kioskPassword")?.toString();
+    if (kioskPassword) branchData.kioskPassword = kioskPassword;
+
+    const hallDisplayPassword = formData.get("hallDisplayPassword")?.toString();
+    if (hallDisplayPassword)
+      branchData.hallDisplayPassword = hallDisplayPassword;
 
     if (editingBranch) {
       handleUpdate(branchData);
@@ -252,12 +266,14 @@ export default function BranchPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="databasePassword">Database Password</Label>
+                  <Label htmlFor="databasePassword">
+                    Update Database Password
+                  </Label>
                   <Input
                     id="databasePassword"
                     name="databasePassword"
-                    defaultValue={editingBranch?.databasePassword || ""}
-                    required
+                    type="password"
+                    placeholder="Enter new password to update"
                   />
                 </div>
               </div>
@@ -272,13 +288,12 @@ export default function BranchPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="kioskPassword">Kiosk Password</Label>
+                  <Label htmlFor="kioskPassword">Update Kiosk Password</Label>
                   <Input
                     id="kioskPassword"
                     name="kioskPassword"
                     type="password"
-                    defaultValue={editingBranch?.kioskPassword || ""}
-                    required
+                    placeholder="Enter new password to update"
                   />
                 </div>
               </div>
@@ -296,14 +311,13 @@ export default function BranchPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="hallDisplayPassword">
-                    Hall Display Password
+                    Update Hall Display Password
                   </Label>
                   <Input
                     id="hallDisplayPassword"
                     name="hallDisplayPassword"
                     type="password"
-                    defaultValue={editingBranch?.hallDisplayPassword || ""}
-                    required
+                    placeholder="Enter new password to update"
                   />
                 </div>
               </div>
@@ -322,52 +336,74 @@ export default function BranchPage() {
       ) : branches.length === 0 ? (
         <p className="text-center text-gray-500">No branches available.</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Address</TableHead>
-              <TableHead>Network Address</TableHead>
-              <TableHead>Database Name</TableHead>
-              <TableHead>Database Host</TableHead>
-              <TableHead>Kiosk Username</TableHead>
-              <TableHead>Hall Display Username</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {branches.map((branch) => (
-              <TableRow key={branch._id}>
-                <TableCell>{branch.name}</TableCell>
-                <TableCell>{branch.address}</TableCell>
-                <TableCell>{branch.localNetworkAddress}</TableCell>
-                <TableCell>{branch.databaseName}</TableCell>
-                <TableCell>{branch.databaseHost}</TableCell>
-                <TableCell>{branch.kioskUsername}</TableCell>
-                <TableCell>{branch.hallDisplayUsername}</TableCell>
-                <TableCell>
-                  <Button
-                    size="sm"
-                    className="mr-2 bg-[#3a72ec]"
-                    onClick={() => {
-                      setEditingBranch(branch);
-                      setIsOpen(true);
-                    }}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDelete(branch._id)}
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {branches.map((branch) => (
+            <Card key={branch._id} className="flex flex-col">
+              <CardHeader>
+                <CardTitle>{branch.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-grow space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <MapPin className="w-4 h-4 mr-2 text-gray-500" />
+                    <span className="text-sm">{branch.address}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Database className="w-4 h-4 mr-2 text-gray-500" />
+                    <span className="text-sm">
+                      {branch.databaseName} @ {branch.databaseHost}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <User className="w-4 h-4 mr-2 text-gray-500" />
+                    <span className="text-sm">
+                      DB User: {branch.databaseUser}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <User className="w-4 h-4 mr-2 text-gray-500" />
+                    <span className="text-sm">
+                      Kiosk: {branch.kioskUsername}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <User className="w-4 h-4 mr-2 text-gray-500" />
+                    <span className="text-sm">
+                      Hall Display: {branch.hallDisplayUsername}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-end space-x-2">
+                <Button
+                  size="sm"
+                  className="bg-[#3a72ec]"
+                  onClick={() => {
+                    setEditingBranch(branch);
+                    setIsOpen(true);
+                  }}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDelete(branch._id)}
+                >
+                  <Trash className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

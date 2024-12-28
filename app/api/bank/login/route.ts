@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       await request.json();
 
     if (isAdminLogin) {
-      // Admin login logic
+      // Admin login logic (unchanged)
       const settings = await Settings.findOne();
       console.log("Admin login attempt:", {
         email,
@@ -68,7 +68,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true }, { status: 200 });
     } else {
       // Regular staff login logic
-      const user = await User.findOne({ email }).populate("role");
+      const user = await User.findOne({ email })
+        .populate("role")
+        .populate("branch");
       if (!user) {
         return NextResponse.json(
           { error: "Invalid credentials" },
@@ -89,9 +91,21 @@ export async function POST(request: Request) {
       session.isLoggedIn = true;
       session.role = user.role.name;
       session.permissions = user.role.permissions;
+      session.branchId = user.branch ? user.branch._id.toString() : undefined;
       await session.save();
 
-      return NextResponse.json({ success: true }, { status: 200 });
+      return NextResponse.json(
+        {
+          success: true,
+          user: {
+            id: user._id,
+            name: user.name,
+            role: user.role.name,
+            branchId: user.branch ? user.branch._id.toString() : undefined,
+          },
+        },
+        { status: 200 }
+      );
     }
   } catch (error) {
     console.error("Login error:", error);

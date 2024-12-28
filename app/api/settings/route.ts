@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile } from "fs/promises";
+import { Error as MongooseError } from "mongoose";
 import path from "path";
 import { Settings } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
       body = await req.json();
     }
 
-    const settingsData: Record<string, string> = {};
+    const settingsData: Record<string, any> = {};
 
     if (body instanceof FormData) {
       for (const [key, value] of Array.from(body.entries())) {
@@ -77,41 +78,66 @@ export async function POST(req: NextRequest) {
             );
             return setCorsHeaders(errorResponse);
           }
-        } else if (key === "password" || key === "kioskPassword") {
-          if (value) {
-            settingsData[key] = await bcrypt.hash(value.toString(), 10);
-          }
         } else {
           settingsData[key] = value.toString();
         }
       }
     } else {
-      for (const [key, value] of Object.entries(body)) {
-        if (key === "password" || key === "kioskPassword") {
-          if (value) {
-            settingsData[key] = await bcrypt.hash(value as string, 10);
-          }
-        } else {
-          settingsData[key] = value as string;
-        }
-      }
+      Object.assign(settingsData, body);
     }
 
     let existingSettings = await Settings.findOne();
     if (existingSettings) {
       // Update existing settings
       Object.assign(existingSettings, settingsData);
+
+      // Handle password updates separately
+      if (body.password) {
+        existingSettings.password = body.password;
+      }
+      if (body.kioskPassword) {
+        existingSettings.kioskPassword = body.kioskPassword;
+      }
+
       await existingSettings.save();
     } else {
       // Create new settings
       existingSettings = new Settings(settingsData);
+
+      // Set passwords directly on the model instance
+      if (body.password) {
+        existingSettings.password = body.password;
+      }
+      if (body.kioskPassword) {
+        existingSettings.kioskPassword = body.kioskPassword;
+      }
+
       await existingSettings.save();
     }
 
-    const response = NextResponse.json(existingSettings);
+    const response = NextResponse.json({
+      message: "Settings saved successfully",
+      settings: await Settings.findOne().select("-password -kioskPassword"),
+    });
     return setCorsHeaders(response);
   } catch (error) {
     console.error("Error saving settings:", error);
+
+    if (error instanceof MongooseError.ValidationError) {
+      const validationErrors: Record<string, string> = {};
+      for (const field in error.errors) {
+        validationErrors[field] = error.errors[field].message;
+      }
+      const errorResponse = NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationErrors,
+        },
+        { status: 400 }
+      );
+      return setCorsHeaders(errorResponse);
+    }
+
     const errorResponse = NextResponse.json(
       { error: "Failed to save settings. Please try again." },
       { status: 500 }

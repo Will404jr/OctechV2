@@ -17,6 +17,13 @@ import { useForm } from "react-hook-form";
 import AdCarousel from "./AdCarousel";
 import { Ad } from "./Ad";
 import { QueueSpinner } from "@/components/queue-spinner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 
@@ -29,6 +36,7 @@ const validateFileSize = (file: File) => {
 
 export default function DisplayAdsPage() {
   const [ads, setAds] = useState<Ad[]>([]);
+  const [branches, setBranches] = useState<{ _id: string; name: string }[]>([]); // Added state for branches
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const {
@@ -40,6 +48,7 @@ export default function DisplayAdsPage() {
 
   useEffect(() => {
     fetchAds();
+    fetchBranches(); // Fetch branches data
   }, []);
 
   const fetchAds = async () => {
@@ -57,10 +66,25 @@ export default function DisplayAdsPage() {
     }
   };
 
+  const fetchBranches = async () => {
+    try {
+      const response = await fetch("/api/bank/branches"); // Fetch branches API endpoint
+      if (response.ok) {
+        const data = await response.json();
+        setBranches(data);
+      } else {
+        console.error("Failed to fetch branches");
+      }
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+    }
+  };
+
   const onSubmit = async (data: any) => {
     try {
       const formData = new FormData();
       formData.append("name", data.name);
+      formData.append("branchId", data.branchId);
       if (data.image && data.image.length > 0) {
         formData.append("image", data.image[0]);
       }
@@ -104,6 +128,12 @@ export default function DisplayAdsPage() {
     }
   };
 
+  const setValue = (field: string, value: string) => {
+    reset((prevValues) => ({
+      ...prevValues,
+      [field]: value,
+    }));
+  };
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -128,6 +158,24 @@ export default function DisplayAdsPage() {
                 <div className="grid gap-2">
                   <Label htmlFor="name">Ad Name</Label>
                   <Input id="name" {...register("name")} required />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="branch">Branch</Label>
+                  <Select
+                    onValueChange={(value) => setValue("branchId", value)}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch._id} value={branch._id}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="image">Image</Label>
@@ -165,7 +213,7 @@ export default function DisplayAdsPage() {
         </div>
       ) : (
         <>
-          <AdCarousel ads={ads} />
+          <AdCarousel ads={ads} branches={branches} />
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {ads.map((ad: Ad) => (
