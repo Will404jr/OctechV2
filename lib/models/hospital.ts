@@ -25,24 +25,26 @@ export const Event =
   mongoose.models.Event || mongoose.model("Event", eventSchema);
 
 //queue schema
-const subMenuItemSchema = new mongoose.Schema({
-  name: { type: String, required: true }, // Sub-menu item name
-});
-
-const menuItemSchema = new mongoose.Schema({
-  name: { type: String, required: true }, // Menu item name
-  subMenuItems: [subMenuItemSchema], // Array of sub-menu items
-});
-
-const queueSchema = new mongoose.Schema(
+const TreeNodeSchema = new mongoose.Schema(
   {
-    menuItem: menuItemSchema, // A single menu item with sub-menu items
+    name: { type: String, required: true },
+    type: {
+      type: String,
+      enum: ["default", "primary", "secondary", "warning", "success"],
+      default: "default",
+    },
+    parentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TreeNode",
+      default: null,
+    },
+    order: { type: Number, default: 0 },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "hospitalQueues" }
 );
 
-export const Queue =
-  mongoose.models.Queue || mongoose.model("Queue", queueSchema);
+export default mongoose.models.TreeNode ||
+  mongoose.model("TreeNode", TreeNodeSchema);
 
 //role schema
 const roleSchema = new mongoose.Schema(

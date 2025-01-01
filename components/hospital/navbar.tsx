@@ -1,7 +1,6 @@
 "use client";
 
-import { UserButton } from "@/components/hospital/user-button";
-import { ModeToggle } from "@/components/mode-toggle";
+import { UserButton } from "./user-button";
 
 export function Navbar() {
   return (

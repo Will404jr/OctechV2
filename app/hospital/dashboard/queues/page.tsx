@@ -1,318 +1,362 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Plus, X, Loader2, Edit, Trash } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { QueueSpinner } from "@/components/queue-spinner";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
-// Types
-interface SubMenuItem {
-  name: string;
-}
+type NodeType = "default" | "primary" | "secondary" | "warning" | "success";
 
-interface MenuItem {
-  name: string;
-  subMenuItems: SubMenuItem[];
-}
-
-interface Queue {
+type TreeNode = {
   _id: string;
-  menuItem: MenuItem;
-  createdAt: string;
-  updatedAt: string;
+  name: string;
+  type: NodeType;
+  parentId: string | null;
+  order: number;
+};
+
+const nodeTypeColors: Record<NodeType, string> = {
+  default: "bg-background",
+  primary: "bg-primary/10",
+  secondary: "bg-secondary/10",
+  warning: "bg-orange-100",
+  success: "bg-green-100",
+};
+
+interface TreeNodeProps {
+  node: TreeNode;
+  onAdd: (parentId: string, name: string, type: NodeType) => void;
+  onDelete: (id: string) => void;
+  onUpdate: (id: string, updates: Partial<TreeNode>) => void;
+  allNodes: TreeNode[];
 }
 
-interface FormData {
-  menuItem: MenuItem;
-}
+const TreeNodeComponent = ({
+  node,
+  onAdd,
+  onDelete,
+  onUpdate,
+  allNodes,
+}: TreeNodeProps) => {
+  const [showInput, setShowInput] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newNodeName, setNewNodeName] = useState("");
+  const [newNodeType, setNewNodeType] = useState<NodeType>("default");
+  const [editName, setEditName] = useState(node.name);
 
-export default function QueuesPage() {
-  const [queues, setQueues] = useState<Queue[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingQueue, setEditingQueue] = useState<Queue | null>(null);
-  const { register, handleSubmit, reset, setValue, watch } = useForm<FormData>({
-    defaultValues: {
-      menuItem: { name: "", subMenuItems: [] },
-    },
-  });
-
-  const menuItem = watch("menuItem");
-
-  useEffect(() => {
-    fetchQueues();
-  }, []);
-
-  const fetchQueues = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch("/api/hospital/queues");
-      const data = await response.json();
-      if (response.ok && Array.isArray(data)) {
-        setQueues(data);
-      } else {
-        toast.error("Failed to fetch queues");
-      }
-    } catch (error) {
-      toast.error("Error loading queues");
-    } finally {
-      setIsLoading(false);
+  const handleAdd = () => {
+    if (newNodeName.trim()) {
+      onAdd(node._id, newNodeName.trim(), newNodeType);
+      setNewNodeName("");
+      setNewNodeType("default");
+      setShowInput(false);
     }
   };
 
-  const onSubmit = async (data: FormData) => {
-    try {
-      const url = editingQueue
-        ? `/api/hospital/queues/${editingQueue._id}`
-        : "/api/hospital/queues";
-      const method = editingQueue ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (response.ok) {
-        await fetchQueues();
-        reset();
-        setDialogOpen(false);
-        setEditingQueue(null);
-        toast.success(
-          editingQueue
-            ? "Queue updated successfully"
-            : "Queue created successfully"
-        );
-      } else {
-        const errorData = await response.json();
-        toast.error(
-          `Failed to ${editingQueue ? "update" : "create"} queue: ${
-            errorData.message
-          }`
-        );
-      }
-    } catch (error) {
-      toast.error(`Error ${editingQueue ? "updating" : "creating"} queue`);
+  const handleEdit = () => {
+    if (editName.trim()) {
+      onUpdate(node._id, { name: editName.trim() });
+      setIsEditing(false);
     }
   };
 
-  const deleteQueue = async (id: string) => {
-    try {
-      const response = await fetch(`/api/hospital/queues/${id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        setQueues(queues.filter((queue) => queue._id !== id));
-        toast.success("Queue deleted successfully");
-      } else {
-        toast.error("Failed to delete queue");
-      }
-    } catch (error) {
-      toast.error("Error deleting queue");
-    }
-  };
-
-  const addSubItem = () => {
-    const updatedSubItems = [...menuItem.subMenuItems, { name: "" }];
-    setValue("menuItem.subMenuItems", updatedSubItems);
-  };
-
-  const removeSubItem = (index: number) => {
-    const updatedSubItems = menuItem.subMenuItems.filter((_, i) => i !== index);
-    setValue("menuItem.subMenuItems", updatedSubItems);
-  };
-
-  const openEditDialog = (queue: Queue) => {
-    setEditingQueue(queue);
-    setValue("menuItem", queue.menuItem);
-    setDialogOpen(true);
-  };
+  const childNodes = allNodes.filter((n) => n.parentId === node._id);
 
   return (
-    <ProtectedRoute requiredPermission="Queues">
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-bold tracking-tight">
-            Queue Management
-          </h2>
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) {
-                setEditingQueue(null);
-                reset();
-              }
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button className="bg-[#0e4480]">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Queue Menu
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[525px]">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingQueue ? "Edit" : "Create"} Queue Menu
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                  <Card>
-                    <CardContent className="space-y-4 pt-4">
-                      <div>
-                        <Label>Menu Item Name</Label>
-                        <Input
-                          {...register("menuItem.name")}
-                          placeholder="e.g., Teller Services"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Sub Items</Label>
-                        {menuItem.subMenuItems.map((subItem, index) => (
-                          <div key={index} className="flex gap-2">
-                            <Input
-                              {...register(
-                                `menuItem.subMenuItems.${index}.name`
-                              )}
-                              placeholder="e.g., Deposit"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeSubItem(index)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={addSubItem}
-                        >
-                          Add Sub Item
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-                <Button type="submit" className="bg-[#0e4480]">
-                  {editingQueue ? "Update" : "Create"} Queue Menu
+    <div className="relative">
+      <Card
+        className={`p-4 mb-2 ${
+          nodeTypeColors[node.type]
+        } transition-colors duration-200`}
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <div className="flex gap-2">
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="max-w-xs"
+                />
+                <Button size="icon" variant="ghost" onClick={handleEdit}>
+                  <Check className="h-4 w-4 text-green-600" />
                 </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {isLoading ? (
-          <div className="flex justify-center items-center min-h-[200px]">
-            <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {queues.length > 0 ? (
-              queues.map((queue) => (
-                <Card key={queue._id} className="overflow-hidden">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-lg font-semibold">
-                      {queue.menuItem.name}
-                    </CardTitle>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDialog(queue)}
-                        className="h-8 w-8 text-blue-500 hover:text-blue-700"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
-                          >
-                            <Trash className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will
-                              permanently delete the queue and all its menu
-                              items.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteQueue(queue._id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium text-muted-foreground">
-                        Sub Items:
-                      </h4>
-                      <ul className="list-disc list-inside text-sm space-y-1">
-                        {queue.menuItem.subMenuItems.map((subItem, index) => (
-                          <li key={index} className="text-gray-700">
-                            {subItem.name}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setIsEditing(false)}
+                >
+                  <X className="h-4 w-4 text-red-600" />
+                </Button>
+              </div>
             ) : (
-              <p className="text-muted-foreground col-span-full text-center">
-                No queues available. Create one to get started.
-              </p>
+              <span className="font-medium">{node.name}</span>
             )}
           </div>
+          <div className="flex gap-2">
+            <Select
+              value={node.type}
+              onValueChange={(value: NodeType) =>
+                onUpdate(node._id, { type: value })
+              }
+            >
+              <SelectTrigger className="w-[100px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default</SelectItem>
+                <SelectItem value="primary">Primary</SelectItem>
+                <SelectItem value="secondary">Secondary</SelectItem>
+                <SelectItem value="warning">Warning</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowInput(!showInput)}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsEditing(true)}
+            >
+              <Edit2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(node._id)}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        </div>
+
+        {showInput && (
+          <div className="mt-4 flex gap-2">
+            <Input
+              value={newNodeName}
+              onChange={(e) => setNewNodeName(e.target.value)}
+              placeholder="Enter node name"
+              className="max-w-xs"
+            />
+            <Select
+              value={newNodeType}
+              onValueChange={(value: NodeType) => setNewNodeType(value)}
+            >
+              <SelectTrigger className="w-[100px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default</SelectItem>
+                <SelectItem value="primary">Primary</SelectItem>
+                <SelectItem value="secondary">Secondary</SelectItem>
+                <SelectItem value="warning">Warning</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleAdd}>Add</Button>
+          </div>
+        )}
+      </Card>
+
+      {childNodes.length > 0 && (
+        <div className="ml-8 pl-4 border-l border-border">
+          {childNodes.map((child) => (
+            <TreeNodeComponent
+              key={child._id}
+              node={child}
+              onAdd={onAdd}
+              onDelete={onDelete}
+              onUpdate={onUpdate}
+              allNodes={allNodes}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DynamicTree = () => {
+  const [nodes, setNodes] = useState<TreeNode[]>([]);
+  const [newRootName, setNewRootName] = useState("");
+  const [newRootType, setNewRootType] = useState<NodeType>("default");
+
+  useEffect(() => {
+    fetchNodes();
+  }, []);
+
+  const fetchNodes = async () => {
+    const response = await fetch("/api/hospital/queues");
+    const data = await response.json();
+    setNodes(data);
+  };
+
+  const addNode = async (
+    parentId: string | null,
+    name: string,
+    type: NodeType
+  ) => {
+    const response = await fetch("/api/hospital/queues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, type, parentId }),
+    });
+    const newNode = await response.json();
+    setNodes([...nodes, newNode]);
+  };
+
+  const deleteNode = async (id: string) => {
+    await fetch("/api/hospital/queues", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setNodes(nodes.filter((node) => node._id !== id && node.parentId !== id));
+  };
+
+  const updateNode = async (id: string, updates: Partial<TreeNode>) => {
+    const response = await fetch("/api/hospital/queues", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, updates }),
+    });
+    const updatedNode = await response.json();
+    setNodes(nodes.map((node) => (node._id === id ? updatedNode : node)));
+  };
+
+  const rootNodes = nodes.filter((node) => node.parentId === null);
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-8">Dynamic Tree Layout</h1>
+
+      <div className="flex gap-4 mb-8">
+        <Input
+          value={newRootName}
+          onChange={(e) => setNewRootName(e.target.value)}
+          placeholder="Enter root node name"
+          className="max-w-xs"
+        />
+        <Select
+          value={newRootType}
+          onValueChange={(value: string) => setNewRootType(value as NodeType)}
+        >
+          <SelectTrigger className="w-[100px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Default</SelectItem>
+            <SelectItem value="primary">Primary</SelectItem>
+            <SelectItem value="secondary">Secondary</SelectItem>
+            <SelectItem value="warning">Warning</SelectItem>
+            <SelectItem value="success">Success</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          onClick={() => {
+            if (newRootName.trim()) {
+              addNode(null, newRootName.trim(), newRootType);
+              setNewRootName("");
+              setNewRootType("default");
+            }
+          }}
+        >
+          Add Root Node
+        </Button>
+      </div>
+
+      {rootNodes.length > 0 ? (
+        rootNodes.map((rootNode) => (
+          <TreeNodeComponent
+            key={rootNode._id}
+            node={rootNode}
+            onAdd={addNode}
+            onDelete={deleteNode}
+            onUpdate={updateNode}
+            allNodes={nodes}
+          />
+        ))
+      ) : (
+        <Alert>
+          <AlertDescription>
+            Start by adding a root node to create your tree structure.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {rootNodes.length > 0 && (
+        <div className="mt-12 p-8 bg-muted/20 rounded-lg">
+          <h2 className="text-2xl font-semibold mb-6">Tree Visualization</h2>
+          <div className="flex flex-col items-center">
+            {rootNodes.map((rootNode) => (
+              <TreeVisualization
+                key={rootNode._id}
+                node={rootNode}
+                allNodes={nodes}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TreeVisualization = ({
+  node,
+  allNodes,
+}: {
+  node: TreeNode;
+  allNodes: TreeNode[];
+}) => {
+  const childNodes = allNodes.filter((n) => n.parentId === node._id);
+
+  return (
+    <div className="relative">
+      <div
+        className={cn(
+          "flex flex-col items-center p-4 rounded-xl shadow-lg min-w-[180px]",
+          nodeTypeColors[node.type],
+          "border-2 border-primary/20 relative z-10"
+        )}
+      >
+        <span className="font-medium text-lg">{node.name}</span>
+        {node.type !== "default" && (
+          <span className="text-xs text-muted-foreground mt-1 capitalize">
+            {node.type}
+          </span>
         )}
       </div>
-    </ProtectedRoute>
+
+      {childNodes.length > 0 && (
+        <div className="mt-8 pt-4 flex gap-8 items-start relative">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-8 bg-primary/30" />
+          <div className="absolute top-8 left-0 right-0 h-px bg-primary/30" />
+
+          {childNodes.map((child) => (
+            <div key={child._id} className="relative flex-1">
+              <TreeVisualization node={child} allNodes={allNodes} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
-}
+};
+
+export default DynamicTree;
