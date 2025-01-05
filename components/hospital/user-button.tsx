@@ -29,6 +29,9 @@ export function UserButton() {
         const sessionData: SessionData = await sessionResponse.json();
         setSession(sessionData);
 
+        // Log the entire session data
+        console.log("Session Data:", sessionData);
+
         if (sessionData.userId) {
           const staffResponse = await fetch(
             `/api/hospital/staff?id=${sessionData.userId}`

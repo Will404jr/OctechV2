@@ -43,8 +43,8 @@ const TreeNodeSchema = new mongoose.Schema(
   { timestamps: true, collection: "hospitalQueues" }
 );
 
-export default mongoose.models.TreeNode ||
-  mongoose.model("TreeNode", TreeNodeSchema);
+export const TreeNode =
+  mongoose.models.TreeNode || mongoose.model("TreeNode", TreeNodeSchema);
 
 //role schema
 const roleSchema = new mongoose.Schema(
@@ -75,6 +75,7 @@ const staffSchema = new mongoose.Schema(
     password: { type: String, required: true },
     image: { type: String },
     role: { type: mongoose.Schema.Types.ObjectId, ref: "Role", required: true },
+    department: { type: String, required: true },
   },
   { timestamps: true }
 );
@@ -170,3 +171,82 @@ const roomSchema = new mongoose.Schema(
 );
 
 export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
+
+// ticket schema
+const ticketSchema = new mongoose.Schema(
+  {
+    ticketNo: { type: String, required: true },
+    journeyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Journey",
+      required: false,
+    },
+    currentStep: { type: Number, default: 0 },
+    journeySteps: { type: Map, of: Boolean, default: new Map() },
+    completed: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
+
+export const Ticket =
+  mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
+
+//  journey schema
+const StepSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    required: true,
+  },
+  title: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  icon: {
+    type: String,
+    required: true,
+  },
+});
+
+// Main Journey Schema
+const JourneySchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    steps: [StepSchema],
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Create indexes for better query performance
+JourneySchema.index({ name: 1 });
+JourneySchema.index({ createdAt: -1 });
+
+export const Journey =
+  mongoose.models.Journey || mongoose.model("Journey", JourneySchema);
+
+// Example of how to use the schema
+// const example = {
+//   name: "General Checkup",
+//   steps: [
+//     { id: 1, title: "Reception", icon: "👋" },
+//     { id: 2, title: "Triage", icon: "🔍" },
+//     { id: 3, title: "Laboratory", icon: "🧪" },
+//     { id: 4, title: "General Medicine", icon: "👨‍⚕️" },
+//     { id: 5, title: "Pharmacy", icon: "💊" },
+//     { id: 6, title: "Cashier", icon: "💵" }
+//   ]
+// };

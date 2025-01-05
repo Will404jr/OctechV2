@@ -31,6 +31,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { QueueSpinner } from "@/components/queue-spinner";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import departments, { Department } from "@/lib/models/departments";
 
 interface RoleOrBranch {
   _id: string;
@@ -46,6 +47,7 @@ interface Staff {
   image: string;
   password: string;
   role: RoleOrBranch | null;
+  department: string;
 }
 
 interface Role extends RoleOrBranch {}
@@ -65,6 +67,7 @@ export default function UsersPage() {
       username: "",
       role: null,
       password: "",
+      department: "",
     },
   });
 
@@ -138,6 +141,7 @@ export default function UsersPage() {
           username: "",
           password: "",
           role: null,
+          department: "",
         });
         setIsOpen(false);
         setEditingStaff(null);
@@ -208,6 +212,7 @@ export default function UsersPage() {
                     username: "",
                     password: "",
                     role: null,
+                    department: "",
                   });
                 }}
               >
@@ -338,6 +343,38 @@ export default function UsersPage() {
                     />
                   </div>
                   <div className="grid gap-2">
+                    <Label htmlFor="department">Department</Label>
+                    <Controller
+                      name="department"
+                      control={control}
+                      rules={{ required: "Department is required" }}
+                      render={({ field, fieldState: { error } }) => (
+                        <>
+                          <Select
+                            onValueChange={(value) => field.onChange(value)}
+                            value={field.value}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select department" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departments.map((dept: Department) => (
+                                <SelectItem key={dept.title} value={dept.title}>
+                                  {dept.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {error && (
+                            <p className="text-red-500 text-sm">
+                              {error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor="password">Password</Label>
                     <Controller
                       name="password"
@@ -345,7 +382,7 @@ export default function UsersPage() {
                       rules={{ required: "Password is required" }}
                       render={({ field, fieldState: { error } }) => (
                         <>
-                          <Input id="password" {...field} />
+                          <Input id="password" type="password" {...field} />
                           {error && (
                             <p className="text-red-500 text-sm">
                               {error.message}
@@ -379,6 +416,7 @@ export default function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Username</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Department</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -392,7 +430,7 @@ export default function UsersPage() {
                   <TableCell>
                     {staff.role?.name || "No Role Assigned"}
                   </TableCell>
-
+                  <TableCell>{staff.department}</TableCell>
                   <TableCell>
                     <Button
                       size="sm"

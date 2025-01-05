@@ -84,6 +84,7 @@ export async function POST(request: Request) {
 
       const session = await getSession();
       session.userId = staffMember._id.toString();
+      session.department = staffMember.department;
       session.isLoggedIn = true;
       session.role = staffMember.role.name;
       session.permissions = staffMember.role.permissions;

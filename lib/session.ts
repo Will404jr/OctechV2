@@ -6,6 +6,7 @@ export interface SessionData {
   isLoggedIn: boolean;
   role?: string;
   branchId?: string;
+  department?: string;
   permissions?: Record<string, boolean>;
   destroy: () => Promise<void>;
 }

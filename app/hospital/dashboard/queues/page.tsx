@@ -1,362 +1,234 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { PlusCircle, X, ArrowRight, User, Save, Trash2 } from "lucide-react";
+import departments, { Department } from "@/lib/models/departments";
 
-type NodeType = "default" | "primary" | "secondary" | "warning" | "success";
-
-type TreeNode = {
-  _id: string;
-  name: string;
-  type: NodeType;
-  parentId: string | null;
-  order: number;
-};
-
-const nodeTypeColors: Record<NodeType, string> = {
-  default: "bg-background",
-  primary: "bg-primary/10",
-  secondary: "bg-secondary/10",
-  warning: "bg-orange-100",
-  success: "bg-green-100",
-};
-
-interface TreeNodeProps {
-  node: TreeNode;
-  onAdd: (parentId: string, name: string, type: NodeType) => void;
-  onDelete: (id: string) => void;
-  onUpdate: (id: string, updates: Partial<TreeNode>) => void;
-  allNodes: TreeNode[];
+interface Step {
+  id: number;
+  title: string;
+  icon: string;
 }
 
-const TreeNodeComponent = ({
-  node,
-  onAdd,
-  onDelete,
-  onUpdate,
-  allNodes,
-}: TreeNodeProps) => {
-  const [showInput, setShowInput] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [newNodeName, setNewNodeName] = useState("");
-  const [newNodeType, setNewNodeType] = useState<NodeType>("default");
-  const [editName, setEditName] = useState(node.name);
+interface Journey {
+  _id: string;
+  name: string;
+  steps: Step[];
+}
 
-  const handleAdd = () => {
-    if (newNodeName.trim()) {
-      onAdd(node._id, newNodeName.trim(), newNodeType);
-      setNewNodeName("");
-      setNewNodeType("default");
-      setShowInput(false);
-    }
-  };
-
-  const handleEdit = () => {
-    if (editName.trim()) {
-      onUpdate(node._id, { name: editName.trim() });
-      setIsEditing(false);
-    }
-  };
-
-  const childNodes = allNodes.filter((n) => n.parentId === node._id);
-
-  return (
-    <div className="relative">
-      <Card
-        className={`p-4 mb-2 ${
-          nodeTypeColors[node.type]
-        } transition-colors duration-200`}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <div className="flex gap-2">
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="max-w-xs"
-                />
-                <Button size="icon" variant="ghost" onClick={handleEdit}>
-                  <Check className="h-4 w-4 text-green-600" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setIsEditing(false)}
-                >
-                  <X className="h-4 w-4 text-red-600" />
-                </Button>
-              </div>
-            ) : (
-              <span className="font-medium">{node.name}</span>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Select
-              value={node.type}
-              onValueChange={(value: NodeType) =>
-                onUpdate(node._id, { type: value })
-              }
-            >
-              <SelectTrigger className="w-[100px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="primary">Primary</SelectItem>
-                <SelectItem value="secondary">Secondary</SelectItem>
-                <SelectItem value="warning">Warning</SelectItem>
-                <SelectItem value="success">Success</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowInput(!showInput)}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsEditing(true)}
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onDelete(node._id)}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
-        </div>
-
-        {showInput && (
-          <div className="mt-4 flex gap-2">
-            <Input
-              value={newNodeName}
-              onChange={(e) => setNewNodeName(e.target.value)}
-              placeholder="Enter node name"
-              className="max-w-xs"
-            />
-            <Select
-              value={newNodeType}
-              onValueChange={(value: NodeType) => setNewNodeType(value)}
-            >
-              <SelectTrigger className="w-[100px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="primary">Primary</SelectItem>
-                <SelectItem value="secondary">Secondary</SelectItem>
-                <SelectItem value="warning">Warning</SelectItem>
-                <SelectItem value="success">Success</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={handleAdd}>Add</Button>
-          </div>
-        )}
-      </Card>
-
-      {childNodes.length > 0 && (
-        <div className="ml-8 pl-4 border-l border-border">
-          {childNodes.map((child) => (
-            <TreeNodeComponent
-              key={child._id}
-              node={child}
-              onAdd={onAdd}
-              onDelete={onDelete}
-              onUpdate={onUpdate}
-              allNodes={allNodes}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const DynamicTree = () => {
-  const [nodes, setNodes] = useState<TreeNode[]>([]);
-  const [newRootName, setNewRootName] = useState("");
-  const [newRootType, setNewRootType] = useState<NodeType>("default");
+const HospitalJourney: React.FC = () => {
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [isAdding, setIsAdding] = useState<boolean>(false);
+  const [journeyName, setJourneyName] = useState<string>("");
+  const [savedJourneys, setSavedJourneys] = useState<Journey[]>([]);
+  const [selectedJourney, setSelectedJourney] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchNodes();
+    fetchJourneys();
   }, []);
 
-  const fetchNodes = async () => {
-    const response = await fetch("/api/hospital/queues");
-    const data = await response.json();
-    setNodes(data);
+  const fetchJourneys = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/hospital/journey");
+      if (!response.ok) throw new Error("Failed to fetch journeys");
+      const data = await response.json();
+      setSavedJourneys(data);
+    } catch (err) {
+      setError("Failed to load journeys. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const addNode = async (
-    parentId: string | null,
-    name: string,
-    type: NodeType
-  ) => {
-    const response = await fetch("/api/hospital/queues", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type, parentId }),
-    });
-    const newNode = await response.json();
-    setNodes([...nodes, newNode]);
+  const addStep = (department: Department) => {
+    setSteps([
+      ...steps,
+      {
+        id: steps.length + 1,
+        title: department.title,
+        icon: department.icon,
+      },
+    ]);
+    setIsAdding(false);
   };
 
-  const deleteNode = async (id: string) => {
-    await fetch("/api/hospital/queues", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    setNodes(nodes.filter((node) => node._id !== id && node.parentId !== id));
+  const removeStep = (id: number) => {
+    setSteps(steps.filter((step) => step.id !== id));
   };
 
-  const updateNode = async (id: string, updates: Partial<TreeNode>) => {
-    const response = await fetch("/api/hospital/queues", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, updates }),
-    });
-    const updatedNode = await response.json();
-    setNodes(nodes.map((node) => (node._id === id ? updatedNode : node)));
+  const saveJourney = async () => {
+    if (journeyName.trim() && steps.length > 0) {
+      try {
+        const response = await fetch("/api/hospital/journey", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: journeyName, steps }),
+        });
+        if (!response.ok) throw new Error("Failed to save journey");
+        await fetchJourneys();
+        setJourneyName("");
+        setSteps([]);
+        setSelectedJourney(null);
+      } catch (err) {
+        setError("Failed to save journey. Please try again.");
+      }
+    }
   };
 
-  const rootNodes = nodes.filter((node) => node.parentId === null);
+  const loadJourney = (journey: Journey) => {
+    setSteps([...journey.steps]);
+    setSelectedJourney(journey._id);
+    setJourneyName(journey.name);
+  };
+
+  const deleteJourney = async (id: string) => {
+    try {
+      const response = await fetch(`/api/hospital/journey/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete journey");
+      await fetchJourneys();
+      if (selectedJourney === id) {
+        setSteps([]);
+        setSelectedJourney(null);
+        setJourneyName("");
+      }
+    } catch (err) {
+      setError("Failed to delete journey. Please try again.");
+    }
+  };
+
+  const startNewJourney = () => {
+    setSteps([]);
+    setSelectedJourney(null);
+    setJourneyName("");
+  };
+
+  if (isLoading) return <div className="p-6 text-center">Loading...</div>;
+  if (error) return <div className="p-6 text-center text-red-500">{error}</div>;
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">Dynamic Tree Layout</h1>
+    <div className="p-6 max-w-4xl mx-auto">
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h2 className="text-2xl font-bold mb-6 text-gray-800">
+          Patient Journey Management
+        </h2>
 
-      <div className="flex gap-4 mb-8">
-        <Input
-          value={newRootName}
-          onChange={(e) => setNewRootName(e.target.value)}
-          placeholder="Enter root node name"
-          className="max-w-xs"
-        />
-        <Select
-          value={newRootType}
-          onValueChange={(value: string) => setNewRootType(value as NodeType)}
-        >
-          <SelectTrigger className="w-[100px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Default</SelectItem>
-            <SelectItem value="primary">Primary</SelectItem>
-            <SelectItem value="secondary">Secondary</SelectItem>
-            <SelectItem value="warning">Warning</SelectItem>
-            <SelectItem value="success">Success</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button
-          onClick={() => {
-            if (newRootName.trim()) {
-              addNode(null, newRootName.trim(), newRootType);
-              setNewRootName("");
-              setNewRootType("default");
-            }
-          }}
-        >
-          Add Root Node
-        </Button>
-      </div>
-
-      {rootNodes.length > 0 ? (
-        rootNodes.map((rootNode) => (
-          <TreeNodeComponent
-            key={rootNode._id}
-            node={rootNode}
-            onAdd={addNode}
-            onDelete={deleteNode}
-            onUpdate={updateNode}
-            allNodes={nodes}
+        {/* Save Journey Section */}
+        <div className="mb-6 flex gap-4 items-center">
+          <input
+            type="text"
+            value={journeyName}
+            onChange={(e) => setJourneyName(e.target.value)}
+            placeholder="Enter journey name"
+            className="p-2 border rounded flex-grow"
           />
-        ))
-      ) : (
-        <Alert>
-          <AlertDescription>
-            Start by adding a root node to create your tree structure.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {rootNodes.length > 0 && (
-        <div className="mt-12 p-8 bg-muted/20 rounded-lg">
-          <h2 className="text-2xl font-semibold mb-6">Tree Visualization</h2>
-          <div className="flex flex-col items-center">
-            {rootNodes.map((rootNode) => (
-              <TreeVisualization
-                key={rootNode._id}
-                node={rootNode}
-                allNodes={nodes}
-              />
-            ))}
-          </div>
+          <button
+            onClick={saveJourney}
+            disabled={!journeyName.trim() || steps.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save size={20} />
+            Save Journey
+          </button>
+          <button
+            onClick={startNewJourney}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <PlusCircle size={20} />
+            New Journey
+          </button>
         </div>
-      )}
-    </div>
-  );
-};
 
-const TreeVisualization = ({
-  node,
-  allNodes,
-}: {
-  node: TreeNode;
-  allNodes: TreeNode[];
-}) => {
-  const childNodes = allNodes.filter((n) => n.parentId === node._id);
-
-  return (
-    <div className="relative">
-      <div
-        className={cn(
-          "flex flex-col items-center p-4 rounded-xl shadow-lg min-w-[180px]",
-          nodeTypeColors[node.type],
-          "border-2 border-primary/20 relative z-10"
+        {/* Saved Journeys List */}
+        {savedJourneys.length > 0 && (
+          <div className="mb-6">
+            <h3 className="font-medium mb-2">Saved Journeys:</h3>
+            <div className="flex flex-wrap gap-2">
+              {savedJourneys.map((journey) => (
+                <div key={journey._id} className="flex items-center">
+                  <button
+                    onClick={() => loadJourney(journey)}
+                    className={`px-3 py-1 rounded-l-full text-sm ${
+                      selectedJourney === journey._id
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 hover:bg-gray-200"
+                    }`}
+                  >
+                    {journey.name}
+                  </button>
+                  <button
+                    onClick={() => deleteJourney(journey._id)}
+                    className="bg-red-500 text-white p-1 rounded-r-full hover:bg-red-600"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
-      >
-        <span className="font-medium text-lg">{node.name}</span>
-        {node.type !== "default" && (
-          <span className="text-xs text-muted-foreground mt-1 capitalize">
-            {node.type}
-          </span>
-        )}
-      </div>
 
-      {childNodes.length > 0 && (
-        <div className="mt-8 pt-4 flex gap-8 items-start relative">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-8 bg-primary/30" />
-          <div className="absolute top-8 left-0 right-0 h-px bg-primary/30" />
-
-          {childNodes.map((child) => (
-            <div key={child._id} className="relative flex-1">
-              <TreeVisualization node={child} allNodes={allNodes} />
+        {/* Current Journey Display */}
+        <div className="flex flex-wrap items-center gap-4 mb-6">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center">
+              <div className="bg-blue-50 rounded-lg p-4 relative group min-w-[150px]">
+                <button
+                  onClick={() => removeStep(step.id)}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={16} />
+                </button>
+                <div className="text-center">
+                  <div className="text-3xl mb-2">{step.icon}</div>
+                  <div className="font-medium text-gray-700">{step.title}</div>
+                </div>
+              </div>
+              {index < steps.length - 1 && (
+                <ArrowRight className="mx-2 text-gray-400" />
+              )}
             </div>
           ))}
+
+          {!isAdding && (
+            <button
+              onClick={() => setIsAdding(true)}
+              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <PlusCircle size={20} />
+              Add Step
+            </button>
+          )}
         </div>
-      )}
+
+        {/* Department Selection */}
+        {isAdding && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-2 text-gray-600 mb-4">
+              <User size={20} />
+              <span className="font-medium">Select Department:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {departments.map((dept) => (
+                <button
+                  key={dept.title}
+                  onClick={() => addStep(dept)}
+                  className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  <span className="text-xl">{dept.icon}</span>
+                  <span>{dept.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-export default DynamicTree;
+export default HospitalJourney;

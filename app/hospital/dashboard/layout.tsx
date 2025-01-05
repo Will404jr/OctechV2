@@ -13,6 +13,7 @@ export default function HospitalDashboardLayout({
       </div>
       <main className="md:pl-72">
         <Navbar />
+
         <div className="p-8">{children}</div>
       </main>
     </div>
