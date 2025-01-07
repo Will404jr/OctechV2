@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,8 +19,17 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { CheckCircle2, Circle } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  AlertCircle,
+  Clock,
+  RefreshCw,
+  ArrowRight,
+} from "lucide-react";
 import { SessionData } from "@/lib/session";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 interface Ticket {
   _id: string;
@@ -32,11 +47,14 @@ interface Ticket {
 const ServingPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [session, setSession] = useState<SessionData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
 
   const fetchTickets = useCallback(async () => {
     if (!session?.department) return;
 
+    setIsLoading(true);
     try {
       const response = await fetch(
         `/api/hospital/ticket?department=${session.department}&currentStepOnly=true`
@@ -44,6 +62,7 @@ const ServingPage: React.FC = () => {
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
       setTickets(data);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -51,6 +70,8 @@ const ServingPage: React.FC = () => {
         description: "Failed to fetch tickets",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   }, [session?.department, toast]);
 
@@ -67,13 +88,8 @@ const ServingPage: React.FC = () => {
 
   useEffect(() => {
     if (session?.department) {
-      // Initial fetch
       fetchTickets();
-
-      // Set up polling every 5 seconds
       const intervalId = setInterval(fetchTickets, 5000);
-
-      // Cleanup interval on unmount or department change
       return () => clearInterval(intervalId);
     }
   }, [session?.department, fetchTickets]);
@@ -93,7 +109,6 @@ const ServingPage: React.FC = () => {
         description: "Ticket cleared successfully",
       });
 
-      // Immediate fetch after clearing
       fetchTickets();
     } catch (error) {
       console.error("Error clearing ticket:", error);
@@ -105,76 +120,162 @@ const ServingPage: React.FC = () => {
     }
   };
 
+  const JourneyStep = ({
+    step,
+    isCompleted,
+    isCurrent,
+    isLast,
+  }: {
+    step: { title: string };
+    isCompleted: boolean;
+    isCurrent: boolean;
+    isLast: boolean;
+  }) => (
+    <div className="flex items-center">
+      <div
+        className={`flex items-center gap-1 p-1.5 rounded-md transition-colors ${
+          isCurrent ? "bg-primary/10" : ""
+        }`}
+      >
+        {isCompleted ? (
+          <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+        ) : (
+          <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        )}
+        <span className="text-sm whitespace-nowrap">{step.title}</span>
+      </div>
+      {!isLast && (
+        <div className="flex items-center mx-2">
+          <ArrowRight
+            className={`h-4 w-4 ${
+              isCompleted ? "text-green-500" : "text-muted-foreground"
+            } transition-colors`}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  if (!session?.department) {
+    return (
+      <div className="container mx-auto p-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No department assigned. Please contact an administrator.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto p-4">
-      {session?.department ? (
-        <Card className="mb-8">
+    <ProtectedRoute requiredPermission="Serving">
+      <div className="container mx-auto p-4 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Serving Dashboard
+            </h1>
+            <p className="text-muted-foreground">
+              Department: {session.department}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={fetchTickets}
+              disabled={isLoading}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </div>
+        </div>
+
+        <Card>
           <CardHeader>
-            <CardTitle>Serving Dashboard - {session.department}</CardTitle>
+            <CardTitle>Active Tickets</CardTitle>
+            <CardDescription>
+              Currently serving {tickets.length} ticket
+              {tickets.length !== 1 ? "s" : ""}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {tickets.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ticket No</TableHead>
-                    <TableHead>Journey</TableHead>
-                    <TableHead>Steps</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tickets.map((ticket) => (
-                    <TableRow key={ticket._id}>
-                      <TableCell>{ticket.ticketNo}</TableCell>
-                      <TableCell>{ticket.journeyId.name}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {ticket.journeyId.steps.map((step, index) => (
-                            <React.Fragment key={index}>
-                              {index > 0 && (
-                                <span className="text-gray-300">→</span>
-                              )}
-                              <div className="flex items-center">
-                                {ticket.journeySteps[step.title] ? (
-                                  <CheckCircle2 className="text-green-500 mr-1" />
-                                ) : (
-                                  <Circle className="text-gray-300 mr-1" />
-                                )}
-                                <span>{step.title}</span>
-                              </div>
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {ticket.journeyId.steps[ticket.currentStep]?.title ===
-                          session.department && (
-                          <Button
-                            onClick={() =>
-                              handleClearTicket(ticket._id, ticket.currentStep)
-                            }
-                          >
-                            Clear Ticket
-                          </Button>
-                        )}
-                      </TableCell>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ticket No</TableHead>
+                      <TableHead>Journey</TableHead>
+                      <TableHead className="w-[50%]">Progress</TableHead>
+                      <TableHead>Action</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {tickets.map((ticket) => (
+                      <TableRow key={ticket._id}>
+                        <TableCell className="font-medium">
+                          {ticket.ticketNo}
+                        </TableCell>
+                        <TableCell>{ticket.journeyId.name}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center flex-wrap gap-y-2">
+                            {ticket.journeyId.steps.map((step, index) => (
+                              <JourneyStep
+                                key={index}
+                                step={step}
+                                isCompleted={ticket.journeySteps[step.title]}
+                                isCurrent={ticket.currentStep === index}
+                                isLast={
+                                  index === ticket.journeyId.steps.length - 1
+                                }
+                              />
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {ticket.journeyId.steps[ticket.currentStep]?.title ===
+                            session.department && (
+                            <Button
+                              onClick={() =>
+                                handleClearTicket(
+                                  ticket._id,
+                                  ticket.currentStep
+                                )
+                              }
+                              size="sm"
+                            >
+                              Clear Ticket
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
-              <div className="text-center mt-4">
-                No tickets available for this department.
+              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                <AlertCircle className="h-8 w-8 mb-2" />
+                <p>No active tickets for this department</p>
+                <p className="text-sm">
+                  New tickets will appear here automatically
+                </p>
               </div>
             )}
           </CardContent>
         </Card>
-      ) : (
-        <div>No department assigned. Please contact an administrator.</div>
-      )}
-      <Toaster />
-    </div>
+        <Toaster />
+      </div>
+    </ProtectedRoute>
   );
 };
 

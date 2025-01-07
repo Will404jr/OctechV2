@@ -25,3 +25,41 @@ export async function DELETE(
     );
   }
 }
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await dbConnect();
+    const { id } = params;
+    const body = await request.json();
+
+    // Validate the incoming data
+    if (!body.name || !body.steps || !Array.isArray(body.steps)) {
+      return NextResponse.json(
+        { error: "Invalid journey data" },
+        { status: 400 }
+      );
+    }
+
+    // Find the journey by ID and update it
+    const updatedJourney = await Journey.findByIdAndUpdate(
+      id,
+      { name: body.name, steps: body.steps, updatedAt: new Date() },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedJourney) {
+      return NextResponse.json({ error: "Journey not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updatedJourney);
+  } catch (error) {
+    console.error("Failed to update journey:", error);
+    return NextResponse.json(
+      { error: "Failed to update journey" },
+      { status: 500 }
+    );
+  }
+}

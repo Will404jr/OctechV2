@@ -53,6 +53,7 @@ const roleSchema = new mongoose.Schema(
     permissions: {
       Staff: { type: Boolean, default: false },
       Roles: { type: Boolean, default: false },
+      Receptionist: { type: Boolean, default: false },
       Serving: { type: Boolean, default: false },
       Queues: { type: Boolean, default: false },
       UpcomingEvents: { type: Boolean, default: false },

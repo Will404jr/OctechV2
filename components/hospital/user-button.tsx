@@ -19,43 +19,44 @@ interface StaffData {
 
 export function UserButton() {
   const [session, setSession] = useState<SessionData | null>(null);
-  const [staffData, setStaffData] = useState<StaffData | null>(null);
+  const [userData, setUserData] = useState<{ username: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    async function fetchSessionAndStaffData() {
+    async function fetchSessionAndUserData() {
       const sessionResponse = await fetch("/api/session");
       if (sessionResponse.ok) {
         const sessionData: SessionData = await sessionResponse.json();
         setSession(sessionData);
 
-        // Log the entire session data
         console.log("Session Data:", sessionData);
 
-        if (sessionData.userId) {
+        if (sessionData.userId === "admin") {
+          setUserData({ username: "Admin" });
+        } else if (sessionData.userId) {
           const staffResponse = await fetch(
             `/api/hospital/staff?id=${sessionData.userId}`
           );
           if (staffResponse.ok) {
             const staffData: StaffData = await staffResponse.json();
-            setStaffData(staffData);
+            setUserData(staffData);
           }
         }
       }
     }
-    fetchSessionAndStaffData();
+    fetchSessionAndUserData();
   }, []);
 
   const handleLogout = async () => {
     const response = await fetch("/api/logout", { method: "POST" });
     if (response.ok) {
       setSession(null);
-      setStaffData(null);
+      setUserData(null);
       router.push("/"); // Redirect to login page after logout
     }
   };
 
-  if (!session || !staffData) {
+  if (!session || !userData) {
     return null; // Or a loading spinner
   }
 
@@ -72,7 +73,7 @@ export function UserButton() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">
-              {staffData.username}
+              {userData.username}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
               {session.role}

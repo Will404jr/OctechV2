@@ -29,9 +29,13 @@ export function UserButton() {
         const sessionData: SessionData = await sessionResponse.json();
         setSession(sessionData);
 
-        if (sessionData.userId) {
+        console.log("Session Data:", sessionData);
+
+        if (sessionData.userId === "admin") {
+          setUserData({ username: "Admin" });
+        } else if (sessionData.userId) {
           const userResponse = await fetch(
-            `/api/bank/users?id=${sessionData.userId}`
+            `/api/hospital/users?id=${sessionData.userId}`
           );
           if (userResponse.ok) {
             const userData: UserData = await userResponse.json();

@@ -38,6 +38,7 @@ const menuItems = [
   "Roles",
   "Serving",
   "Queues",
+  "Receptionist",
   "UpcomingEvents",
   "Ads",
   "Settings",

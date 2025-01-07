@@ -1,8 +1,29 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { PlusCircle, X, ArrowRight, User, Save, Trash2 } from "lucide-react";
+import {
+  PlusCircle,
+  X,
+  ArrowRight,
+  User,
+  Save,
+  Trash2,
+  Loader2,
+  Edit,
+} from "lucide-react";
 import departments, { Department } from "@/lib/models/departments";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { QueueSpinner } from "@/components/queue-spinner";
 
 interface Step {
   id: number;
@@ -24,6 +45,7 @@ const HospitalJourney: React.FC = () => {
   const [selectedJourney, setSelectedJourney] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
 
   useEffect(() => {
     fetchJourneys();
@@ -72,8 +94,29 @@ const HospitalJourney: React.FC = () => {
         setJourneyName("");
         setSteps([]);
         setSelectedJourney(null);
+        setIsEditing(false);
       } catch (err) {
         setError("Failed to save journey. Please try again.");
+      }
+    }
+  };
+
+  const updateJourney = async () => {
+    if (selectedJourney && journeyName.trim() && steps.length > 0) {
+      try {
+        const response = await fetch(
+          `/api/hospital/journey/${selectedJourney}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: journeyName, steps }),
+          }
+        );
+        if (!response.ok) throw new Error("Failed to update journey");
+        await fetchJourneys();
+        setIsEditing(false);
+      } catch (err) {
+        setError("Failed to update journey. Please try again.");
       }
     }
   };
@@ -82,6 +125,7 @@ const HospitalJourney: React.FC = () => {
     setSteps([...journey.steps]);
     setSelectedJourney(journey._id);
     setJourneyName(journey.name);
+    setIsEditing(false);
   };
 
   const deleteJourney = async (id: string) => {
@@ -95,6 +139,7 @@ const HospitalJourney: React.FC = () => {
         setSteps([]);
         setSelectedJourney(null);
         setJourneyName("");
+        setIsEditing(false);
       }
     } catch (err) {
       setError("Failed to delete journey. Please try again.");
@@ -105,129 +150,218 @@ const HospitalJourney: React.FC = () => {
     setSteps([]);
     setSelectedJourney(null);
     setJourneyName("");
+    setIsAdding(false);
+    setIsEditing(false);
   };
 
-  if (isLoading) return <div className="p-6 text-center">Loading...</div>;
-  if (error) return <div className="p-6 text-center text-red-500">{error}</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-2">
+          <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
+          {/* <p className="text-muted-foreground">Loading journeys...</p> */}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">
-          Patient Journey Management
-        </h2>
-
-        {/* Save Journey Section */}
-        <div className="mb-6 flex gap-4 items-center">
-          <input
-            type="text"
-            value={journeyName}
-            onChange={(e) => setJourneyName(e.target.value)}
-            placeholder="Enter journey name"
-            className="p-2 border rounded flex-grow"
-          />
-          <button
-            onClick={saveJourney}
-            disabled={!journeyName.trim() || steps.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save size={20} />
-            Save Journey
-          </button>
-          <button
-            onClick={startNewJourney}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <PlusCircle size={20} />
-            New Journey
-          </button>
+    <ProtectedRoute requiredPermission="Queues">
+      <div className="container mx-auto p-4 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight mb-1">
+            Journey Management
+          </h1>
+          <p className="text-muted-foreground">
+            Create and manage patient journey templates
+          </p>
         </div>
 
-        {/* Saved Journeys List */}
-        {savedJourneys.length > 0 && (
-          <div className="mb-6">
-            <h3 className="font-medium mb-2">Saved Journeys:</h3>
-            <div className="flex flex-wrap gap-2">
-              {savedJourneys.map((journey) => (
-                <div key={journey._id} className="flex items-center">
-                  <button
-                    onClick={() => loadJourney(journey)}
-                    className={`px-3 py-1 rounded-l-full text-sm ${
-                      selectedJourney === journey._id
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 hover:bg-gray-200"
-                    }`}
-                  >
-                    {journey.name}
-                  </button>
-                  <button
-                    onClick={() => deleteJourney(journey._id)}
-                    className="bg-red-500 text-white p-1 rounded-r-full hover:bg-red-600"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Current Journey Display */}
-        <div className="flex flex-wrap items-center gap-4 mb-6">
-          {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div className="bg-blue-50 rounded-lg p-4 relative group min-w-[150px]">
-                <button
-                  onClick={() => removeStep(step.id)}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Saved Journeys Panel */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>Saved Journeys</CardTitle>
+              <CardDescription>
+                {savedJourneys.length} template
+                {savedJourneys.length !== 1 ? "s" : ""} available
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Button
+                  onClick={startNewJourney}
+                  className="w-full mb-4"
+                  variant="outline"
                 >
-                  <X size={16} />
-                </button>
-                <div className="text-center">
-                  <div className="text-3xl mb-2">{step.icon}</div>
-                  <div className="font-medium text-gray-700">{step.title}</div>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Create New Journey
+                </Button>
+
+                <div className="space-y-2">
+                  {savedJourneys.map((journey) => (
+                    <div
+                      key={journey._id}
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        selectedJourney === journey._id
+                          ? "bg-primary/5 border-primary"
+                          : "hover:bg-secondary/50"
+                      }`}
+                    >
+                      <button
+                        onClick={() => loadJourney(journey)}
+                        className="flex-1 text-left"
+                      >
+                        <div className="font-medium">{journey.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {journey.steps.length} step
+                          {journey.steps.length !== 1 ? "s" : ""}
+                        </div>
+                      </button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            loadJourney(journey);
+                            setIsEditing(true);
+                          }}
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteJourney(journey._id)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              {index < steps.length - 1 && (
-                <ArrowRight className="mx-2 text-gray-400" />
-              )}
-            </div>
-          ))}
+            </CardContent>
+          </Card>
 
-          {!isAdding && (
-            <button
-              onClick={() => setIsAdding(true)}
-              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <PlusCircle size={20} />
-              Add Step
-            </button>
-          )}
-        </div>
-
-        {/* Department Selection */}
-        {isAdding && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-2 text-gray-600 mb-4">
-              <User size={20} />
-              <span className="font-medium">Select Department:</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {departments.map((dept) => (
-                <button
-                  key={dept.title}
-                  onClick={() => addStep(dept)}
-                  className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+          {/* Journey Editor Panel */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Journey Editor</CardTitle>
+              <CardDescription>
+                {isEditing
+                  ? "Edit existing journey"
+                  : "Build your journey by adding steps"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Journey Name Input */}
+              <div className="flex gap-4">
+                <Input
+                  value={journeyName}
+                  onChange={(e) => setJourneyName(e.target.value)}
+                  placeholder="Enter journey name"
+                  className="flex-1"
+                />
+                <Button
+                  onClick={isEditing ? updateJourney : saveJourney}
+                  disabled={!journeyName.trim() || steps.length === 0}
                 >
-                  <span className="text-xl">{dept.icon}</span>
-                  <span>{dept.title}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+                  <Save className="mr-2 h-4 w-4" />
+                  {isEditing ? "Update" : "Save"} Journey
+                </Button>
+              </div>
+
+              {/* Steps Display */}
+              <Card>
+                <CardContent className="pt-6">
+                  {steps.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-4">
+                      {steps.map((step, index) => (
+                        <div key={step.id} className="flex items-center">
+                          <div className="relative group">
+                            <div className="bg-secondary/50 rounded-lg p-4 text-center min-w-[120px]">
+                              <div className="text-3xl mb-2">{step.icon}</div>
+                              <div className="font-medium">{step.title}</div>
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => removeStep(step.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {index < steps.length - 1 && (
+                            <ArrowRight className="mx-2 text-muted-foreground" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No steps added yet. Click "Add Step" to begin building
+                      your journey.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Add Step Button & Department Selection */}
+              <div>
+                {!isAdding ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsAdding(true)}
+                    className="w-full"
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Step
+                  </Button>
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <User className="h-5 w-5" />
+                        Select Department
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-2">
+                        {departments.map((dept) => (
+                          <Button
+                            key={dept.title}
+                            variant="outline"
+                            onClick={() => addStep(dept)}
+                            className="justify-start"
+                          >
+                            <span className="text-xl mr-2">{dept.icon}</span>
+                            <span>{dept.title}</span>
+                          </Button>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

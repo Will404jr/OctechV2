@@ -12,6 +12,7 @@ import {
   Menu,
   Settings,
   Building2,
+  ConciergeBell,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -43,6 +44,12 @@ const routes = [
     icon: ListTodo,
     href: "/hospital/dashboard/queues",
     permission: "Queues",
+  },
+  {
+    label: "Receptionist",
+    icon: ConciergeBell,
+    href: "/hospital/dashboard/receptionist",
+    permission: "Receptionist",
   },
   {
     label: "Upcoming-events",
