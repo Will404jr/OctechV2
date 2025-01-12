@@ -28,12 +28,6 @@ import {
   ArrowRight,
   Volume2,
 } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { SessionData } from "@/lib/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -49,7 +43,6 @@ interface Ticket {
   currentStep: number;
   journeySteps: { [key: string]: boolean };
   completed: boolean;
-  call: boolean;
 }
 
 const ServingPage: React.FC = () => {
@@ -83,6 +76,35 @@ const ServingPage: React.FC = () => {
     }
   }, [session?.department, toast]);
 
+  const callTicket = async (ticketId: string) => {
+    try {
+      const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ call: true }),
+      });
+      if (!response.ok) throw new Error("Failed to call ticket");
+      const updatedTicket = await response.json();
+      toast({
+        title: "Success",
+        description: "Ticket called successfully",
+      });
+      // Update the local state to reflect the change
+      setTickets(
+        tickets.map((ticket) =>
+          ticket._id === ticketId ? { ...ticket, ...updatedTicket } : ticket
+        )
+      );
+    } catch (error) {
+      console.error("Error calling ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to call ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     const fetchSession = async () => {
       const response = await fetch("/api/session");
@@ -101,39 +123,6 @@ const ServingPage: React.FC = () => {
       return () => clearInterval(intervalId);
     }
   }, [session?.department, fetchTickets]);
-
-  const callTicket = async (ticketId: string) => {
-    try {
-      const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ call: true }),
-      });
-
-      if (!response.ok) throw new Error("Failed to call ticket");
-
-      const updatedTicket = await response.json();
-
-      toast({
-        title: "Success",
-        description: "Ticket called successfully",
-      });
-
-      // Update the local state to reflect the change
-      setTickets(
-        tickets.map((ticket) =>
-          ticket._id === ticketId ? { ...ticket, ...updatedTicket } : ticket
-        )
-      );
-    } catch (error) {
-      console.error("Error calling ticket:", error);
-      toast({
-        title: "Error",
-        description: "Failed to call ticket",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleClearTicket = async (ticketId: string, currentStep: number) => {
     try {
@@ -257,6 +246,7 @@ const ServingPage: React.FC = () => {
                       <TableHead>Ticket No</TableHead>
                       <TableHead>Journey</TableHead>
                       <TableHead className="w-[50%]">Progress</TableHead>
+                      <TableHead>Call</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -266,44 +256,38 @@ const ServingPage: React.FC = () => {
                         <TableCell className="font-medium">
                           {ticket.ticketNo}
                         </TableCell>
-                        <TableCell>{ticket.journeyId.name}</TableCell>
+                        <TableCell>{ticket.journeyId?.name || "N/A"}</TableCell>
                         <TableCell>
                           <div className="flex items-center flex-wrap gap-y-2">
-                            {ticket.journeyId.steps.map((step, index) => (
+                            {ticket.journeyId?.steps?.map((step, index) => (
                               <JourneyStep
                                 key={index}
                                 step={step}
                                 isCompleted={ticket.journeySteps[step.title]}
                                 isCurrent={ticket.currentStep === index}
                                 isLast={
-                                  index === ticket.journeyId.steps.length - 1
+                                  index ===
+                                  (ticket.journeyId?.steps?.length || 0) - 1
                                 }
                               />
                             ))}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => callTicket(ticket._id)}
-                                    // disabled={ticket.call}
-                                  >
-                                    <Volume2 className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Call ticket</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            {ticket.journeyId.steps[ticket.currentStep]
-                              ?.title === session.department && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => callTicket(ticket._id)}
+                          >
+                            <Volume2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          {ticket.journeyId?.steps &&
+                            Array.isArray(ticket.journeyId.steps) &&
+                            ticket.journeyId.steps[ticket.currentStep] &&
+                            ticket.journeyId.steps[ticket.currentStep].title ===
+                              session.department && (
                               <Button
                                 onClick={() =>
                                   handleClearTicket(
@@ -316,7 +300,6 @@ const ServingPage: React.FC = () => {
                                 Clear Ticket
                               </Button>
                             )}
-                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

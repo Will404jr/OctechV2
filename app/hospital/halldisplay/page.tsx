@@ -28,16 +28,20 @@ import {
 import { Marquee } from "@/components/Marquee";
 import { Toast, ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
+import departments from "@/lib/models/departments";
 
 interface Ticket {
   _id: string;
   ticketNo: string;
-  ticketStatus: string;
-  roomId: {
+  journeyId: {
     _id: string;
-    roomNumber: number;
+    name: string;
+    steps: { title: string; icon: string }[];
   } | null;
-  callAgain: boolean;
+  currentStep: number;
+  journeySteps: { [key: string]: boolean };
+  completed: boolean;
+  call: boolean;
 }
 
 interface Event {
@@ -62,7 +66,7 @@ export default function HallDisplay() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const isPlaying = useRef(false);
   const audioContext = useRef<AudioContext | null>(null);
   const announcedTickets = useRef<Set<string>>(new Set());
@@ -101,13 +105,17 @@ export default function HallDisplay() {
           resolve();
         };
 
-        const playPromise = audio.play();
-        if (playPromise) {
-          playPromise.catch((e) => {
-            console.error(`Failed to play audio ${src}:`, e);
-            resolve();
-          });
-        }
+        audio.oncanplaythrough = () => {
+          const playPromise = audio.play();
+          if (playPromise) {
+            playPromise.catch((e) => {
+              console.error(`Failed to play audio ${src}:`, e);
+              resolve();
+            });
+          }
+        };
+
+        audio.load();
       });
     },
     [isMuted]
@@ -115,10 +123,8 @@ export default function HallDisplay() {
 
   const announceTicket = useCallback(
     async (ticket: Ticket) => {
-      if (!ticket.roomId || isMuted) {
-        console.log(
-          "Cannot announce ticket: no room assigned or audio is muted"
-        );
+      if (isMuted) {
+        console.log("Audio is muted, skipping announcement");
         return;
       }
 
@@ -129,17 +135,22 @@ export default function HallDisplay() {
       }
 
       isPlaying.current = true;
-      console.log(
-        `Announcing ticket: ${ticket.ticketNo} for room ${ticket.roomId.roomNumber}`
-      );
+      console.log(`Announcing ticket: ${ticket.ticketNo}`);
 
       const ticketNumber = ticket.ticketNo;
-      const roomNumber = ticket.roomId.roomNumber.toString();
+      const currentStep = ticket.currentStep;
+      const currentDepartment = ticket.journeyId?.steps[currentStep]?.title;
+      const roomNumber =
+        departments
+          .find((d) => d.title === currentDepartment)
+          ?.roomNumber.toString() || "";
 
       // Show toast notification
       toast({
         title: `Ticket ${ticketNumber}`,
-        description: `Please proceed to Room ${roomNumber}`,
+        description: `Please proceed to ${currentDepartment || "Reception"} ${
+          roomNumber ? `(Room ${roomNumber})` : ""
+        }`,
         duration: 5000,
       });
 
@@ -147,9 +158,19 @@ export default function HallDisplay() {
         "/audio/alert.wav",
         "/audio/TicketNumber.wav",
         ...ticketNumber.split("").map((char) => `/audio/${char}.wav`),
-        "/audio/proceedtoroom.wav",
-        ...roomNumber.split("").map((char) => `/audio/${char}.wav`),
+        "/audio/proceedto.wav",
+        "/audio/room.wav",
+        ...(roomNumber
+          ? roomNumber.split("").map((char) => `/audio/${char}.wav`)
+          : ["/audio/reception.wav"]),
       ];
+
+      if (roomNumber) {
+        audioFiles.push(
+          "/audio/room.wav",
+          ...roomNumber.split("").map((char) => `/audio/${char}.wav`)
+        );
+      }
 
       for (const audioSrc of audioFiles) {
         await playAudio(audioSrc);
@@ -158,16 +179,14 @@ export default function HallDisplay() {
       isPlaying.current = false;
       announcedTickets.current.add(ticket._id);
 
-      // If this was a "call again" announcement, update the ticket
-      if (ticket.callAgain) {
-        await fetch(`/api/ticket/${ticket._id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ callAgain: false }),
-        });
-      }
+      // Update the ticket to set call back to false
+      await fetch(`/api/hospital/ticket/${ticket._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ call: false }),
+      });
 
       // Check if there are more tickets in the queue
       if (announcementQueue.current.length > 0) {
@@ -183,7 +202,7 @@ export default function HallDisplay() {
   const fetchData = useCallback(async () => {
     try {
       const [ticketsRes, eventsRes, adsRes, settingsRes] = await Promise.all([
-        fetch("/api/ticket?status=Serving"),
+        fetch("/api/hospital/ticket"),
         fetch("/api/hospital/events"),
         fetch("/api/hospital/ads"),
         fetch("/api/settings"),
@@ -201,9 +220,9 @@ export default function HallDisplay() {
       setAds(adsData);
       setSettings(settingsData);
 
-      // Announce new tickets and tickets with callAgain set to true
+      // Announce new tickets with call set to true
       ticketsData.forEach((ticket) => {
-        if (!announcedTickets.current.has(ticket._id) || ticket.callAgain) {
+        if (ticket.call && !announcedTickets.current.has(ticket._id)) {
           announceTicket(ticket);
         }
       });
@@ -280,13 +299,13 @@ export default function HallDisplay() {
         <main className="flex-grow flex p-4 space-x-4 overflow-hidden">
           <Card className="w-1/5 overflow-auto">
             <CardContent>
-              <h2 className="text-xl font-bold mb-2 pt-2">Serving Tickets</h2>
+              <h2 className="text-xl font-bold mb-2 pt-2">Active Tickets</h2>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Ticket</TableHead>
                     <TableHead className="text-center"></TableHead>
-                    <TableHead>Room</TableHead>
+                    <TableHead>Department</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -297,7 +316,8 @@ export default function HallDisplay() {
                         <ArrowRight className="mx-auto text-blue-500" />
                       </TableCell>
                       <TableCell>
-                        {ticket.roomId ? ticket.roomId.roomNumber : "N/A"}
+                        {ticket.journeyId?.steps[ticket.currentStep]?.title ||
+                          "Reception"}
                       </TableCell>
                     </TableRow>
                   ))}
