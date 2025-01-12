@@ -185,6 +185,7 @@ const ticketSchema = new mongoose.Schema(
     currentStep: { type: Number, default: 0 },
     journeySteps: { type: Map, of: Boolean, default: new Map() },
     completed: { type: Boolean, default: false },
+    call: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

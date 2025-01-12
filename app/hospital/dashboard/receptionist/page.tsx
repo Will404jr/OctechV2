@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -26,15 +26,22 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { ArrowRight, Users, Loader2, AlertCircle } from "lucide-react";
+import { ArrowRight, Users, Loader2, AlertCircle, Volume2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { QueueSpinner } from "@/components/queue-spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Ticket {
   _id: string;
   ticketNo: string;
   journeyId: string | null;
+  call: boolean;
 }
 
 interface Journey {
@@ -42,6 +49,8 @@ interface Journey {
   name: string;
   steps: { id: number; title: string; icon: string }[];
 }
+
+const POLLING_INTERVAL = 5000; // 5 seconds
 
 const ReceptionistPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -52,7 +61,7 @@ const ReceptionistPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
       const response = await fetch("/api/hospital/ticket?journeyId=null");
       if (!response.ok) throw new Error("Failed to fetch tickets");
@@ -66,9 +75,9 @@ const ReceptionistPage: React.FC = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
-  const fetchJourneys = async () => {
+  const fetchJourneys = useCallback(async () => {
     try {
       const response = await fetch("/api/hospital/journey");
       if (!response.ok) throw new Error("Failed to fetch journeys");
@@ -82,7 +91,7 @@ const ReceptionistPage: React.FC = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -91,7 +100,13 @@ const ReceptionistPage: React.FC = () => {
       setIsLoading(false);
     };
     loadData();
-  }, []);
+
+    // Set up polling for new tickets
+    const pollInterval = setInterval(fetchTickets, POLLING_INTERVAL);
+
+    // Clean up the interval on component unmount
+    return () => clearInterval(pollInterval);
+  }, [fetchTickets, fetchJourneys]);
 
   const handleJourneyChange = (ticketId: string, journeyId: string) => {
     setSelectedJourneys({ ...selectedJourneys, [ticketId]: journeyId });
@@ -137,12 +152,44 @@ const ReceptionistPage: React.FC = () => {
     }
   };
 
+  const callTicket = async (ticketId: string) => {
+    try {
+      const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ call: true }),
+      });
+
+      if (!response.ok) throw new Error("Failed to call ticket");
+
+      const updatedTicket = await response.json();
+
+      toast({
+        title: "Success",
+        description: "Ticket called successfully",
+      });
+
+      // Update the local state to reflect the change
+      setTickets(
+        tickets.map((ticket) =>
+          ticket._id === ticketId ? { ...ticket, ...updatedTicket } : ticket
+        )
+      );
+    } catch (error) {
+      console.error("Error calling ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to call ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-4 flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-2">
           <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
-          {/* <p className="text-muted-foreground">Loading dashboard...</p> */}
         </div>
       </div>
     );
@@ -228,13 +275,33 @@ const ReceptionistPage: React.FC = () => {
                             </Select>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              onClick={() => assignJourney(ticket._id)}
-                              disabled={!selectedJourneys[ticket._id]}
-                            >
-                              Assign Journey
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => callTicket(ticket._id)}
+                                      disabled={ticket.call}
+                                    >
+                                      <Volume2 className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Call ticket</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <Button
+                                size="sm"
+                                onClick={() => assignJourney(ticket._id)}
+                                disabled={!selectedJourneys[ticket._id]}
+                              >
+                                Assign
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

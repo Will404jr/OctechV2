@@ -5,13 +5,13 @@ import { Journey } from "@/lib/models/hospital";
 
 export async function PUT(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     await dbConnect();
 
-    const id = await context.params.id;
-    const { journeyId, currentStep } = await request.json();
+    const id = params.id;
+    const { journeyId, currentStep, call } = await request.json();
 
     let updateData: any = {};
 
@@ -58,6 +58,7 @@ export async function PUT(
         // Clear the current step
         const currentStepTitle = journey.steps[currentStep].title;
         updateData = {
+          ...updateData,
           [`journeySteps.${currentStepTitle}`]: true,
         };
 
@@ -80,6 +81,10 @@ export async function PUT(
           updateData.completed = true;
         }
       }
+    }
+
+    if (call !== undefined) {
+      updateData.call = call;
     }
 
     const updatedTicket = await Ticket.findByIdAndUpdate(id, updateData, {

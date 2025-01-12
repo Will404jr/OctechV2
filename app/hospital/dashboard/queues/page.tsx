@@ -46,6 +46,7 @@ const HospitalJourney: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [isPreview, setIsPreview] = useState<boolean>(false);
 
   useEffect(() => {
     fetchJourneys();
@@ -95,6 +96,7 @@ const HospitalJourney: React.FC = () => {
         setSteps([]);
         setSelectedJourney(null);
         setIsEditing(false);
+        setIsPreview(false);
       } catch (err) {
         setError("Failed to save journey. Please try again.");
       }
@@ -115,6 +117,7 @@ const HospitalJourney: React.FC = () => {
         if (!response.ok) throw new Error("Failed to update journey");
         await fetchJourneys();
         setIsEditing(false);
+        setIsPreview(true);
       } catch (err) {
         setError("Failed to update journey. Please try again.");
       }
@@ -126,6 +129,8 @@ const HospitalJourney: React.FC = () => {
     setSelectedJourney(journey._id);
     setJourneyName(journey.name);
     setIsEditing(false);
+    setIsPreview(true);
+    setIsAdding(false);
   };
 
   const deleteJourney = async (id: string) => {
@@ -140,6 +145,7 @@ const HospitalJourney: React.FC = () => {
         setSelectedJourney(null);
         setJourneyName("");
         setIsEditing(false);
+        setIsPreview(false);
       }
     } catch (err) {
       setError("Failed to delete journey. Please try again.");
@@ -152,6 +158,7 @@ const HospitalJourney: React.FC = () => {
     setJourneyName("");
     setIsAdding(false);
     setIsEditing(false);
+    setIsPreview(false);
   };
 
   if (isLoading) {
@@ -159,7 +166,6 @@ const HospitalJourney: React.FC = () => {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-2">
           <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
-          {/* <p className="text-muted-foreground">Loading journeys...</p> */}
         </div>
       </div>
     );
@@ -232,9 +238,11 @@ const HospitalJourney: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             loadJourney(journey);
                             setIsEditing(true);
+                            setIsPreview(false);
                           }}
                           className="text-primary hover:text-primary hover:bg-primary/10"
                         >
@@ -243,7 +251,10 @@ const HospitalJourney: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteJourney(journey._id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteJourney(journey._id);
+                          }}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -261,27 +272,44 @@ const HospitalJourney: React.FC = () => {
             <CardHeader>
               <CardTitle>Journey Editor</CardTitle>
               <CardDescription>
-                {isEditing
+                {isPreview
+                  ? "Journey preview"
+                  : isEditing
                   ? "Edit existing journey"
                   : "Build your journey by adding steps"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Journey Name Input */}
+              {/* Journey Name Input and Buttons */}
               <div className="flex gap-4">
                 <Input
                   value={journeyName}
                   onChange={(e) => setJourneyName(e.target.value)}
                   placeholder="Enter journey name"
                   className="flex-1"
+                  disabled={isPreview}
                 />
-                <Button
-                  onClick={isEditing ? updateJourney : saveJourney}
-                  disabled={!journeyName.trim() || steps.length === 0}
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  {isEditing ? "Update" : "Save"} Journey
-                </Button>
+                {isEditing ? (
+                  <Button
+                    onClick={updateJourney}
+                    disabled={!journeyName.trim() || steps.length === 0}
+                    className="bg-[#0e4480]"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Update Journey
+                  </Button>
+                ) : (
+                  !isPreview && (
+                    <Button
+                      onClick={saveJourney}
+                      disabled={!journeyName.trim() || steps.length === 0}
+                      className="bg-[#0e4480]"
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Journey
+                    </Button>
+                  )
+                )}
               </div>
 
               {/* Steps Display */}
@@ -296,14 +324,16 @@ const HospitalJourney: React.FC = () => {
                               <div className="text-3xl mb-2">{step.icon}</div>
                               <div className="font-medium">{step.title}</div>
                             </div>
-                            <Button
-                              variant="destructive"
-                              size="icon"
-                              className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() => removeStep(step.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                            {!isPreview && (
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => removeStep(step.id)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                           {index < steps.length - 1 && (
                             <ArrowRight className="mx-2 text-muted-foreground" />
@@ -321,42 +351,44 @@ const HospitalJourney: React.FC = () => {
               </Card>
 
               {/* Add Step Button & Department Selection */}
-              <div>
-                {!isAdding ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsAdding(true)}
-                    className="w-full"
-                  >
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Step
-                  </Button>
-                ) : (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <User className="h-5 w-5" />
-                        Select Department
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 gap-2">
-                        {departments.map((dept) => (
-                          <Button
-                            key={dept.title}
-                            variant="outline"
-                            onClick={() => addStep(dept)}
-                            className="justify-start"
-                          >
-                            <span className="text-xl mr-2">{dept.icon}</span>
-                            <span>{dept.title}</span>
-                          </Button>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              {!isPreview && (
+                <div>
+                  {!isAdding ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsAdding(true)}
+                      className="w-full"
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add Step
+                    </Button>
+                  ) : (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <User className="h-5 w-5" />
+                          Select Department
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-2">
+                          {departments.map((dept) => (
+                            <Button
+                              key={dept.title}
+                              variant="outline"
+                              onClick={() => addStep(dept)}
+                              className="justify-start "
+                            >
+                              <span className="text-xl mr-2">{dept.icon}</span>
+                              <span>{dept.title}</span>
+                            </Button>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
