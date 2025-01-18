@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ticket } from "@/lib/models/hospital";
 import { Journey } from "@/lib/models/hospital";
 
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     await dbConnect();
 
     const id = params.id;
-    const { journeyId, currentStep, call } = await request.json();
+    const { journeyId, currentStep, call, note } = await request.json();
 
     let updateData: any = {};
 
@@ -26,7 +26,7 @@ export async function PUT(
 
       const journeySteps = new Map();
       journey.steps.forEach((step: { title: string }) => {
-        journeySteps.set(step.title, false);
+        journeySteps.set(step.title, { completed: false, note: "" });
       });
 
       updateData = {
@@ -59,7 +59,8 @@ export async function PUT(
         const currentStepTitle = journey.steps[currentStep].title;
         updateData = {
           ...updateData,
-          [`journeySteps.${currentStepTitle}`]: true,
+          [`journeySteps.${currentStepTitle}.completed`]: true,
+          [`journeySteps.${currentStepTitle}.note`]: note || "",
         };
 
         // Move to the next step if it exists
@@ -73,7 +74,7 @@ export async function PUT(
         // Check if all steps are now completed
         const allStepsCompleted = journey.steps.every(
           (step: { title: string }) =>
-            ticket.journeySteps.get(step.title) ||
+            ticket.journeySteps.get(step.title)?.completed ||
             step.title === currentStepTitle
         );
 

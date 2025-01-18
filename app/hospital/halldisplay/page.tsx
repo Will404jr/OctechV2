@@ -158,19 +158,21 @@ export default function HallDisplay() {
         "/audio/alert.wav",
         "/audio/TicketNumber.wav",
         ...ticketNumber.split("").map((char) => `/audio/${char}.wav`),
-        "/audio/proceedto.wav",
-        "/audio/room.wav",
         ...(roomNumber
-          ? roomNumber.split("").map((char) => `/audio/${char}.wav`)
-          : ["/audio/reception.wav"]),
+          ? [
+              "/audio/proceedtoroom.wav",
+              ...roomNumber.split("").map((char) => `/audio/${char}.wav`),
+            ]
+          : ["/audio/proceedtothereception.wav"]),
+        // : ["/audio/proceedto.wav", "/audio/reception1.wav"]),
       ];
 
-      if (roomNumber) {
-        audioFiles.push(
-          "/audio/room.wav",
-          ...roomNumber.split("").map((char) => `/audio/${char}.wav`)
-        );
-      }
+      // if (roomNumber) {
+      //   audioFiles.push(
+      //     "/audio/room.wav",
+      //     ...roomNumber.split("").map((char) => `/audio/${char}.wav`)
+      //   );
+      // }
 
       for (const audioSrc of audioFiles) {
         await playAudio(audioSrc);

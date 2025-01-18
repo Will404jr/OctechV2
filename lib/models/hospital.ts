@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { string } from "zod";
 
 //ad schema
 const adSchema = new mongoose.Schema(
@@ -161,19 +162,14 @@ const roomSchema = new mongoose.Schema(
       required: true,
     },
     roomNumber: { type: Number, required: true },
-    queueId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Queue",
-      required: true,
-    },
     isActive: { type: Boolean, default: true },
+    servingTicket: { type: String, required: false },
   },
   { timestamps: true }
 );
 
 export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
 
-// ticket schema
 const ticketSchema = new mongoose.Schema(
   {
     ticketNo: { type: String, required: true },
@@ -183,7 +179,14 @@ const ticketSchema = new mongoose.Schema(
       required: false,
     },
     currentStep: { type: Number, default: 0 },
-    journeySteps: { type: Map, of: Boolean, default: new Map() },
+    journeySteps: {
+      type: Map,
+      of: new mongoose.Schema({
+        completed: { type: Boolean, default: false },
+        note: { type: String, default: "", required: false },
+      }),
+      default: new Map(),
+    },
     completed: { type: Boolean, default: false },
     call: { type: Boolean, default: false },
   },

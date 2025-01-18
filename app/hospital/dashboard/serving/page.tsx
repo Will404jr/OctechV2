@@ -27,10 +27,18 @@ import {
   RefreshCw,
   ArrowRight,
   Volume2,
+  MessageCircle,
 } from "lucide-react";
 import { SessionData } from "@/lib/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ClearTicketDialog } from "@/components/ClearTicketDialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Ticket {
   _id: string;
@@ -41,7 +49,9 @@ interface Ticket {
     steps: { title: string; icon: string }[];
   };
   currentStep: number;
-  journeySteps: { [key: string]: boolean };
+  journeySteps:
+    | Map<string, { completed: boolean; note: string }>
+    | { [key: string]: { completed: boolean; note: string } };
   completed: boolean;
 }
 
@@ -51,6 +61,7 @@ const ServingPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
+  const [clearingTicket, setClearingTicket] = useState<Ticket | null>(null);
 
   const fetchTickets = useCallback(async () => {
     if (!session?.department) return;
@@ -124,12 +135,16 @@ const ServingPage: React.FC = () => {
     }
   }, [session?.department, fetchTickets]);
 
-  const handleClearTicket = async (ticketId: string, currentStep: number) => {
+  const handleClearTicket = async (
+    ticketId: string,
+    currentStep: number,
+    note?: string
+  ) => {
     try {
       const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentStep }),
+        body: JSON.stringify({ currentStep, note }),
       });
 
       if (!response.ok) throw new Error("Failed to clear ticket");
@@ -152,39 +167,70 @@ const ServingPage: React.FC = () => {
 
   const JourneyStep = ({
     step,
-    isCompleted,
+    stepData,
     isCurrent,
     isLast,
+    previousNote,
   }: {
     step: { title: string };
-    isCompleted: boolean;
+    stepData: { completed: boolean; note: string };
     isCurrent: boolean;
     isLast: boolean;
+    previousNote?: string;
   }) => (
     <div className="flex items-center">
-      <div
-        className={`flex items-center gap-1 p-1.5 rounded-md transition-colors ${
-          isCurrent ? "bg-primary/10" : ""
-        }`}
-      >
-        {isCompleted ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-        ) : (
-          <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        )}
-        <span className="text-sm whitespace-nowrap">{step.title}</span>
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={`flex items-center gap-1 p-1.5 rounded-md transition-colors ${
+                isCurrent ? "bg-primary/10" : ""
+              }`}
+            >
+              {stepData.completed ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+              ) : (
+                <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              )}
+              <span className="text-sm whitespace-nowrap">{step.title}</span>
+              {previousNote && (
+                <MessageCircle className="h-4 w-4 text-blue-500 flex-shrink-0 ml-1" />
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            {previousNote ? (
+              <div>
+                <p className="font-semibold">Previous step note:</p>
+                <p>{previousNote}</p>
+              </div>
+            ) : (
+              <p>{stepData.completed ? "Completed" : "Not completed"}</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {!isLast && (
         <div className="flex items-center mx-2">
           <ArrowRight
             className={`h-4 w-4 ${
-              isCompleted ? "text-green-500" : "text-muted-foreground"
+              stepData.completed ? "text-green-500" : "text-muted-foreground"
             } transition-colors`}
           />
         </div>
       )}
     </div>
   );
+
+  const getStepData = (ticket: Ticket, stepTitle: string) => {
+    if (ticket.journeySteps instanceof Map) {
+      return (
+        ticket.journeySteps.get(stepTitle) || { completed: false, note: "" }
+      );
+    } else {
+      return ticket.journeySteps[stepTitle] || { completed: false, note: "" };
+    }
+  };
 
   if (!session?.department) {
     return (
@@ -259,18 +305,30 @@ const ServingPage: React.FC = () => {
                         <TableCell>{ticket.journeyId?.name || "N/A"}</TableCell>
                         <TableCell>
                           <div className="flex items-center flex-wrap gap-y-2">
-                            {ticket.journeyId?.steps?.map((step, index) => (
-                              <JourneyStep
-                                key={index}
-                                step={step}
-                                isCompleted={ticket.journeySteps[step.title]}
-                                isCurrent={ticket.currentStep === index}
-                                isLast={
-                                  index ===
-                                  (ticket.journeyId?.steps?.length || 0) - 1
-                                }
-                              />
-                            ))}
+                            {ticket.journeyId?.steps?.map((step, index) => {
+                              const stepData = getStepData(ticket, step.title);
+                              const previousStepTitle =
+                                index > 0
+                                  ? ticket.journeyId.steps[index - 1].title
+                                  : null;
+                              const previousNote = previousStepTitle
+                                ? getStepData(ticket, previousStepTitle).note
+                                : undefined;
+
+                              return (
+                                <JourneyStep
+                                  key={index}
+                                  step={step}
+                                  stepData={stepData}
+                                  isCurrent={ticket.currentStep === index}
+                                  isLast={
+                                    index ===
+                                    (ticket.journeyId?.steps?.length || 0) - 1
+                                  }
+                                  previousNote={previousNote}
+                                />
+                              );
+                            })}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -287,14 +345,9 @@ const ServingPage: React.FC = () => {
                             Array.isArray(ticket.journeyId.steps) &&
                             ticket.journeyId.steps[ticket.currentStep] &&
                             ticket.journeyId.steps[ticket.currentStep].title ===
-                              session.department && (
+                              session?.department && (
                               <Button
-                                onClick={() =>
-                                  handleClearTicket(
-                                    ticket._id,
-                                    ticket.currentStep
-                                  )
-                                }
+                                onClick={() => setClearingTicket(ticket)}
                                 size="sm"
                               >
                                 Clear Ticket
@@ -317,6 +370,21 @@ const ServingPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
+        {clearingTicket && (
+          <ClearTicketDialog
+            isOpen={!!clearingTicket}
+            onClose={() => setClearingTicket(null)}
+            onClear={(note) => {
+              handleClearTicket(
+                clearingTicket._id,
+                clearingTicket.currentStep,
+                note
+              );
+              setClearingTicket(null);
+            }}
+            ticketNo={clearingTicket.ticketNo}
+          />
+        )}
         <Toaster />
       </div>
     </ProtectedRoute>
