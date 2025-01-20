@@ -11,7 +11,15 @@ export async function PUT(
     await dbConnect();
 
     const id = params.id;
-    const { journeyId, currentStep, call, note } = await request.json();
+    const {
+      journeyId,
+      currentStep,
+      call,
+      note,
+      reasonforVisit,
+      receptionistNote,
+      noShow,
+    } = await request.json();
 
     let updateData: any = {};
 
@@ -86,6 +94,18 @@ export async function PUT(
 
     if (call !== undefined) {
       updateData.call = call;
+    }
+
+    if (reasonforVisit !== undefined) {
+      updateData.reasonforVisit = reasonforVisit;
+    }
+
+    if (receptionistNote !== undefined) {
+      updateData.receptionistNote = receptionistNote;
+    }
+
+    if (noShow !== undefined) {
+      updateData.noShow = noShow;
     }
 
     const updatedTicket = await Ticket.findByIdAndUpdate(id, updateData, {

@@ -161,9 +161,9 @@ const roomSchema = new mongoose.Schema(
       ref: "Staff",
       required: true,
     },
+    department: { type: String, required: true },
     roomNumber: { type: Number, required: true },
-    isActive: { type: Boolean, default: true },
-    servingTicket: { type: String, required: false },
+    servingTicket: { type: String, default: "", required: false },
   },
   { timestamps: true }
 );
@@ -173,6 +173,8 @@ export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
 const ticketSchema = new mongoose.Schema(
   {
     ticketNo: { type: String, required: true },
+    reasonforVisit: { type: String, default: "", required: false },
+    receptionistNote: { type: String, default: "", required: false },
     journeyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Journey",
@@ -189,6 +191,7 @@ const ticketSchema = new mongoose.Schema(
     },
     completed: { type: Boolean, default: false },
     call: { type: Boolean, default: false },
+    noShow: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

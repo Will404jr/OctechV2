@@ -7,66 +7,39 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import {
   CheckCircle2,
   Circle,
   AlertCircle,
-  Clock,
-  RefreshCw,
-  ArrowRight,
   Volume2,
   MessageCircle,
+  Users,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { SessionData } from "@/lib/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ClearTicketDialog } from "@/components/ClearTicketDialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-
-interface Ticket {
-  _id: string;
-  ticketNo: string;
-  journeyId: {
-    _id: string;
-    name: string;
-    steps: { title: string; icon: string }[];
-  };
-  currentStep: number;
-  journeySteps:
-    | Map<string, { completed: boolean; note: string }>
-    | { [key: string]: { completed: boolean; note: string } };
-  completed: boolean;
-}
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Ticket } from "@/types/ticket";
 
 const ServingPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [session, setSession] = useState<SessionData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
   const [clearingTicket, setClearingTicket] = useState<Ticket | null>(null);
+  const [currentTicketIndex, setCurrentTicketIndex] = useState(0);
 
   const fetchTickets = useCallback(async () => {
     if (!session?.department) return;
 
-    setIsLoading(true);
     try {
       const response = await fetch(
         `/api/hospital/ticket?department=${session.department}&currentStepOnly=true`
@@ -74,7 +47,9 @@ const ServingPage: React.FC = () => {
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
       setTickets(data);
-      setLastUpdated(new Date());
+      if (currentTicketIndex >= data.length && data.length > 0) {
+        setCurrentTicketIndex(0);
+      }
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -82,10 +57,8 @@ const ServingPage: React.FC = () => {
         description: "Failed to fetch tickets",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
-  }, [session?.department, toast]);
+  }, [session?.department, toast, currentTicketIndex]);
 
   const callTicket = async (ticketId: string) => {
     try {
@@ -100,7 +73,6 @@ const ServingPage: React.FC = () => {
         title: "Success",
         description: "Ticket called successfully",
       });
-      // Update the local state to reflect the change
       setTickets(
         tickets.map((ticket) =>
           ticket._id === ticketId ? { ...ticket, ...updatedTicket } : ticket
@@ -165,71 +137,37 @@ const ServingPage: React.FC = () => {
     }
   };
 
-  const JourneyStep = ({
-    step,
-    stepData,
-    isCurrent,
-    isLast,
-    previousNote,
-  }: {
-    step: { title: string };
-    stepData: { completed: boolean; note: string };
-    isCurrent: boolean;
-    isLast: boolean;
-    previousNote?: string;
-  }) => (
-    <div className="flex items-center">
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div
-              className={`flex items-center gap-1 p-1.5 rounded-md transition-colors ${
-                isCurrent ? "bg-primary/10" : ""
-              }`}
-            >
-              {stepData.completed ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-              ) : (
-                <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              )}
-              <span className="text-sm whitespace-nowrap">{step.title}</span>
-              {previousNote && (
-                <MessageCircle className="h-4 w-4 text-blue-500 flex-shrink-0 ml-1" />
-              )}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {previousNote ? (
-              <div>
-                <p className="font-semibold">Previous step note:</p>
-                <p>{previousNote}</p>
-              </div>
-            ) : (
-              <p>{stepData.completed ? "Completed" : "Not completed"}</p>
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      {!isLast && (
-        <div className="flex items-center mx-2">
-          <ArrowRight
-            className={`h-4 w-4 ${
-              stepData.completed ? "text-green-500" : "text-muted-foreground"
-            } transition-colors`}
-          />
-        </div>
-      )}
-    </div>
-  );
-
   const getStepData = (ticket: Ticket, stepTitle: string) => {
+    if (!ticket.journeyId || !ticket.journeySteps) {
+      return { completed: false, note: "" };
+    }
     if (ticket.journeySteps instanceof Map) {
       return (
         ticket.journeySteps.get(stepTitle) || { completed: false, note: "" }
       );
-    } else {
-      return ticket.journeySteps[stepTitle] || { completed: false, note: "" };
     }
+    return (
+      (
+        ticket.journeySteps as {
+          [key: string]: { completed: boolean; note: string };
+        }
+      )[stepTitle] || { completed: false, note: "" }
+    );
+  };
+
+  const currentTicket = tickets[currentTicketIndex];
+  const waitingCount = tickets.length - 1;
+
+  const StatusBadge = ({
+    isCompleted,
+    isCurrent,
+  }: {
+    isCompleted: boolean;
+    isCurrent: boolean;
+  }) => {
+    if (isCompleted) return <Badge className="bg-green-500">Completed</Badge>;
+    if (isCurrent) return <Badge className="bg-blue-500">In Progress</Badge>;
+    return <Badge variant="secondary">Pending</Badge>;
   };
 
   if (!session?.department) {
@@ -247,8 +185,8 @@ const ServingPage: React.FC = () => {
 
   return (
     <ProtectedRoute requiredPermission="Serving">
-      <div className="container mx-auto p-4 space-y-6">
-        <div className="flex justify-between items-center">
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-center bg-background shadow-sm rounded-lg p-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
               Serving Dashboard
@@ -257,119 +195,178 @@ const ServingPage: React.FC = () => {
               Department: {session.department}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              Last updated: {lastUpdated.toLocaleTimeString()}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={fetchTickets}
-              disabled={isLoading}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-              />
-            </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-muted p-3 rounded-lg">
+              <Users className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Waiting</p>
+                <p className="text-2xl font-bold text-primary">
+                  {waitingCount}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Tickets</CardTitle>
-            <CardDescription>
-              Currently serving {tickets.length} ticket
-              {tickets.length !== 1 ? "s" : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {tickets.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Ticket No</TableHead>
-                      <TableHead>Journey</TableHead>
-                      <TableHead className="w-[50%]">Progress</TableHead>
-                      <TableHead>Call</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tickets.map((ticket) => (
-                      <TableRow key={ticket._id}>
-                        <TableCell className="font-medium">
-                          {ticket.ticketNo}
-                        </TableCell>
-                        <TableCell>{ticket.journeyId?.name || "N/A"}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center flex-wrap gap-y-2">
-                            {ticket.journeyId?.steps?.map((step, index) => {
-                              const stepData = getStepData(ticket, step.title);
-                              const previousStepTitle =
-                                index > 0
-                                  ? ticket.journeyId.steps[index - 1].title
-                                  : null;
-                              const previousNote = previousStepTitle
-                                ? getStepData(ticket, previousStepTitle).note
-                                : undefined;
+        {tickets.length > 0 && currentTicket ? (
+          <div className="grid gap-6">
+            <Card className="border-t-4 border-t-primary">
+              <CardHeader className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-3xl font-bold">
+                        #{currentTicket.ticketNo}
+                      </CardTitle>
+                      <Badge variant="outline" className="text-base">
+                        {currentTicketIndex + 1} of {tickets.length}
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-base mt-1">
+                      Journey: {currentTicket.journeyId?.name || "N/A"}
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => callTicket(currentTicket._id)}
+                      className="h-10 w-10"
+                    >
+                      <Volume2 className="h-5 w-5" />
+                    </Button>
+                    {currentTicket.journeyId?.steps &&
+                      Array.isArray(currentTicket.journeyId.steps) &&
+                      currentTicket.journeyId.steps[
+                        currentTicket.currentStep
+                      ] &&
+                      currentTicket.journeyId.steps[currentTicket.currentStep]
+                        .title === session?.department && (
+                        <Button
+                          onClick={() => setClearingTicket(currentTicket)}
+                          size="default"
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          Clear Ticket
+                        </Button>
+                      )}
+                  </div>
+                </div>
 
-                              return (
-                                <JourneyStep
-                                  key={index}
-                                  step={step}
-                                  stepData={stepData}
-                                  isCurrent={ticket.currentStep === index}
-                                  isLast={
-                                    index ===
-                                    (ticket.journeyId?.steps?.length || 0) - 1
-                                  }
-                                  previousNote={previousNote}
-                                />
-                              );
-                            })}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => callTicket(ticket._id)}
-                          >
-                            <Volume2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          {ticket.journeyId?.steps &&
-                            Array.isArray(ticket.journeyId.steps) &&
-                            ticket.journeyId.steps[ticket.currentStep] &&
-                            ticket.journeyId.steps[ticket.currentStep].title ===
-                              session?.department && (
-                              <Button
-                                onClick={() => setClearingTicket(ticket)}
-                                size="sm"
-                              >
-                                Clear Ticket
-                              </Button>
+                <div className="bg-muted p-4 rounded-lg space-y-3">
+                  <div>
+                    <h3 className="font-semibold text-sm text-muted-foreground mb-1">
+                      Reason for Visit
+                    </h3>
+                    <p className="text-lg">{currentTicket.reasonforVisit}</p>
+                  </div>
+                  {currentTicket.receptionistNote && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h3 className="font-semibold text-sm text-muted-foreground mb-1">
+                          Receptionist Note
+                        </h3>
+                        <p className="text-lg">
+                          {currentTicket.receptionistNote}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                <h3 className="font-semibold text-lg mb-4">Journey Progress</h3>
+                <div className="space-y-3">
+                  {currentTicket.journeyId?.steps?.map((step, index) => {
+                    const stepData = getStepData(currentTicket, step.title);
+                    const isCurrentStep = currentTicket.currentStep === index;
+
+                    return (
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg border transition-all ${
+                          isCurrentStep
+                            ? "bg-primary/5 border-primary shadow-sm"
+                            : "hover:bg-muted/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            {stepData.completed ? (
+                              <CheckCircle2 className="h-5 w-5 text-green-500" />
+                            ) : (
+                              <Circle className="h-5 w-5 text-muted-foreground" />
                             )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-                <AlertCircle className="h-8 w-8 mb-2" />
-                <p>No active tickets for this department</p>
-                <p className="text-sm">
-                  New tickets will appear here automatically
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                            <span className="font-medium text-lg">
+                              {step.title}
+                            </span>
+                          </div>
+                          <StatusBadge
+                            isCompleted={stepData.completed}
+                            isCurrent={isCurrentStep}
+                          />
+                        </div>
+                        {stepData.completed && stepData.note && (
+                          <div className="ml-8 mt-2">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                              <MessageCircle className="h-4 w-4" />
+                              <span>Department Note:</span>
+                            </div>
+                            <p className="text-sm bg-background p-2 rounded-md border">
+                              {stepData.note}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+
+              <CardFooter className="flex justify-between pt-6">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setCurrentTicketIndex((prev) =>
+                      prev > 0 ? prev - 1 : tickets.length - 1
+                    )
+                  }
+                  disabled={tickets.length <= 1}
+                  className="w-[120px]"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setCurrentTicketIndex((prev) =>
+                      prev < tickets.length - 1 ? prev + 1 : 0
+                    )
+                  }
+                  disabled={tickets.length <= 1}
+                  className="w-[120px]"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+              <AlertCircle className="h-12 w-12 mb-4 text-muted-foreground/60" />
+              <p className="text-lg font-medium">No active tickets</p>
+              <p className="text-sm mt-1">
+                New tickets will appear here automatically
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {clearingTicket && (
           <ClearTicketDialog
             isOpen={!!clearingTicket}
