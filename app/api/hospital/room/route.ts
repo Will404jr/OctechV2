@@ -1,83 +1,37 @@
-import { NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
+import { type NextRequest, NextResponse } from "next/server";
 import { Room } from "@/lib/models/hospital";
-import { getSession } from "@/lib/session";
+import dbConnect from "@/lib/db";
 
-export async function GET(request: Request) {
+export async function POST(req: NextRequest) {
+  await dbConnect();
+  const body = await req.json();
+
   try {
-    await dbConnect();
-    const session = await getSession();
-
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const activeRoom = await Room.findOne({
-      staffId: session.userId,
-      isActive: true,
-    }).populate("queueId");
-
-    return NextResponse.json({ room: activeRoom }, { status: 200 });
+    const room = new Room(body);
+    await room.save();
+    return NextResponse.json(room);
   } catch (error) {
-    console.error("Error fetching room:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to create room" },
       { status: 500 }
     );
   }
 }
 
-export async function PUT(request: Request) {
+export async function GET(req: NextRequest) {
+  await dbConnect();
+  const { searchParams } = new URL(req.url);
+  const staffId = searchParams.get("staffId");
+
   try {
-    await dbConnect();
-    const session = await getSession();
-
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const room = await Room.findOne({ staffId });
+    if (!room) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-
-    const { roomNumber, queueId } = await request.json();
-
-    if (!roomNumber || !queueId) {
-      return NextResponse.json(
-        { error: "Room number and queue ID are required" },
-        { status: 400 }
-      );
-    }
-
-    // Deactivate the current active room for this staff member
-    await Room.findOneAndUpdate(
-      { staffId: session.userId, isActive: true },
-      { isActive: false }
-    );
-
-    // Create or update the room for this staff member
-    const updatedRoom = await Room.findOneAndUpdate(
-      { staffId: session.userId, roomNumber: roomNumber },
-      {
-        staffId: session.userId,
-        roomNumber: roomNumber,
-        queueId: queueId,
-        isActive: true,
-      },
-      { new: true, upsert: true }
-    ).populate("queueId");
-
-    if (!updatedRoom) {
-      return NextResponse.json(
-        { error: "Failed to update room" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      { success: true, room: updatedRoom },
-      { status: 200 }
-    );
+    return NextResponse.json(room);
   } catch (error) {
-    console.error("Error updating room:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to fetch room" },
       { status: 500 }
     );
   }

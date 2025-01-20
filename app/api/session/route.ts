@@ -13,8 +13,13 @@ export async function POST(req: NextRequest) {
   if (body.branchId) {
     session.branchId = body.branchId;
     session.isLoggedIn = true;
-    await session.save();
   }
+
+  if (body.roomId) {
+    session.roomId = body.roomId;
+  }
+
+  await session.save();
 
   return NextResponse.json(session);
 }

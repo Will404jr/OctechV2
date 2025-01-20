@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import type React from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -21,24 +22,30 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  XCircle,
 } from "lucide-react";
-import { SessionData } from "@/lib/session";
+import type { SessionData } from "@/lib/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ClearTicketDialog } from "@/components/ClearTicketDialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Ticket } from "@/types/ticket";
+import type { Ticket } from "@/types/ticket";
+import { RoomSelectionDialog } from "@/components/RoomSelectionDialog";
 
 const ServingPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [session, setSession] = useState<SessionData | null>(null);
   const { toast } = useToast();
   const [clearingTicket, setClearingTicket] = useState<Ticket | null>(null);
-  const [currentTicketIndex, setCurrentTicketIndex] = useState(0);
+  const [currentTicket, setCurrentTicket] = useState<Ticket | null>(null);
+  const [showRoomDialog, setShowRoomDialog] = useState(false);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [isServing, setIsServing] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
 
   const fetchTickets = useCallback(async () => {
-    if (!session?.department) return;
+    if (!session?.department || !isServing) return [];
 
     try {
       const response = await fetch(
@@ -46,10 +53,14 @@ const ServingPage: React.FC = () => {
       );
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
-      setTickets(data);
-      if (currentTicketIndex >= data.length && data.length > 0) {
-        setCurrentTicketIndex(0);
-      }
+
+      // Filter out current ticket from fetched data
+      const filteredData = currentTicket
+        ? data.filter((ticket: Ticket) => ticket._id !== currentTicket._id)
+        : data;
+
+      setTickets(filteredData);
+      return filteredData;
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -57,8 +68,9 @@ const ServingPage: React.FC = () => {
         description: "Failed to fetch tickets",
         variant: "destructive",
       });
+      return [];
     }
-  }, [session?.department, toast, currentTicketIndex]);
+  }, [session?.department, isServing, currentTicket, toast]);
 
   const callTicket = async (ticketId: string) => {
     try {
@@ -68,16 +80,11 @@ const ServingPage: React.FC = () => {
         body: JSON.stringify({ call: true }),
       });
       if (!response.ok) throw new Error("Failed to call ticket");
-      const updatedTicket = await response.json();
+
       toast({
         title: "Success",
         description: "Ticket called successfully",
       });
-      setTickets(
-        tickets.map((ticket) =>
-          ticket._id === ticketId ? { ...ticket, ...updatedTicket } : ticket
-        )
-      );
     } catch (error) {
       console.error("Error calling ticket:", error);
       toast({
@@ -94,18 +101,27 @@ const ServingPage: React.FC = () => {
       if (response.ok) {
         const sessionData: SessionData = await response.json();
         setSession(sessionData);
+        if (sessionData.roomId) {
+          setRoomId(sessionData.roomId);
+          setIsServing(false);
+        } else {
+          setShowRoomDialog(true);
+        }
       }
     };
     fetchSession();
   }, []);
 
   useEffect(() => {
-    if (session?.department) {
+    if (session?.department && isServing) {
+      // Initial fetch
       fetchTickets();
+
+      // Set up polling
       const intervalId = setInterval(fetchTickets, 5000);
       return () => clearInterval(intervalId);
     }
-  }, [session?.department, fetchTickets]);
+  }, [session?.department, fetchTickets, isServing]);
 
   const handleClearTicket = async (
     ticketId: string,
@@ -126,12 +142,215 @@ const ServingPage: React.FC = () => {
         description: "Ticket cleared successfully",
       });
 
-      fetchTickets();
+      // Clear current ticket
+      setCurrentTicket(null);
+      updateRoomServingTicket("");
+
+      // Check if we were in the process of pausing
+      if (isPausing) {
+        setIsServing(false);
+        setIsPausing(false);
+        toast({
+          title: "Paused",
+          description: "Serving has been paused",
+          variant: "default",
+        });
+        return; // Don't fetch next ticket if pausing
+      }
+
+      // Fetch fresh tickets only if not pausing
+      const freshTickets = await fetchTickets();
+
+      if (freshTickets.length > 0) {
+        const [nextTicket, ...remainingTickets] = freshTickets;
+        setCurrentTicket(nextTicket);
+        updateRoomServingTicket(nextTicket.ticketNo);
+        setTickets(remainingTickets);
+      } else {
+        toast({
+          title: "No more tickets",
+          description: "There are no more tickets available at the moment.",
+          variant: "default",
+        });
+      }
     } catch (error) {
       console.error("Error clearing ticket:", error);
       toast({
         title: "Error",
         description: "Failed to clear ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCancelTicket = async (ticketId: string) => {
+    try {
+      const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ noShow: true }),
+      });
+
+      if (!response.ok) throw new Error("Failed to cancel ticket");
+
+      toast({
+        title: "Success",
+        description: "Ticket cancelled successfully",
+      });
+
+      // Clear current ticket
+      setCurrentTicket(null);
+      updateRoomServingTicket("");
+
+      // Check if we were in the process of pausing
+      if (isPausing) {
+        setIsServing(false);
+        setIsPausing(false);
+        toast({
+          title: "Paused",
+          description: "Serving has been paused",
+          variant: "default",
+        });
+        return; // Don't fetch next ticket if pausing
+      }
+
+      // Fetch fresh tickets only if not pausing
+      const freshTickets = await fetchTickets();
+
+      if (freshTickets.length > 0) {
+        const [nextTicket, ...remainingTickets] = freshTickets;
+        setCurrentTicket(nextTicket);
+        updateRoomServingTicket(nextTicket.ticketNo);
+        setTickets(remainingTickets);
+      } else {
+        toast({
+          title: "No more tickets",
+          description: "There are no more tickets available at the moment.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error("Error cancelling ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to cancel ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRoomSelection = async (roomNumber: number) => {
+    try {
+      const response = await fetch("/api/hospital/room", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffId: session?.userId,
+          department: session?.department,
+          roomNumber,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to create room");
+      const room = await response.json();
+      setRoomId(room._id);
+
+      // Update session with roomId
+      await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room._id }),
+      });
+
+      setShowRoomDialog(false);
+    } catch (error) {
+      console.error("Error creating room:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create room",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleChangeRoom = () => {
+    setShowRoomDialog(true);
+  };
+
+  const startServing = async () => {
+    try {
+      // Set serving state first
+      setIsServing(true);
+
+      // Fetch tickets
+      const response = await fetch(
+        `/api/hospital/ticket?department=${session?.department}&currentStepOnly=true`
+      );
+      if (!response.ok) throw new Error("Failed to fetch tickets");
+      const fetchedTickets = await response.json();
+
+      if (fetchedTickets.length > 0) {
+        // Set first ticket as current and rest as waiting
+        const [firstTicket, ...remainingTickets] = fetchedTickets;
+        setCurrentTicket(firstTicket);
+        updateRoomServingTicket(firstTicket.ticketNo);
+        setTickets(remainingTickets);
+      } else {
+        setCurrentTicket(null);
+        setTickets([]);
+        toast({
+          title: "No tickets",
+          description: "There are no tickets available at the moment.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error("Error starting serving:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start serving",
+        variant: "destructive",
+      });
+      setIsServing(false);
+    }
+  };
+
+  const pauseServing = () => {
+    if (currentTicket) {
+      // If there's a current ticket, set pausing state
+      setIsPausing(true);
+      toast({
+        title: "Pausing",
+        description: "Please clear or cancel the current ticket before pausing",
+        variant: "default",
+      });
+    } else {
+      // If no current ticket, pause immediately
+      setIsServing(false);
+      setIsPausing(false);
+      updateRoomServingTicket("");
+      toast({
+        title: "Paused",
+        description: "Serving has been paused",
+        variant: "default",
+      });
+    }
+  };
+
+  const updateRoomServingTicket = async (ticketNo: string) => {
+    if (!roomId) return;
+
+    try {
+      const response = await fetch(`/api/hospital/room/${roomId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ servingTicket: ticketNo }),
+      });
+      if (!response.ok) throw new Error("Failed to update room serving ticket");
+    } catch (error) {
+      console.error("Error updating room serving ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update room serving ticket",
         variant: "destructive",
       });
     }
@@ -155,8 +374,7 @@ const ServingPage: React.FC = () => {
     );
   };
 
-  const currentTicket = tickets[currentTicketIndex];
-  const waitingCount = tickets.length - 1;
+  const waitingCount = tickets.length;
 
   const StatusBadge = ({
     isCompleted,
@@ -208,40 +426,55 @@ const ServingPage: React.FC = () => {
           </div>
         </div>
 
-        {tickets.length > 0 && currentTicket ? (
-          <div className="grid gap-6">
-            <Card className="border-t-4 border-t-primary">
-              <CardHeader className="space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-3xl font-bold">
-                        #{currentTicket.ticketNo}
-                      </CardTitle>
-                      <Badge variant="outline" className="text-base">
-                        {currentTicketIndex + 1} of {tickets.length}
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-base mt-1">
-                      Journey: {currentTicket.journeyId?.name || "N/A"}
-                    </CardDescription>
+        {roomId && (
+          <div className="flex justify-between items-center mt-4">
+            <Button onClick={handleChangeRoom} variant="outline">
+              Change Room
+            </Button>
+            {isServing ? (
+              <Button onClick={pauseServing} variant="destructive">
+                {isPausing ? "Clear Current Ticket to Pause" : "Pause Serving"}
+              </Button>
+            ) : (
+              <Button onClick={startServing} variant="secondary">
+                Start Serving
+              </Button>
+            )}
+          </div>
+        )}
+
+        {isServing && currentTicket ? (
+          <Card className="mt-6 border-t-4 border-t-primary">
+            <CardHeader className="space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-3xl font-bold">
+                      #{currentTicket.ticketNo}
+                    </CardTitle>
+                    <Badge variant="outline" className="text-base">
+                      Current
+                    </Badge>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => callTicket(currentTicket._id)}
-                      className="h-10 w-10"
-                    >
-                      <Volume2 className="h-5 w-5" />
-                    </Button>
-                    {currentTicket.journeyId?.steps &&
-                      Array.isArray(currentTicket.journeyId.steps) &&
-                      currentTicket.journeyId.steps[
-                        currentTicket.currentStep
-                      ] &&
-                      currentTicket.journeyId.steps[currentTicket.currentStep]
-                        .title === session?.department && (
+                  <CardDescription className="text-base mt-1">
+                    Journey: {currentTicket.journeyId?.name || "N/A"}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => callTicket(currentTicket._id)}
+                    className="h-10 w-10"
+                  >
+                    <Volume2 className="h-5 w-5" />
+                  </Button>
+                  {currentTicket.journeyId?.steps &&
+                    Array.isArray(currentTicket.journeyId.steps) &&
+                    currentTicket.journeyId.steps[currentTicket.currentStep] &&
+                    currentTicket.journeyId.steps[currentTicket.currentStep]
+                      .title === session?.department && (
+                      <>
                         <Button
                           onClick={() => setClearingTicket(currentTicket)}
                           size="default"
@@ -249,119 +482,100 @@ const ServingPage: React.FC = () => {
                         >
                           Clear Ticket
                         </Button>
-                      )}
-                  </div>
+                        <Button
+                          onClick={() => handleCancelTicket(currentTicket._id)}
+                          size="default"
+                          variant="destructive"
+                        >
+                          <XCircle className="h-5 w-5 mr-2" />
+                          Cancel
+                        </Button>
+                      </>
+                    )}
                 </div>
+              </div>
 
-                <div className="bg-muted p-4 rounded-lg space-y-3">
-                  <div>
-                    <h3 className="font-semibold text-sm text-muted-foreground mb-1">
-                      Reason for Visit
-                    </h3>
-                    <p className="text-lg">{currentTicket.reasonforVisit}</p>
-                  </div>
-                  {currentTicket.receptionistNote && (
-                    <>
-                      <Separator />
-                      <div>
-                        <h3 className="font-semibold text-sm text-muted-foreground mb-1">
-                          Receptionist Note
-                        </h3>
-                        <p className="text-lg">
-                          {currentTicket.receptionistNote}
-                        </p>
-                      </div>
-                    </>
-                  )}
+              <div className="bg-muted p-4 rounded-lg space-y-3">
+                <div>
+                  <h3 className="font-semibold text-sm text-muted-foreground mb-1">
+                    Reason for Visit
+                  </h3>
+                  <p className="text-lg">{currentTicket.reasonforVisit}</p>
                 </div>
-              </CardHeader>
+                {currentTicket.receptionistNote && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="font-semibold text-sm text-muted-foreground mb-1">
+                        Receptionist Note
+                      </h3>
+                      <p className="text-lg">
+                        {currentTicket.receptionistNote}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </CardHeader>
 
-              <CardContent>
-                <h3 className="font-semibold text-lg mb-4">Journey Progress</h3>
-                <div className="space-y-3">
-                  {currentTicket.journeyId?.steps?.map((step, index) => {
-                    const stepData = getStepData(currentTicket, step.title);
-                    const isCurrentStep = currentTicket.currentStep === index;
+            <CardContent>
+              <h3 className="font-semibold text-lg mb-4">Journey Progress</h3>
+              <div className="space-y-3">
+                {currentTicket.journeyId?.steps?.map((step, index) => {
+                  const stepData = getStepData(currentTicket, step.title);
+                  const isCurrentStep = currentTicket.currentStep === index;
 
-                    return (
-                      <div
-                        key={index}
-                        className={`p-4 rounded-lg border transition-all ${
-                          isCurrentStep
-                            ? "bg-primary/5 border-primary shadow-sm"
-                            : "hover:bg-muted/50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-3">
-                            {stepData.completed ? (
-                              <CheckCircle2 className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <Circle className="h-5 w-5 text-muted-foreground" />
-                            )}
-                            <span className="font-medium text-lg">
-                              {step.title}
-                            </span>
-                          </div>
-                          <StatusBadge
-                            isCompleted={stepData.completed}
-                            isCurrent={isCurrentStep}
-                          />
+                  return (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg border transition-all ${
+                        isCurrentStep
+                          ? "bg-primary/5 border-primary shadow-sm"
+                          : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          {stepData.completed ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <Circle className="h-5 w-5 text-muted-foreground" />
+                          )}
+                          <span className="font-medium text-lg">
+                            {step.title}
+                          </span>
                         </div>
-                        {stepData.completed && stepData.note && (
-                          <div className="ml-8 mt-2">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                              <MessageCircle className="h-4 w-4" />
-                              <span>Department Note:</span>
-                            </div>
-                            <p className="text-sm bg-background p-2 rounded-md border">
-                              {stepData.note}
-                            </p>
-                          </div>
-                        )}
+                        <StatusBadge
+                          isCompleted={stepData.completed}
+                          isCurrent={isCurrentStep}
+                        />
                       </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-
-              <CardFooter className="flex justify-between pt-6">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setCurrentTicketIndex((prev) =>
-                      prev > 0 ? prev - 1 : tickets.length - 1
-                    )
-                  }
-                  disabled={tickets.length <= 1}
-                  className="w-[120px]"
-                >
-                  <ChevronLeft className="h-4 w-4 mr-2" />
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setCurrentTicketIndex((prev) =>
-                      prev < tickets.length - 1 ? prev + 1 : 0
-                    )
-                  }
-                  disabled={tickets.length <= 1}
-                  className="w-[120px]"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
+                      {stepData.completed && stepData.note && (
+                        <div className="ml-8 mt-2">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                            <MessageCircle className="h-4 w-4" />
+                            <span>Department Note:</span>
+                          </div>
+                          <p className="text-sm bg-background p-2 rounded-md border">
+                            {stepData.note}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         ) : (
-          <Card>
+          <Card className="mt-6">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
               <AlertCircle className="h-12 w-12 mb-4 text-muted-foreground/60" />
-              <p className="text-lg font-medium">No active tickets</p>
+              <p className="text-lg font-medium">No active ticket</p>
               <p className="text-sm mt-1">
-                New tickets will appear here automatically
+                {isServing
+                  ? "Waiting for the next ticket..."
+                  : "Click 'Start Serving' to begin"}
               </p>
             </CardContent>
           </Card>
@@ -382,6 +596,14 @@ const ServingPage: React.FC = () => {
             ticketNo={clearingTicket.ticketNo}
           />
         )}
+
+        <RoomSelectionDialog
+          isOpen={showRoomDialog}
+          onClose={() => setShowRoomDialog(false)}
+          onSubmit={handleRoomSelection}
+          staffId={session?.userId || ""}
+          department={session?.department || ""}
+        />
         <Toaster />
       </div>
     </ProtectedRoute>

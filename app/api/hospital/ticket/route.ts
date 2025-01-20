@@ -79,7 +79,8 @@ export async function GET(request: Request) {
     `Fetching tickets for department: ${department}, currentStepOnly: ${currentStepOnly}`
   );
 
-  let query: any = { completed: false }; // Add this line to exclude completed tickets
+  let query: any = { noShow: false, completed: false };
+
   if (journeyId === "null") {
     query = { ...query, journeyId: null };
   } else if (journeyId) {
@@ -100,7 +101,6 @@ export async function GET(request: Request) {
     };
 
     if (currentStepOnly) {
-      // First, find the index of the current department in each journey
       const journeyStepIndices = await Promise.all(
         journeys.map(async (journey) => {
           const stepIndex = journey.steps.findIndex(
@@ -110,14 +110,12 @@ export async function GET(request: Request) {
         })
       );
 
-      // Then, use these indices in the query
       query.$or = journeyStepIndices.map(({ journeyId, stepIndex }) => ({
         journeyId,
         currentStep: stepIndex,
-        completed: false, // Add this line to ensure we're not fetching completed tickets
       }));
     } else {
-      query[`journeySteps.${department}`] = false;
+      query[`journeySteps.${department}.completed`] = { $ne: true };
     }
   }
 
@@ -125,7 +123,7 @@ export async function GET(request: Request) {
 
   const tickets = await Ticket.find(query).populate("journeyId");
 
-  console.log(`Found ${tickets.length} active tickets`);
+  console.log(`Found ${tickets.length} tickets`);
 
   return NextResponse.json(tickets);
 }

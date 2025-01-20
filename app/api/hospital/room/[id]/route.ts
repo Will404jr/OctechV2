@@ -1,49 +1,45 @@
-"use server";
-
-import { NextResponse } from "next/server";
-import connectDB from "@/lib/db";
+import { type NextRequest, NextResponse } from "next/server";
 import { Room } from "@/lib/models/hospital";
+import dbConnect from "@/lib/db";
 
 export async function PUT(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  await dbConnect();
+  const { id } = params;
+  const body = await req.json();
+
   try {
-    await connectDB();
-    const data = await req.json();
-    const room = await Room.findByIdAndUpdate(params.id, data, {
-      new: true,
-    });
-
+    const room = await Room.findByIdAndUpdate(id, body, { new: true });
     if (!room) {
-      return NextResponse.json({ message: "Room not found" }, { status: 404 });
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-
     return NextResponse.json(room);
   } catch (error) {
     return NextResponse.json(
-      { message: "Error updating room" },
+      { error: "Failed to update room" },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  await dbConnect();
+  const { id } = params;
+
   try {
-    await connectDB();
-    const room = await Room.findByIdAndDelete(params.id);
-
+    const room = await Room.findByIdAndDelete(id);
     if (!room) {
-      return NextResponse.json({ message: "Room not found" }, { status: 404 });
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-
     return NextResponse.json({ message: "Room deleted successfully" });
   } catch (error) {
     return NextResponse.json(
-      { message: "Error deleting room" },
+      { error: "Failed to delete room" },
       { status: 500 }
     );
   }

@@ -32,6 +32,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { QueueSpinner } from "@/components/queue-spinner";
 import { Badge } from "@/components/ui/badge";
+import type { SessionData } from "@/lib/session";
+import { RoomSelectionDialog } from "@/components/RoomSelectionDialog";
 
 interface Ticket {
   _id: string;
@@ -39,6 +41,8 @@ interface Ticket {
   journeyId: string | null;
   call: boolean;
   noShow?: boolean;
+  reasonforVisit?: string;
+  receptionistNote?: string;
 }
 
 interface Journey {
@@ -58,9 +62,16 @@ const ReceptionistPage: React.FC = () => {
   const [reasonForVisit, setReasonForVisit] = useState<string>("");
   const [receptionistNote, setReceptionistNote] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [showRoomDialog, setShowRoomDialog] = useState(false);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [isServing, setIsServing] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
   const { toast } = useToast();
 
   const fetchTickets = useCallback(async () => {
+    if (!isServing) return;
+
     try {
       const response = await fetch("/api/hospital/ticket?journeyId=null");
       if (!response.ok) throw new Error("Failed to fetch tickets");
@@ -77,7 +88,7 @@ const ReceptionistPage: React.FC = () => {
         variant: "destructive",
       });
     }
-  }, [toast, currentTicket]);
+  }, [toast, currentTicket, isServing]);
 
   const fetchJourneys = useCallback(async () => {
     try {
@@ -96,6 +107,23 @@ const ReceptionistPage: React.FC = () => {
   }, [toast]);
 
   useEffect(() => {
+    const fetchSession = async () => {
+      const response = await fetch("/api/session");
+      if (response.ok) {
+        const sessionData: SessionData = await response.json();
+        setSession(sessionData);
+        if (sessionData.roomId) {
+          setRoomId(sessionData.roomId);
+          setIsServing(false);
+        } else {
+          setShowRoomDialog(true);
+        }
+      }
+    };
+    fetchSession();
+  }, []);
+
+  useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       await Promise.all([fetchTickets(), fetchJourneys()]);
@@ -106,6 +134,99 @@ const ReceptionistPage: React.FC = () => {
     const pollInterval = setInterval(fetchTickets, POLLING_INTERVAL);
     return () => clearInterval(pollInterval);
   }, [fetchTickets, fetchJourneys]);
+
+  const handleRoomSelection = async (roomNumber: number) => {
+    try {
+      const response = await fetch("/api/hospital/room", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffId: session?.userId,
+          department: session?.department,
+          roomNumber,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to create room");
+      const room = await response.json();
+      setRoomId(room._id);
+
+      // Update session with roomId
+      await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room._id }),
+      });
+
+      setShowRoomDialog(false);
+    } catch (error) {
+      console.error("Error creating room:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create room",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleChangeRoom = () => {
+    setShowRoomDialog(true);
+  };
+
+  const startServing = async () => {
+    try {
+      setIsServing(true);
+      await fetchTickets();
+    } catch (error) {
+      console.error("Error starting serving:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start serving",
+        variant: "destructive",
+      });
+      setIsServing(false);
+    }
+  };
+
+  const pauseServing = () => {
+    if (currentTicket) {
+      setIsPausing(true);
+      toast({
+        title: "Pausing",
+        description:
+          "Please complete or cancel the current ticket before pausing",
+        variant: "default",
+      });
+    } else {
+      setIsServing(false);
+      setIsPausing(false);
+      updateRoomServingTicket("");
+      toast({
+        title: "Paused",
+        description: "Serving has been paused",
+        variant: "default",
+      });
+    }
+  };
+
+  const updateRoomServingTicket = async (ticketNo: string) => {
+    if (!roomId) return;
+
+    try {
+      const response = await fetch(`/api/hospital/room/${roomId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ servingTicket: ticketNo }),
+      });
+      if (!response.ok) throw new Error("Failed to update room serving ticket");
+    } catch (error) {
+      console.error("Error updating room serving ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update room serving ticket",
+        variant: "destructive",
+      });
+    }
+  };
 
   const assignJourney = async () => {
     if (!currentTicket) return;
@@ -140,8 +261,29 @@ const ReceptionistPage: React.FC = () => {
         description: "Journey assigned successfully",
       });
 
+      // Update tickets and current ticket
       setTickets(tickets.filter((t) => t._id !== currentTicket._id));
-      setCurrentTicket(tickets.length > 1 ? tickets[1] : null);
+
+      // Check if we were in the process of pausing
+      if (isPausing) {
+        setIsServing(false);
+        setIsPausing(false);
+        updateRoomServingTicket("");
+        toast({
+          title: "Paused",
+          description: "Serving has been paused",
+          variant: "default",
+        });
+      } else {
+        // Set next ticket if available
+        const nextTicket = tickets.length > 1 ? tickets[1] : null;
+        setCurrentTicket(nextTicket);
+        if (nextTicket) {
+          updateRoomServingTicket(nextTicket.ticketNo);
+        }
+      }
+
+      // Reset form
       setSelectedJourney("");
       setReasonForVisit("");
       setReceptionistNote("");
@@ -175,8 +317,29 @@ const ReceptionistPage: React.FC = () => {
         description: "Ticket cancelled successfully",
       });
 
+      // Update tickets and current ticket
       setTickets(tickets.filter((t) => t._id !== currentTicket._id));
-      setCurrentTicket(tickets.length > 1 ? tickets[1] : null);
+
+      // Check if we were in the process of pausing
+      if (isPausing) {
+        setIsServing(false);
+        setIsPausing(false);
+        updateRoomServingTicket("");
+        toast({
+          title: "Paused",
+          description: "Serving has been paused",
+          variant: "default",
+        });
+      } else {
+        // Set next ticket if available
+        const nextTicket = tickets.length > 1 ? tickets[1] : null;
+        setCurrentTicket(nextTicket);
+        if (nextTicket) {
+          updateRoomServingTicket(nextTicket.ticketNo);
+        }
+      }
+
+      // Reset form
       setSelectedJourney("");
       setReasonForVisit("");
       setReceptionistNote("");
@@ -232,16 +395,49 @@ const ReceptionistPage: React.FC = () => {
     );
   }
 
+  if (!session?.department) {
+    return (
+      <div className="container mx-auto p-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No department assigned. Please contact an administrator.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
     <ProtectedRoute requiredPermission="Receptionist">
       <div className="container mx-auto p-4 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1">
-            Receptionist Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Manage patient journeys and ticket assignments
-          </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight mb-1">
+              Receptionist Dashboard
+            </h1>
+            <p className="text-muted-foreground">
+              Manage patient journeys and ticket assignments
+            </p>
+          </div>
+          {roomId && (
+            <div className="flex items-center gap-3">
+              <Button onClick={handleChangeRoom} variant="outline">
+                Change Room
+              </Button>
+              {isServing ? (
+                <Button onClick={pauseServing} variant="destructive">
+                  {isPausing
+                    ? "Complete Current Ticket to Pause"
+                    : "Pause Serving"}
+                </Button>
+              ) : (
+                <Button onClick={startServing} variant="secondary">
+                  Start Serving
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-7 gap-6">
@@ -342,7 +538,9 @@ const ReceptionistPage: React.FC = () => {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    No ticket currently being served
+                    {isServing
+                      ? "No ticket currently being served. Waiting for next ticket..."
+                      : "Click 'Start Serving' to begin serving tickets"}
                   </AlertDescription>
                 </Alert>
               )}
@@ -441,6 +639,13 @@ const ReceptionistPage: React.FC = () => {
           </Card>
         </div>
 
+        <RoomSelectionDialog
+          isOpen={showRoomDialog}
+          onClose={() => setShowRoomDialog(false)}
+          onSubmit={handleRoomSelection}
+          staffId={session?.userId || ""}
+          department={session?.department || ""}
+        />
         <Toaster />
       </div>
     </ProtectedRoute>

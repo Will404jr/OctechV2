@@ -8,7 +8,9 @@ export interface SessionData {
   branchId?: string;
   department?: string;
   permissions?: Record<string, boolean>;
+  roomId?: string;
   destroy: () => Promise<void>;
+  save: () => Promise<void>; // Added save method
 }
 
 const sessionOptions = {
