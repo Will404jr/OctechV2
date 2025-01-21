@@ -15,6 +15,9 @@ export async function POST(request: Request) {
     const { email, password, isAdminLogin }: LoginRequestBody =
       await request.json();
 
+    const session = await getSession();
+    const expirationTime = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
     if (isAdminLogin) {
       // Admin login logic
       const settings = await Settings.findOne();
@@ -48,7 +51,6 @@ export async function POST(request: Request) {
         );
       }
 
-      const session = await getSession();
       session.userId = "admin";
       session.isLoggedIn = true;
       session.role = "admin";
@@ -62,6 +64,7 @@ export async function POST(request: Request) {
         Ads: true,
         Settings: true,
       };
+      session.expiresAt = Date.now() + expirationTime;
       await session.save();
 
       return NextResponse.json({ success: true }, { status: 200 });
@@ -83,12 +86,12 @@ export async function POST(request: Request) {
         );
       }
 
-      const session = await getSession();
       session.userId = staffMember._id.toString();
       session.department = staffMember.department;
       session.isLoggedIn = true;
       session.role = staffMember.role.name;
       session.permissions = staffMember.role.permissions;
+      session.expiresAt = Date.now() + expirationTime;
       await session.save();
 
       return NextResponse.json({ success: true }, { status: 200 });

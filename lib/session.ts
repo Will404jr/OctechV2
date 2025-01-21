@@ -9,8 +9,9 @@ export interface SessionData {
   department?: string;
   permissions?: Record<string, boolean>;
   roomId?: string;
+  expiresAt?: number; // Add expiration time
   destroy: () => Promise<void>;
-  save: () => Promise<void>; // Added save method
+  save: () => Promise<void>;
 }
 
 const sessionOptions = {
@@ -21,6 +22,7 @@ const sessionOptions = {
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
+    maxAge: 24 * 60 * 60, // 24 hours in seconds
   },
 };
 
@@ -31,6 +33,12 @@ export async function getSession() {
   );
 
   if (!session.isLoggedIn) {
+    session.isLoggedIn = false;
+  }
+
+  // Check if the session has expired
+  if (session.expiresAt && Date.now() > session.expiresAt) {
+    await session.destroy();
     session.isLoggedIn = false;
   }
 

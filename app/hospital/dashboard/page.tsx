@@ -1,110 +1,217 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, ListTodo, Clock } from "lucide-react";
+import { Users, CheckSquare, Clock, XSquare } from "lucide-react";
+import { Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler,
+  Legend,
+  type ChartOptions,
+} from "chart.js";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler,
+  Legend
+);
+
+const chartOptions: ChartOptions<"line"> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: false,
+    },
+    title: {
+      display: false,
+    },
+    tooltip: {
+      mode: "index" as const,
+      intersect: false,
+      callbacks: {
+        label: (context) => `Tickets: ${context.parsed.y}`,
+      },
+    },
+  },
+  scales: {
+    x: {
+      title: {
+        display: true,
+        text: "Hour of Day",
+      },
+      grid: {
+        display: false,
+      },
+    },
+    y: {
+      display: false,
+      beginAtZero: true,
+      grid: {
+        display: false,
+      },
+    },
+  },
+};
+
+interface DashboardData {
+  totalTickets: number;
+  ticketsServed: number;
+  waitingTickets: number;
+  cancelledTickets: number;
+  ticketsPerHour: number[];
+}
 
 export default function HospitalDashboard() {
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(
+    null
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const response = await fetch("/api/hospital/dashboard");
+        if (!response.ok) {
+          throw new Error("Failed to fetch dashboard data");
+        }
+        const data = await response.json();
+        setDashboardData(data);
+      } catch (err) {
+        setError("Error fetching dashboard data");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const currentDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
+
+  if (!dashboardData) {
+    return <div>No data available</div>;
+  }
+
+  const chartData = {
+    labels: Array.from(
+      { length: 24 },
+      (_, i) => i.toString().padStart(2, "0") + ":00"
+    ),
+    datasets: [
+      {
+        fill: true,
+        label: "Tickets",
+        data: dashboardData.ticketsPerHour,
+        borderColor: "rgb(53, 162, 235)",
+        backgroundColor: "rgba(53, 162, 235, 0.5)",
+        tension: 0.4,
+      },
+    ],
+  };
+
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">Welcome to your hospital queue management dashboard</p>
+        <p className="text-muted-foreground">
+          Welcome to your hospital queue management dashboard
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">{currentDate}</p>
       </div>
-      
-      <div className="grid gap-4 md:grid-cols-3">
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Patients</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Tickets</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">45</div>
-            <p className="text-xs text-muted-foreground">Today's queue</p>
+            <div className="text-2xl font-bold">
+              {dashboardData.totalTickets}
+            </div>
+            <p className="text-xs text-muted-foreground">Today's total</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Departments</CardTitle>
-            <ListTodo className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">
+              Tickets Served
+            </CardTitle>
+            <CheckSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">Currently serving</p>
+            <div className="text-2xl font-bold">
+              {dashboardData.ticketsServed}
+            </div>
+            <p className="text-xs text-muted-foreground">Completed tickets</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Wait Time</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Waiting Tickets
+            </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">15 min</div>
-            <p className="text-xs text-muted-foreground">Current average</p>
+            <div className="text-2xl font-bold">
+              {dashboardData.waitingTickets}
+            </div>
+            <p className="text-xs text-muted-foreground">In progress</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Cancelled Tickets
+            </CardTitle>
+            <XSquare className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {dashboardData.cancelledTickets}
+            </div>
+            <p className="text-xs text-muted-foreground">No-shows</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="col-span-full md:col-span-2">
-          <CardHeader>
-            <CardTitle>Department Queue Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                <div>
-                  <p className="font-medium">Emergency Room</p>
-                  <p className="text-sm text-muted-foreground">High priority</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-blue-600">12 waiting</p>
-                  <p className="text-sm text-muted-foreground">~20 min wait</p>
-                </div>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium">General Practice</p>
-                  <p className="text-sm text-muted-foreground">Regular checkups</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-blue-600">8 waiting</p>
-                  <p className="text-sm text-muted-foreground">~15 min wait</p>
-                </div>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium">Pediatrics</p>
-                  <p className="text-sm text-muted-foreground">Children's care</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-blue-600">5 waiting</p>
-                  <p className="text-sm text-muted-foreground">~10 min wait</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-full md:col-span-1">
-          <CardHeader>
-            <CardTitle>Quick Stats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Staff On Duty</span>
-                <span className="font-medium">24</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Completed Consultations</span>
-                <span className="font-medium">87</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Average Service Time</span>
-                <span className="font-medium">12 minutes</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Tickets Per Hour</CardTitle>
+        </CardHeader>
+        <CardContent className="h-[300px]">
+          <Line options={chartOptions} data={chartData} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

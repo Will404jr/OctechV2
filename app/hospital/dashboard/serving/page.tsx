@@ -44,6 +44,26 @@ const ServingPage: React.FC = () => {
   const [isServing, setIsServing] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
 
+  const updateRoomServingTicket = async (ticketNo: string) => {
+    if (!roomId) return;
+
+    try {
+      const response = await fetch(`/api/hospital/room/${roomId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ servingTicket: ticketNo }),
+      });
+      if (!response.ok) throw new Error("Failed to update room serving ticket");
+    } catch (error) {
+      console.error("Error updating room serving ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update room serving ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
   const fetchTickets = useCallback(async () => {
     if (!session?.department || !isServing) return [];
 
@@ -54,13 +74,21 @@ const ServingPage: React.FC = () => {
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
 
-      // Filter out current ticket from fetched data
-      const filteredData = currentTicket
-        ? data.filter((ticket: Ticket) => ticket._id !== currentTicket._id)
-        : data;
+      // If there's no current ticket and we have fetched tickets, set the first one as current
+      if (!currentTicket && data.length > 0) {
+        const [nextTicket, ...remainingTickets] = data;
+        setCurrentTicket(nextTicket);
+        updateRoomServingTicket(nextTicket.ticketNo);
+        setTickets(remainingTickets);
+      } else {
+        // Filter out current ticket from fetched data
+        const filteredData = currentTicket
+          ? data.filter((ticket: Ticket) => ticket._id !== currentTicket._id)
+          : data;
+        setTickets(filteredData);
+      }
 
-      setTickets(filteredData);
-      return filteredData;
+      return data;
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -70,7 +98,7 @@ const ServingPage: React.FC = () => {
       });
       return [];
     }
-  }, [session?.department, isServing, currentTicket, toast]);
+  }, [session?.department, isServing, currentTicket, toast, roomId]);
 
   const callTicket = async (ticketId: string) => {
     try {
@@ -332,26 +360,6 @@ const ServingPage: React.FC = () => {
         title: "Paused",
         description: "Serving has been paused",
         variant: "default",
-      });
-    }
-  };
-
-  const updateRoomServingTicket = async (ticketNo: string) => {
-    if (!roomId) return;
-
-    try {
-      const response = await fetch(`/api/hospital/room/${roomId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ servingTicket: ticketNo }),
-      });
-      if (!response.ok) throw new Error("Failed to update room serving ticket");
-    } catch (error) {
-      console.error("Error updating room serving ticket:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update room serving ticket",
-        variant: "destructive",
       });
     }
   };

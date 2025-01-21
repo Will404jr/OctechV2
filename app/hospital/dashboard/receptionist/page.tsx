@@ -69,16 +69,35 @@ const ReceptionistPage: React.FC = () => {
   const [isPausing, setIsPausing] = useState(false);
   const { toast } = useToast();
 
-  const fetchTickets = useCallback(async () => {
-    if (!isServing) return;
+  const updateRoomServingTicket = async (ticketNo: string) => {
+    if (!roomId) return;
 
+    try {
+      const response = await fetch(`/api/hospital/room/${roomId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ servingTicket: ticketNo }),
+      });
+      if (!response.ok) throw new Error("Failed to update room serving ticket");
+    } catch (error) {
+      console.error("Error updating room serving ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update room serving ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchTickets = useCallback(async () => {
     try {
       const response = await fetch("/api/hospital/ticket?journeyId=null");
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
       setTickets(data);
-      if (!currentTicket && data.length > 0) {
+      if (isServing && !currentTicket && data.length > 0) {
         setCurrentTicket(data[0]);
+        updateRoomServingTicket(data[0].ticketNo);
       }
     } catch (error) {
       console.error("Error fetching tickets:", error);
@@ -88,7 +107,7 @@ const ReceptionistPage: React.FC = () => {
         variant: "destructive",
       });
     }
-  }, [toast, currentTicket, isServing]);
+  }, [toast, currentTicket, isServing, roomId]);
 
   const fetchJourneys = useCallback(async () => {
     try {
@@ -137,32 +156,45 @@ const ReceptionistPage: React.FC = () => {
 
   const handleRoomSelection = async (roomNumber: number) => {
     try {
-      const response = await fetch("/api/hospital/room", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          staffId: session?.userId,
-          department: session?.department,
-          roomNumber,
-        }),
-      });
-      if (!response.ok) throw new Error("Failed to create room");
-      const room = await response.json();
-      setRoomId(room._id);
+      if (!roomId) {
+        // If no room exists, create a new one
+        const response = await fetch("/api/hospital/room", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            staffId: session?.userId,
+            department: session?.department,
+            roomNumber,
+          }),
+        });
+        if (!response.ok) throw new Error("Failed to create room");
+        const room = await response.json();
+        setRoomId(room._id);
+      } else {
+        // If room exists, update it
+        const response = await fetch(`/api/hospital/room/${roomId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomNumber }),
+        });
+        if (!response.ok) throw new Error("Failed to update room");
+      }
 
-      // Update session with roomId
-      await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room._id }),
-      });
+      // Update session with roomId (only needed for new room creation)
+      if (!roomId) {
+        await fetch("/api/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId }),
+        });
+      }
 
       setShowRoomDialog(false);
     } catch (error) {
-      console.error("Error creating room:", error);
+      console.error("Error updating room:", error);
       toast({
         title: "Error",
-        description: "Failed to create room",
+        description: "Failed to update room",
         variant: "destructive",
       });
     }
@@ -199,31 +231,12 @@ const ReceptionistPage: React.FC = () => {
     } else {
       setIsServing(false);
       setIsPausing(false);
+      setCurrentTicket(null);
       updateRoomServingTicket("");
       toast({
         title: "Paused",
         description: "Serving has been paused",
         variant: "default",
-      });
-    }
-  };
-
-  const updateRoomServingTicket = async (ticketNo: string) => {
-    if (!roomId) return;
-
-    try {
-      const response = await fetch(`/api/hospital/room/${roomId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ servingTicket: ticketNo }),
-      });
-      if (!response.ok) throw new Error("Failed to update room serving ticket");
-    } catch (error) {
-      console.error("Error updating room serving ticket:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update room serving ticket",
-        variant: "destructive",
       });
     }
   };
@@ -261,26 +274,22 @@ const ReceptionistPage: React.FC = () => {
         description: "Journey assigned successfully",
       });
 
-      // Update tickets and current ticket
+      // Update tickets
       setTickets(tickets.filter((t) => t._id !== currentTicket._id));
+
+      // Clear current ticket
+      setCurrentTicket(null);
+      updateRoomServingTicket("");
 
       // Check if we were in the process of pausing
       if (isPausing) {
         setIsServing(false);
         setIsPausing(false);
-        updateRoomServingTicket("");
         toast({
           title: "Paused",
           description: "Serving has been paused",
           variant: "default",
         });
-      } else {
-        // Set next ticket if available
-        const nextTicket = tickets.length > 1 ? tickets[1] : null;
-        setCurrentTicket(nextTicket);
-        if (nextTicket) {
-          updateRoomServingTicket(nextTicket.ticketNo);
-        }
       }
 
       // Reset form
@@ -317,26 +326,22 @@ const ReceptionistPage: React.FC = () => {
         description: "Ticket cancelled successfully",
       });
 
-      // Update tickets and current ticket
+      // Update tickets
       setTickets(tickets.filter((t) => t._id !== currentTicket._id));
+
+      // Clear current ticket
+      setCurrentTicket(null);
+      updateRoomServingTicket("");
 
       // Check if we were in the process of pausing
       if (isPausing) {
         setIsServing(false);
         setIsPausing(false);
-        updateRoomServingTicket("");
         toast({
           title: "Paused",
           description: "Serving has been paused",
           variant: "default",
         });
-      } else {
-        // Set next ticket if available
-        const nextTicket = tickets.length > 1 ? tickets[1] : null;
-        setCurrentTicket(nextTicket);
-        if (nextTicket) {
-          updateRoomServingTicket(nextTicket.ticketNo);
-        }
       }
 
       // Reset form
