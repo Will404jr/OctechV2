@@ -1,6 +1,6 @@
 // import { NextResponse } from "next/server";
 // import dbConnect from "@/lib/db";
-// import Queue from "@/lib/models/hospitalQueue";
+// import Queue from "@/lib/models/hospital";
 
 // export async function PUT(
 //   req: Request,

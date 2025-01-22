@@ -7,9 +7,10 @@ export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const { id } = params;
+
   try {
     await dbConnect();
-    const { id } = params;
     const deletedJourney = await Journey.findByIdAndDelete(id);
 
     if (!deletedJourney) {
@@ -30,9 +31,10 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const { id } = params;
+
   try {
     await dbConnect();
-    const { id } = params;
     const body = await request.json();
 
     // Validate the incoming data

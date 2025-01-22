@@ -170,6 +170,13 @@ const ReceptionistPage: React.FC = () => {
         if (!response.ok) throw new Error("Failed to create room");
         const room = await response.json();
         setRoomId(room._id);
+
+        // Update session with roomId
+        await fetch("/api/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: room._id }),
+        });
       } else {
         // If room exists, update it
         const response = await fetch(`/api/hospital/room/${roomId}`, {
@@ -178,15 +185,6 @@ const ReceptionistPage: React.FC = () => {
           body: JSON.stringify({ roomNumber }),
         });
         if (!response.ok) throw new Error("Failed to update room");
-      }
-
-      // Update session with roomId (only needed for new room creation)
-      if (!roomId) {
-        await fetch("/api/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId }),
-        });
       }
 
       setShowRoomDialog(false);

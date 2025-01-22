@@ -11,7 +11,7 @@ import {
   Loader2,
   Edit,
 } from "lucide-react";
-import departments, { Department } from "@/lib/models/departments";
+import departments, { type Department } from "@/lib/models/departments";
 import {
   Card,
   CardContent,
@@ -67,10 +67,10 @@ const HospitalJourney: React.FC = () => {
   };
 
   const addStep = (department: Department) => {
-    setSteps([
-      ...steps,
+    setSteps((prevSteps) => [
+      ...prevSteps,
       {
-        id: steps.length + 1,
+        id: Date.now(), // Use a unique identifier
         title: department.title,
         icon: department.icon,
       },
@@ -318,27 +318,29 @@ const HospitalJourney: React.FC = () => {
                   {steps.length > 0 ? (
                     <div className="flex flex-wrap items-center gap-4">
                       {steps.map((step, index) => (
-                        <div key={step.id} className="flex items-center">
-                          <div className="relative group">
-                            <div className="bg-secondary/50 rounded-lg p-4 text-center min-w-[120px]">
-                              <div className="text-3xl mb-2">{step.icon}</div>
-                              <div className="font-medium">{step.title}</div>
+                        <React.Fragment key={step.id}>
+                          <div className="flex items-center">
+                            <div className="relative group">
+                              <div className="bg-secondary/50 rounded-lg p-4 text-center min-w-[120px]">
+                                <div className="text-3xl mb-2">{step.icon}</div>
+                                <div className="font-medium">{step.title}</div>
+                              </div>
+                              {!isPreview && (
+                                <Button
+                                  variant="destructive"
+                                  size="icon"
+                                  className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => removeStep(step.id)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
-                            {!isPreview && (
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => removeStep(step.id)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            )}
                           </div>
                           {index < steps.length - 1 && (
                             <ArrowRight className="mx-2 text-muted-foreground" />
                           )}
-                        </div>
+                        </React.Fragment>
                       ))}
                     </div>
                   ) : (

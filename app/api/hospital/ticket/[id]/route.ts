@@ -1,16 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ticket } from "@/lib/models/hospital";
 import { Journey } from "@/lib/models/hospital";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     await dbConnect();
 
-    const id = params.id;
+    // Await the params to fix the synchronous access warning
+    const { id } = await context.params;
+
     const {
       journeyId,
       currentStep,
@@ -19,10 +21,12 @@ export async function PUT(
       reasonforVisit,
       receptionistNote,
       noShow,
+      journeySteps,
     } = await request.json();
 
     let updateData: any = {};
 
+    // Handle journey assignment
     if (journeyId) {
       const journey = await Journey.findById(journeyId);
       if (!journey) {
@@ -32,19 +36,26 @@ export async function PUT(
         );
       }
 
-      const journeySteps = new Map();
-      journey.steps.forEach((step: { title: string }) => {
-        journeySteps.set(step.title, { completed: false, note: "" });
-      });
+      // Create journey steps map if not provided
+      if (!journeySteps) {
+        const newJourneySteps = new Map();
+        journey.steps.forEach((step: { title: string }) => {
+          newJourneySteps.set(step.title, { completed: false, note: "" });
+        });
+        updateData.journeySteps = newJourneySteps;
+      } else {
+        updateData.journeySteps = journeySteps;
+      }
 
       updateData = {
+        ...updateData,
         journeyId,
-        journeySteps,
-        currentStep: 0,
+        currentStep: currentStep || 0,
         completed: false,
       };
     }
 
+    // Handle step completion
     if (currentStep !== undefined) {
       const ticket = await Ticket.findById(id);
       if (!ticket) {
@@ -92,6 +103,7 @@ export async function PUT(
       }
     }
 
+    // Handle other updates
     if (call !== undefined) {
       updateData.call = call;
     }
@@ -108,9 +120,12 @@ export async function PUT(
       updateData.noShow = noShow;
     }
 
-    const updatedTicket = await Ticket.findByIdAndUpdate(id, updateData, {
-      new: true,
-    });
+    // Update the ticket
+    const updatedTicket = await Ticket.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true }
+    );
 
     if (!updatedTicket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
