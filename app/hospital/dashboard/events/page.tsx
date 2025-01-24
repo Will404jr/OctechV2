@@ -121,112 +121,110 @@ export default function UpcomingEventsPage() {
     setIsDialogOpen(true);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
-      </div>
-    );
-  }
-
   return (
     <ProtectedRoute requiredPermission="UpcomingEvents">
-      <div className="container mx-auto py-10">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Upcoming Events</h1>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={handleDialogOpen} className="bg-[#0e4480]">
-                <PlusIcon className="mr-2 h-4 w-4" /> Add Event
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>
-                  {isEditing ? "Edit Event" : "Add New Event"}
-                </DialogTitle>
-                <DialogDescription>
-                  {isEditing
-                    ? "Edit the details of your event here."
-                    : "Add the details of your new event here."}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="title" className="text-right">
-                    Title
-                  </Label>
-                  <Input
-                    id="title"
-                    value={newEvent.title}
-                    onChange={(e) =>
-                      setNewEvent({ ...newEvent, title: e.target.value })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="date" className="text-right">
-                    Date
-                  </Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={newEvent.date}
-                    onChange={(e) =>
-                      setNewEvent({ ...newEvent, date: e.target.value })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  className="bg-[#0e4480]"
-                  onClick={isEditing ? handleEditEvent : handleAddEvent}
-                >
-                  {isEditing ? "Save Changes" : "Add Event"}
+      {isLoading ? (
+        <div className="flex justify-center items-center h-screen">
+          <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
+        </div>
+      ) : (
+        <div className="container mx-auto py-10">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Upcoming Events</h1>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={handleDialogOpen} className="bg-[#0e4480]">
+                  <PlusIcon className="mr-2 h-4 w-4" /> Add Event
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {events.map((event) => (
-            <Card key={event._id}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {event?.title || "Untitled Event"}
-                </CardTitle>
-                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {event?.date
-                    ? new Date(event.date).toLocaleDateString()
-                    : "No date"}
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>
+                    {isEditing ? "Edit Event" : "Add New Event"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {isEditing
+                      ? "Edit the details of your event here."
+                      : "Add the details of your new event here."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="title" className="text-right">
+                      Title
+                    </Label>
+                    <Input
+                      id="title"
+                      value={newEvent.title}
+                      onChange={(e) =>
+                        setNewEvent({ ...newEvent, title: e.target.value })
+                      }
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="date" className="text-right">
+                      Date
+                    </Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={newEvent.date}
+                      onChange={(e) =>
+                        setNewEvent({ ...newEvent, date: e.target.value })
+                      }
+                      className="col-span-3"
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-end space-x-2 mt-4">
+                <DialogFooter>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEditDialog(event)}
+                    className="bg-[#0e4480]"
+                    onClick={isEditing ? handleEditEvent : handleAddEvent}
                   >
-                    <Edit className="h-4 w-4" />
+                    {isEditing ? "Save Changes" : "Add Event"}
                   </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDeleteEvent(event._id)}
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {events.map((event) => (
+              <Card key={event._id}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {event?.title || "Untitled Event"}
+                  </CardTitle>
+                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {event?.date
+                      ? new Date(event.date).toLocaleDateString()
+                      : "No date"}
+                  </div>
+                  <div className="flex justify-end space-x-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(event)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeleteEvent(event._id)}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </ProtectedRoute>
   );
 }

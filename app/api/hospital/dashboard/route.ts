@@ -15,7 +15,9 @@ export async function GET() {
 
     const totalTickets = tickets.length;
     const ticketsServed = tickets.filter((ticket) => ticket.completed).length;
-    const waitingTickets = tickets.filter((ticket) => !ticket.completed).length;
+    const waitingTickets = tickets.filter(
+      (ticket) => !ticket.completed && !ticket.noShow
+    ).length;
     const cancelledTickets = tickets.filter((ticket) => ticket.noShow).length;
 
     // Calculate tickets per hour

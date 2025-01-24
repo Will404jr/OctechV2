@@ -170,6 +170,7 @@ const roomSchema = new mongoose.Schema(
 
 export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
 
+//ticket schema
 const ticketSchema = new mongoose.Schema(
   {
     ticketNo: { type: String, required: true },

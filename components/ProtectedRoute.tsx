@@ -29,8 +29,8 @@ export function ProtectedRoute({
             router.push("/hospital/dashboard");
           }
         } else {
-          console.error("Failed to fetch user permissions");
-          router.push("/hospital/dashboard");
+          // console.error("Failed to fetch user permissions");
+          router.push("/hospital/login");
         }
       } catch (error) {
         console.error("Error checking permissions:", error);

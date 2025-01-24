@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { Ticket } from "@/types/ticket";
 import { RoomSelectionDialog } from "@/components/RoomSelectionDialog";
+import { QueueSpinner } from "@/components/queue-spinner";
 
 const ServingPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -65,7 +66,7 @@ const ServingPage: React.FC = () => {
   };
 
   const fetchTickets = useCallback(async () => {
-    if (!session?.department || !isServing) return [];
+    if (!session?.department) return [];
 
     try {
       const response = await fetch(
@@ -74,18 +75,22 @@ const ServingPage: React.FC = () => {
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
 
-      // If there's no current ticket and we have fetched tickets, set the first one as current
-      if (!currentTicket && data.length > 0) {
-        const [nextTicket, ...remainingTickets] = data;
-        setCurrentTicket(nextTicket);
-        updateRoomServingTicket(nextTicket.ticketNo);
-        setTickets(remainingTickets);
+      if (!isServing) {
+        // When not serving, just update the waiting tickets
+        setTickets(data);
       } else {
-        // Filter out current ticket from fetched data
-        const filteredData = currentTicket
-          ? data.filter((ticket: Ticket) => ticket._id !== currentTicket._id)
-          : data;
-        setTickets(filteredData);
+        // When serving, handle current ticket and waiting tickets
+        if (!currentTicket && data.length > 0) {
+          const [nextTicket, ...remainingTickets] = data;
+          setCurrentTicket(nextTicket);
+          updateRoomServingTicket(nextTicket.ticketNo);
+          setTickets(remainingTickets);
+        } else {
+          const filteredData = currentTicket
+            ? data.filter((ticket: Ticket) => ticket._id !== currentTicket._id)
+            : data;
+          setTickets(filteredData);
+        }
       }
 
       return data;
@@ -98,7 +103,13 @@ const ServingPage: React.FC = () => {
       });
       return [];
     }
-  }, [session?.department, isServing, currentTicket, toast, roomId]);
+  }, [
+    session?.department,
+    isServing,
+    currentTicket,
+    toast,
+    updateRoomServingTicket,
+  ]);
 
   const callTicket = async (ticketId: string) => {
     try {
@@ -141,7 +152,7 @@ const ServingPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (session?.department && isServing) {
+    if (session?.department) {
       // Initial fetch
       fetchTickets();
 
@@ -149,7 +160,7 @@ const ServingPage: React.FC = () => {
       const intervalId = setInterval(fetchTickets, 5000);
       return () => clearInterval(intervalId);
     }
-  }, [session?.department, fetchTickets, isServing]);
+  }, [session?.department, fetchTickets]);
 
   const handleClearTicket = async (
     ticketId: string,
@@ -382,7 +393,9 @@ const ServingPage: React.FC = () => {
     );
   };
 
-  const waitingCount = tickets.length;
+  const waitingCount = isServing
+    ? tickets.length
+    : tickets.length + (currentTicket ? 1 : 0);
 
   const StatusBadge = ({
     isCompleted,
@@ -396,17 +409,19 @@ const ServingPage: React.FC = () => {
     return <Badge variant="secondary">Pending</Badge>;
   };
 
-  if (!session?.department) {
+  if (!session) {
     return (
-      <div className="container mx-auto p-4">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            No department assigned. Please contact an administrator.
-          </AlertDescription>
-        </Alert>
+      <div className="container mx-auto p-4 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-2">
+          <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
+          {/* <p className="text-lg font-medium">Loading...</p> */}
+        </div>
       </div>
     );
+  }
+
+  if (!session.department) {
+    return null; // This will prevent any flash of content before redirecting
   }
 
   return (

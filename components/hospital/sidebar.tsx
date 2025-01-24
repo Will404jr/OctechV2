@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -19,6 +20,7 @@ import { usePathname } from "next/navigation";
 import Image from "next/image";
 import Octech from "@/public/octech.jpg";
 import { QueueSpinner } from "@/components/queue-spinner";
+import { useToast } from "@/hooks/use-toast";
 
 const routes = [
   {
@@ -73,10 +75,12 @@ const routes = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [userPermissions, setUserPermissions] = useState<
     Record<string, boolean>
   >({});
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchUserPermissions = async () => {
@@ -87,20 +91,23 @@ export function Sidebar() {
           const data = await response.json();
           setUserPermissions(data.permissions || {});
         } else {
-          console.error(
-            "Failed to fetch user permissions:",
-            await response.text()
-          );
+          toast({
+            title: "Error",
+            description: "Session expired, Please login again",
+            variant: "destructive",
+          });
+          router.push("/hospital/login");
         }
       } catch (error) {
         console.error("Error fetching user permissions:", error);
+        router.push("/hospital/login");
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUserPermissions();
-  }, []);
+  }, [router, toast]);
 
   const filteredRoutes = routes.filter(
     (route) => userPermissions[route.permission]
@@ -108,17 +115,21 @@ export function Sidebar() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center">
+      <div className="flex justify-center items-center h-full">
         <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 py-4 flex flex-col h-full bg-white border-r">
-      <div className="px-3 py-2">
+    <div className="space-y-4 py-4 flex flex-col h-full bg-white">
+      <div className="px-3 py-2 flex-shrink-0">
         <Link href="/hospital/dashboard">
-          <Image src={Octech} alt="octech logo" height={100} />
+          <Image
+            src={Octech || "/placeholder.svg"}
+            alt="octech logo"
+            height={100}
+          />
         </Link>
       </div>
       <ScrollArea className="flex-1 px-3">

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -68,6 +69,7 @@ const ReceptionistPage: React.FC = () => {
   const [isServing, setIsServing] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const updateRoomServingTicket = async (ticketNo: string) => {
     if (!roomId) return;
@@ -153,6 +155,12 @@ const ReceptionistPage: React.FC = () => {
     const pollInterval = setInterval(fetchTickets, POLLING_INTERVAL);
     return () => clearInterval(pollInterval);
   }, [fetchTickets, fetchJourneys]);
+
+  useEffect(() => {
+    if (session && !session.department) {
+      router.push("/hospital/login");
+    }
+  }, [session, router]);
 
   const handleRoomSelection = async (roomNumber: number) => {
     try {
@@ -398,7 +406,7 @@ const ReceptionistPage: React.FC = () => {
     );
   }
 
-  if (!session?.department) {
+  if (!session || !session.department) {
     return (
       <div className="container mx-auto p-4">
         <Alert variant="destructive">

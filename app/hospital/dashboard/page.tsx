@@ -98,7 +98,14 @@ export default function HospitalDashboard() {
       }
     };
 
+    // Initial fetch
     fetchDashboardData();
+
+    // Set up polling every 5 seconds
+    const intervalId = setInterval(fetchDashboardData, 5000);
+
+    // Clean up function to clear the interval when the component unmounts
+    return () => clearInterval(intervalId);
   }, []);
 
   const currentDate = new Date().toLocaleDateString("en-US", {
@@ -130,8 +137,8 @@ export default function HospitalDashboard() {
         fill: true,
         label: "Tickets",
         data: dashboardData.ticketsPerHour,
-        borderColor: "rgb(53, 162, 235)",
-        backgroundColor: "rgba(53, 162, 235, 0.5)",
+        borderColor: "rgb(14, 68, 128)",
+        backgroundColor: "rgba(59, 130, 246)",
         tension: 0.4,
       },
     ],
@@ -199,7 +206,7 @@ export default function HospitalDashboard() {
             <div className="text-2xl font-bold">
               {dashboardData.cancelledTickets}
             </div>
-            <p className="text-xs text-muted-foreground">No-shows</p>
+            <p className="text-xs text-muted-foreground">Cancelled</p>
           </CardContent>
         </Card>
       </div>
