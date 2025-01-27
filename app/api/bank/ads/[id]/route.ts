@@ -5,12 +5,14 @@ import { unlink } from "fs/promises";
 import path from "path";
 
 export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: { params: { id: string } }
 ): Promise<NextResponse> {
+  const { id } = context.params;
+
   try {
     await dbConnect();
-    const ad = await Ad.findById(params.id);
+    const ad = await Ad.findById(id);
     if (!ad) {
       return NextResponse.json({ error: "Ad not found" }, { status: 404 });
     }
@@ -20,7 +22,7 @@ export async function DELETE(
     await unlink(imagePath);
 
     // Delete the ad from the database
-    await Ad.findByIdAndDelete(params.id);
+    await Ad.findByIdAndDelete(id);
 
     return NextResponse.json({ message: "Ad deleted successfully" });
   } catch (error) {
