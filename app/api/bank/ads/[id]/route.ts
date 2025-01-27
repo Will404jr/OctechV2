@@ -1,13 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ad } from "@/lib/models/bank";
 import { unlink } from "fs/promises";
 import path from "path";
 
+type Props = {
+  params: {
+    id: string;
+  };
+};
+
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  { params }: Props
+): Promise<NextResponse> {
   try {
     await dbConnect();
     const ad = await Ad.findById(params.id);
