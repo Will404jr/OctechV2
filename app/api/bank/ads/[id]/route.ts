@@ -4,15 +4,9 @@ import { Ad } from "@/lib/models/bank";
 import { unlink } from "fs/promises";
 import path from "path";
 
-type Props = {
-  params: {
-    id: string;
-  };
-};
-
 export async function DELETE(
   req: NextRequest,
-  { params }: Props
+  { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
     await dbConnect();
