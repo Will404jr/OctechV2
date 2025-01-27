@@ -6,13 +6,13 @@ import { Staff } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 
 export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const { id } = params;
-    const body = await request.json();
+    const body = await req.json();
 
     const updatedStaff = await Staff.findByIdAndUpdate(id, body, {
       new: true,
@@ -35,11 +35,12 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await connectDB();
-    const rate = await Staff.findByIdAndDelete(params.id);
+    const rate = await Staff.findByIdAndDelete(id);
 
     if (!rate) {
       return NextResponse.json({ message: "Staff not found" }, { status: 404 });

@@ -7,8 +7,10 @@ import bcrypt from "bcryptjs";
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   try {
     await connectDB();
     const data = await req.json();
@@ -43,7 +45,7 @@ export async function PUT(
       delete updateData.hallDisplayPassword;
     }
 
-    const branch = await Branch.findByIdAndUpdate(params.id, updateData, {
+    const branch = await Branch.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
     });
@@ -73,11 +75,13 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   try {
     await connectDB();
-    const branch = await Branch.findByIdAndDelete(params.id);
+    const branch = await Branch.findByIdAndDelete(id);
 
     if (!branch) {
       return NextResponse.json(

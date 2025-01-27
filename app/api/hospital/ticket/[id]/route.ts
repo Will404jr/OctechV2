@@ -4,14 +4,12 @@ import { Ticket } from "@/lib/models/hospital";
 import { Journey } from "@/lib/models/hospital";
 
 export async function PUT(
-  request: NextRequest,
-  context: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-
-    // Await the params to fix the synchronous access warning
-    const { id } = await context.params;
 
     const {
       journeyId,
@@ -22,7 +20,7 @@ export async function PUT(
       receptionistNote,
       noShow,
       journeySteps,
-    } = await request.json();
+    } = await req.json();
 
     let updateData: any = {};
 

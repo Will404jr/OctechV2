@@ -4,10 +4,10 @@ import { Journey } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await context.params;
 
   try {
     await dbConnect();
@@ -28,14 +28,14 @@ export async function DELETE(
 }
 
 export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await context.params;
 
   try {
     await dbConnect();
-    const body = await request.json();
+    const body = await req.json();
 
     // Validate the incoming data
     if (!body.name || !body.steps || !Array.isArray(body.steps)) {

@@ -5,13 +5,13 @@ import { getSession } from "@/lib/session";
 import { Counter } from "@/lib/models/bank";
 
 export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
 
-    const { id } = params;
     const body = await req.json();
     const session = await getSession();
 

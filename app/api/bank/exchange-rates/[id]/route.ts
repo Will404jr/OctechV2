@@ -6,12 +6,14 @@ import { ExchangeRate } from "@/lib/models/bank";
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   try {
     await connectDB();
     const data = await req.json();
-    const rate = await ExchangeRate.findByIdAndUpdate(params.id, data, {
+    const rate = await ExchangeRate.findByIdAndUpdate(id, data, {
       new: true,
     });
 
@@ -33,11 +35,13 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   try {
     await connectDB();
-    const rate = await ExchangeRate.findByIdAndDelete(params.id);
+    const rate = await ExchangeRate.findByIdAndDelete(id);
 
     if (!rate) {
       return NextResponse.json(

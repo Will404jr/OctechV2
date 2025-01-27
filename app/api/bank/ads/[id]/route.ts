@@ -6,9 +6,9 @@ import path from "path";
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const { id } = context.params;
+  const { id } = await context.params;
 
   try {
     await dbConnect();

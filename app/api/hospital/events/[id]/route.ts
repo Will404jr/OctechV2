@@ -6,12 +6,13 @@ import { Event } from "@/lib/models/hospital";
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await connectDB();
     const data = await req.json();
-    const event = await Event.findByIdAndUpdate(params.id, data, {
+    const event = await Event.findByIdAndUpdate(id, data, {
       new: true,
     });
 
@@ -30,17 +31,15 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await connectDB();
-    const event = await Event.findByIdAndDelete(params.id);
+    const event = await Event.findByIdAndDelete(id);
 
     if (!event) {
-      return NextResponse.json(
-        { message: "Branch not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: "Event not found" }, { status: 404 });
     }
 
     return NextResponse.json({ message: "Event deleted successfully" });

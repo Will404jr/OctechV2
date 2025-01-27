@@ -6,12 +6,13 @@ import { Queue } from "@/lib/models/bank";
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await connectDB();
     const data = await req.json();
-    const rate = await Queue.findByIdAndUpdate(params.id, data, {
+    const rate = await Queue.findByIdAndUpdate(id, data, {
       new: true,
     });
 
@@ -30,11 +31,12 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await connectDB();
-    const rate = await Queue.findByIdAndDelete(params.id);
+    const rate = await Queue.findByIdAndDelete(id);
 
     if (!rate) {
       return NextResponse.json({ message: "Queue not found" }, { status: 404 });

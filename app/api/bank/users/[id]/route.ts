@@ -7,13 +7,13 @@ import dbConnect from "@/lib/db";
 import bcrypt from "bcryptjs";
 
 export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const { id } = params;
-    const body = await request.json();
+    const body = await req.json();
 
     // If a new password is provided, hash it
     if (body.password) {
@@ -48,11 +48,12 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await connectDB();
-    const rate = await User.findByIdAndDelete(params.id);
+    const rate = await User.findByIdAndDelete(id);
 
     if (!rate) {
       return NextResponse.json({ message: "User not found" }, { status: 404 });

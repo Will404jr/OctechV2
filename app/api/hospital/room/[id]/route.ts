@@ -3,11 +3,12 @@ import { Room } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 
 export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   await dbConnect();
-  const { id } = params;
+
   const body = await req.json();
 
   try {
@@ -25,11 +26,11 @@ export async function PUT(
 }
 
 export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   await dbConnect();
-  const { id } = params;
 
   try {
     const room = await Room.findByIdAndDelete(id);
