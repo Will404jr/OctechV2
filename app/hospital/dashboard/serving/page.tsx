@@ -289,7 +289,10 @@ const ServingPage: React.FC = () => {
           roomNumber,
         }),
       });
-      if (!response.ok) throw new Error("Failed to create room");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create room");
+      }
       const room = await response.json();
       setRoomId(room._id);
 
@@ -303,11 +306,24 @@ const ServingPage: React.FC = () => {
       setShowRoomDialog(false);
     } catch (error) {
       console.error("Error creating room:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create room",
-        variant: "destructive",
-      });
+      if (
+        error instanceof Error &&
+        error.message ===
+          "A room with this number already exists in the department"
+      ) {
+        toast({
+          title: "Room Already Exists",
+          description:
+            "A room with this number already exists in the department. Please choose a different room number.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to create room",
+          variant: "destructive",
+        });
+      }
     }
   };
 

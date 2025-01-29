@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Ticket } from "@/lib/models/bank";
+import { Bankticket } from "@/lib/models/bank";
 import { Counter } from "@/lib/models/bank";
 
 function setCorsHeaders(response: NextResponse) {
@@ -21,7 +21,7 @@ async function generateTicketNumber() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const latestTicket = await Ticket.findOne({
+  const latestTicket = await Bankticket.findOne({
     createdAt: { $gte: today },
   }).sort({ createdAt: -1 });
 
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
 
     console.log("Executing query:", query);
 
-    const tickets = await Ticket.find(query)
+    const tickets = await Bankticket.find(query)
       .populate({
         path: "counterId",
         model: Counter,
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
 
     const ticketNo = await generateTicketNumber();
 
-    const newTicket = new Ticket({
+    const newTicket = new Bankticket({
       ticketNo,
       queueId: body.queueId,
       subItemId: body.subItemId,
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     console.log("Newly created ticket:", savedTicket.toObject());
 
     // Fetch the ticket again to ensure all fields are populated
-    const fetchedTicket = await Ticket.findById(savedTicket._id).lean();
+    const fetchedTicket = await Bankticket.findById(savedTicket._id).lean();
     console.log("Fetched ticket from database:", fetchedTicket);
 
     const response = NextResponse.json(

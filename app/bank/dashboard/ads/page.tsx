@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, ImageIcon, Trash2, Loader } from "lucide-react";
 import { useForm } from "react-hook-form";
 import AdCarousel from "./AdCarousel";
-import { Ad } from "./Ad";
+import type { Ad } from "./Ad";
 import { QueueSpinner } from "@/components/queue-spinner";
 import {
   Select,
@@ -236,7 +236,7 @@ export default function DisplayAdsPage() {
                     {ad.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={ad.image}
+                        src={`/api/bank/ads/image/${ad.image.split("/").pop()}`}
                         alt={ad.name}
                         className="object-cover w-full h-full"
                       />

@@ -1,10 +1,34 @@
 "use server";
 
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import { User } from "@/lib/models/bank";
 import dbConnect from "@/lib/db";
 import bcrypt from "bcryptjs";
+
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+
+  try {
+    await dbConnect();
+    const user = await User.findById(id).select("username").lean();
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(user);
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function PUT(
   req: Request,

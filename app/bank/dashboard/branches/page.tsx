@@ -7,9 +7,11 @@ import {
   Trash,
   MapPin,
   Database,
-  User,
-  Eye,
-  EyeOff,
+  Network,
+  Building2,
+  Monitor,
+  Keyboard,
+  LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +21,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,6 +37,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import { QueueSpinner } from "@/components/queue-spinner";
 
 interface Branch {
@@ -45,6 +54,29 @@ interface Branch {
   hallDisplayUsername: string;
   hallDisplayPassword: string;
 }
+const IconWithTooltip = ({
+  icon: Icon,
+  text,
+  children,
+  className = "",
+}: {
+  icon: LucideIcon;
+  text: string;
+  children?: React.ReactNode;
+  className?: string;
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <div className={`inline-flex items-center ${className}`}>
+        <Icon className="h-4 w-4 text-gray-500 flex-shrink-0" />
+        {children}
+      </div>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p className="text-sm">{text}</p>
+    </TooltipContent>
+  </Tooltip>
+);
 
 export default function BranchPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -187,9 +219,16 @@ export default function BranchPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Branches</h1>
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">
+            Branch Management
+          </h1>
+          <p className="text-gray-500">
+            Manage your bank branch locations and configurations
+          </p>
+        </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button className="bg-[#0e4480]">
@@ -334,74 +373,149 @@ export default function BranchPage() {
           <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
         </div>
       ) : branches.length === 0 ? (
-        <p className="text-center text-gray-500">No branches available.</p>
+        <Card className="flex flex-col items-center justify-center h-48 border-dashed">
+          <IconWithTooltip
+            icon={Building2}
+            text="No branches have been added yet"
+            className="h-12 w-12 text-gray-400 mb-4"
+          />
+          <p className="text-lg text-gray-500">No branches available</p>
+          <p className="text-sm text-gray-400">
+            Add your first branch to get started
+          </p>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {branches.map((branch) => (
-            <Card key={branch._id} className="flex flex-col">
-              <CardHeader>
-                <CardTitle>{branch.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-grow space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-gray-500" />
-                    <span className="text-sm">{branch.address}</span>
+            <TooltipProvider key={branch._id}>
+              <Card className="flex flex-col hover:shadow-lg transition-shadow duration-200">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="secondary" className="mb-2">
+                          Branch
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>Bank branch location</TooltipContent>
+                    </Tooltip>
+                    <div className="flex space-x-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-blue-600"
+                            onClick={() => {
+                              setEditingBranch(branch);
+                              setIsOpen(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit branch details</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-red-600"
+                            onClick={() => handleDelete(branch._id)}
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete this branch</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                  <div className="flex items-center">
-                    <Database className="w-4 h-4 mr-2 text-gray-500" />
-                    <span className="text-sm">
-                      {branch.databaseName} @ {branch.databaseHost}
-                    </span>
+                  <CardTitle className="text-xl">{branch.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <div className="space-y-3">
+                    <IconWithTooltip
+                      icon={MapPin}
+                      text="Physical branch location"
+                      className="flex space-x-2 text-sm"
+                    >
+                      <span
+                        className="text-gray-600 truncate ml-2"
+                        title={branch.address}
+                      >
+                        {branch.address}
+                      </span>
+                    </IconWithTooltip>
+                    <IconWithTooltip
+                      icon={Network}
+                      text="Local network configuration"
+                      className="flex space-x-2 text-sm"
+                    >
+                      <span
+                        className="text-gray-600 truncate ml-2"
+                        title={branch.localNetworkAddress}
+                      >
+                        {branch.localNetworkAddress}
+                      </span>
+                    </IconWithTooltip>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 mr-2 text-gray-500" />
-                    <span className="text-sm">
-                      DB User: {branch.databaseUser}
-                    </span>
+
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                    <div className="space-y-3">
+                      <IconWithTooltip
+                        icon={Database}
+                        text="Database configuration details"
+                        className="text-sm font-medium"
+                      >
+                        <span className="ml-2">Database</span>
+                      </IconWithTooltip>
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-500">
+                          Host: {branch.databaseHost}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Name: {branch.databaseName}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          User: {branch.databaseUser}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <IconWithTooltip
+                        icon={Monitor}
+                        text="System access credentials"
+                        className="text-sm font-medium"
+                      >
+                        <span className="ml-2">Access</span>
+                      </IconWithTooltip>
+                      <div className="space-y-1">
+                        <IconWithTooltip
+                          icon={Keyboard}
+                          text="Kiosk system username"
+                          className="flex items-center space-x-1"
+                        >
+                          <p className="text-xs text-gray-500 ml-1">
+                            {branch.kioskUsername}
+                          </p>
+                        </IconWithTooltip>
+                        <IconWithTooltip
+                          icon={Monitor}
+                          text="Hall display system username"
+                          className="flex items-center space-x-1"
+                        >
+                          <p className="text-xs text-gray-500 ml-1">
+                            {branch.hallDisplayUsername}
+                          </p>
+                        </IconWithTooltip>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 mr-2 text-gray-500" />
-                    <span className="text-sm">
-                      Kiosk: {branch.kioskUsername}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 mr-2 text-gray-500" />
-                    <span className="text-sm">
-                      Hall Display: {branch.hallDisplayUsername}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end space-x-2">
-                <Button
-                  size="sm"
-                  className="bg-[#3a72ec]"
-                  onClick={() => {
-                    setEditingBranch(branch);
-                    setIsOpen(true);
-                  }}
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDelete(branch._id)}
-                >
-                  <Trash className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
-              </CardFooter>
-            </Card>
+                </CardContent>
+              </Card>
+            </TooltipProvider>
           ))}
         </div>
       )}

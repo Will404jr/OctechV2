@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Ticket } from "@/lib/models/bank";
+import { Bankticket } from "@/lib/models/bank";
 import { getSession } from "@/lib/session";
 import { Counter } from "@/lib/models/bank";
 
@@ -54,7 +54,7 @@ export async function PUT(
       updateData.issueDescription = body.issueDescription;
     if (body.callAgain) updateData.callAgain = body.callAgain;
 
-    const updatedTicket = await Ticket.findByIdAndUpdate(id, updateData, {
+    const updatedTicket = await Bankticket.findByIdAndUpdate(id, updateData, {
       new: true,
     }).populate("counterId");
 

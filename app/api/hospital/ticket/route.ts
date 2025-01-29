@@ -75,9 +75,9 @@ export async function GET(request: Request) {
   const department = searchParams.get("department");
   const currentStepOnly = searchParams.get("currentStepOnly") === "true";
 
-  console.log(
-    `Fetching tickets for department: ${department}, currentStepOnly: ${currentStepOnly}`
-  );
+  // console.log(
+  //   `Fetching tickets for department: ${department}, currentStepOnly: ${currentStepOnly}`
+  // );
 
   let query: any = { noShow: false, completed: false };
 
@@ -91,9 +91,9 @@ export async function GET(request: Request) {
     const journeys = await Journey.find({ "steps.title": department });
     const journeyIds = journeys.map((journey) => journey._id);
 
-    console.log(
-      `Found ${journeys.length} journeys for department ${department}`
-    );
+    // console.log(
+    //   `Found ${journeys.length} journeys for department ${department}`
+    // );
 
     query = {
       ...query,
@@ -119,11 +119,11 @@ export async function GET(request: Request) {
     }
   }
 
-  console.log("Final query:", JSON.stringify(query, null, 2));
+  // console.log("Final query:", JSON.stringify(query, null, 2));
 
   const tickets = await Ticket.find(query).populate("journeyId");
 
-  console.log(`Found ${tickets.length} tickets`);
+  // console.log(`Found ${tickets.length} tickets`);
 
   return NextResponse.json(tickets);
 }

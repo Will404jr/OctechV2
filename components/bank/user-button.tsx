@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SessionData } from "@/lib/session";
+import type { SessionData } from "@/lib/session";
 import { User } from "lucide-react";
 
 interface UserData {
@@ -35,7 +35,7 @@ export function UserButton() {
           setUserData({ username: "Admin" });
         } else if (sessionData.userId) {
           const userResponse = await fetch(
-            `/api/hospital/users?id=${sessionData.userId}`
+            `/api/bank/users/${sessionData.userId}`
           );
           if (userResponse.ok) {
             const userData: UserData = await userResponse.json();

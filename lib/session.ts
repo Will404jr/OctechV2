@@ -9,6 +9,7 @@ export interface SessionData {
   department?: string;
   permissions?: Record<string, boolean>;
   roomId?: string;
+  hallDisplayUsername?: string;
   expiresAt?: number; // Add expiration time
   destroy: () => Promise<void>;
   save: () => Promise<void>;

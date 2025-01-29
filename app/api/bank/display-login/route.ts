@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { Branch } from "@/lib/models/bank";
 import dbConnect from "@/lib/db";
+import { getSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,15 +27,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create a session or token here
-    // For simplicity, we'll just return the branch ID
-    // In a real-world scenario, you'd want to use a proper session management system
+    const session = await getSession();
+    session.branchId = branch._id.toString();
+    session.isLoggedIn = true;
+    session.hallDisplayUsername = branch.hallDisplayUsername;
+    await session.save();
+
     return NextResponse.json(
-      { message: "display login successful", branchId: branch._id },
+      { message: "Display login successful", branchId: branch._id },
       { status: 200 }
     );
   } catch (error) {
-    console.error("display login error:", error);
+    console.error("Display login error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

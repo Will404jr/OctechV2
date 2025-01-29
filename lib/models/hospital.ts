@@ -168,6 +168,9 @@ const roomSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Add a compound unique index for department and roomNumber
+roomSchema.index({ department: 1, roomNumber: 1 }, { unique: true });
+
 export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
 
 //ticket schema

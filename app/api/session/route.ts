@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 
 export async function GET() {
@@ -13,6 +13,10 @@ export async function POST(req: NextRequest) {
   if (body.branchId) {
     session.branchId = body.branchId;
     session.isLoggedIn = true;
+  }
+
+  if (body.hallDisplayUsername) {
+    session.hallDisplayUsername = body.hallDisplayUsername;
   }
 
   if (body.roomId) {

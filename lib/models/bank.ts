@@ -222,7 +222,7 @@ export const Counter =
   mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
 // Ticket schema
-const ticketSchema = new mongoose.Schema(
+const bankTicketSchema = new mongoose.Schema(
   {
     ticketNo: { type: String, required: true },
     queueId: {
@@ -257,12 +257,12 @@ const ticketSchema = new mongoose.Schema(
 );
 
 // Add a pre-save middleware to ensure ticketStatus is set
-ticketSchema.pre("save", function (next) {
+bankTicketSchema.pre("save", function (next) {
   if (!this.ticketStatus) {
     this.ticketStatus = "Not Served";
   }
   next();
 });
 
-export const Ticket =
-  mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
+export const Bankticket =
+  mongoose.models.Bankticket || mongoose.model("Bankticket", bankTicketSchema);

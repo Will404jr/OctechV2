@@ -58,6 +58,12 @@ interface Settings {
   notificationText: string;
 }
 
+interface SessionData {
+  branchId?: string;
+  isLoggedIn: boolean;
+  hallDisplayUsername?: string;
+}
+
 export default function HallDisplay() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([]);
@@ -67,6 +73,7 @@ export default function HallDisplay() {
   const [isMuted, setIsMuted] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [session, setSession] = useState<SessionData | null>(null);
   const isPlaying = useRef(false);
   const audioContext = useRef<AudioContext | null>(null);
   const announcedTickets = useRef<Set<string>>(new Set());
@@ -274,6 +281,29 @@ export default function HallDisplay() {
     }
   };
 
+  const fetchSession = useCallback(async () => {
+    const response = await fetch("/api/session");
+    if (response.ok) {
+      const sessionData: SessionData = await response.json();
+      setSession(sessionData);
+      setIsLoggedIn(sessionData.isLoggedIn);
+      setBranchId(sessionData.branchId || null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSession();
+  }, [fetchSession]);
+
+  const handleLogout = async () => {
+    const response = await fetch("/api/logout", { method: "POST" });
+    if (response.ok) {
+      setSession(null);
+      setIsLoggedIn(false);
+      setBranchId(null);
+    }
+  };
+
   if (!isLoggedIn) {
     return <LoginDialog isOpen={true} onLoginSuccess={handleLoginSuccess} />;
   }
@@ -303,10 +333,13 @@ export default function HallDisplay() {
                 </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuLabel>
+                  {session?.hallDisplayUsername || "User"}
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Logout</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  Logout
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -355,7 +388,7 @@ export default function HallDisplay() {
                   >
                     <div className="w-full h-full">
                       <img
-                        src={ad.image}
+                        src={ad.image || "/placeholder.svg"}
                         alt={ad.name}
                         className="w-full h-full object-cover"
                       />
