@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     if (status) query.ticketStatus = status;
     if (branchId) query.branchId = branchId;
 
-    console.log("Executing query:", query);
+    // console.log("Executing query:", query);
 
     const tickets = await Bankticket.find(query)
       .populate({
@@ -73,13 +73,13 @@ export async function GET(req: NextRequest) {
       })
       .sort({ createdAt: 1 });
 
-    console.log("Found tickets:", tickets.length);
-    console.log(
-      "Sample ticket:",
-      tickets.length > 0
-        ? JSON.stringify(tickets[0], null, 2)
-        : "No tickets found"
-    );
+    // console.log("Found tickets:", tickets.length);
+    // console.log(
+    //   "Sample ticket:",
+    //   tickets.length > 0
+    //     ? JSON.stringify(tickets[0], null, 2)
+    //     : "No tickets found"
+    // );
 
     return NextResponse.json(tickets);
   } catch (error) {

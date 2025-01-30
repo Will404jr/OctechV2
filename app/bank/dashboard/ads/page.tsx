@@ -54,7 +54,7 @@ export default function DisplayAdsPage() {
   const fetchAds = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/bank/ads");
+      const response = await fetch("http://localhost:5000/api/ads");
       if (response.ok) {
         const data: Ad[] = await response.json();
         setAds(data);
@@ -89,7 +89,7 @@ export default function DisplayAdsPage() {
         formData.append("image", data.image[0]);
       }
 
-      const response = await fetch("/api/bank/ads", {
+      const response = await fetch("http://localhost:5000/api/ads", {
         method: "POST",
         body: formData,
       });
@@ -112,7 +112,7 @@ export default function DisplayAdsPage() {
 
   const deleteAd = async (id: string) => {
     try {
-      const response = await fetch(`/api/bank/ads/${id}`, {
+      const response = await fetch(`http://localhost:5000/api/ads/${id}`, {
         method: "DELETE",
       });
 
@@ -236,7 +236,9 @@ export default function DisplayAdsPage() {
                     {ad.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`/api/bank/ads/image/${ad.image.split("/").pop()}`}
+                        src={`http://localhost:5000/api/ads/image/${ad.image
+                          .split("/")
+                          .pop()}`}
                         alt={ad.name}
                         className="object-cover w-full h-full"
                       />

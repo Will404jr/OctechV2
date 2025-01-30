@@ -1,7 +1,6 @@
-import React from "react";
+import type React from "react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
-import Image from "next/image";
 
 interface Ad {
   _id: string;
@@ -27,7 +26,13 @@ const AdCarousel: React.FC<AdCarouselProps> = ({ ads, branches }) => {
     >
       {ads.map((ad) => (
         <div key={ad._id} className="relative aspect-video">
-          <Image src={ad.image} alt={ad.name} layout="fill" objectFit="cover" />
+          <img
+            src={`http://localhost:5000/api/ads/image/${ad.image
+              .split("/")
+              .pop()}`}
+            alt={ad.name}
+            className="w-full h-full object-cover"
+          />
           <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2">
             <p>{ad.name}</p>
             <p className="text-sm">

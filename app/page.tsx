@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Users, Clock, BarChart } from "lucide-react";
+import { Users, Clock, BarChart, ArrowRight } from "lucide-react";
 
 async function getSettings() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -40,6 +40,7 @@ async function getSettings() {
 export default function LandingPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [hoveredCard, setHoveredCard] = useState<number | null>(null);
 
   const handleContinue = async () => {
     setIsLoading(true);
@@ -58,61 +59,97 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex flex-col justify-center items-center p-4">
-      <Card className="w-full max-w-4xl">
-        <CardHeader className="text-center">
-          <CardTitle className="text-4xl font-bold text-primary mb-2">
+    // <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col justify-center items-center p-6">
+    <div
+      className="flex items-center justify-center min-h-screen bg-cover bg-center bg-no-repeat"
+      style={{
+        backgroundImage: "url('/bg.jpg?height=1080&width=1920')",
+      }}
+    >
+      <div className="w-full max-w-6xl space-y-12">
+        <div className="text-center space-y-4">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-primary to-blue-800 bg-clip-text text-transparent">
             Queue Management System
-          </CardTitle>
-          <CardDescription className="text-xl">
-            Streamline your waiting experience
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-3">
-          <FeatureCard
-            icon={<Users className="h-10 w-10 text-primary" />}
-            title="Manage Crowds"
-            description="Efficiently organize and direct customer flow"
-          />
-          <FeatureCard
-            icon={<Clock className="h-10 w-10 text-primary" />}
-            title="Reduce Wait Times"
-            description="Optimize service delivery and minimize delays"
-          />
-          <FeatureCard
-            icon={<BarChart className="h-10 w-10 text-primary" />}
-            title="Insightful Analytics"
-            description="Gain valuable data to improve your operations"
-          />
-        </CardContent>
-        <CardFooter className="flex justify-center">
-          <Button size="lg" onClick={handleContinue} disabled={isLoading}>
-            {isLoading ? "Loading..." : "Continue"}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
-  );
-}
+          </h1>
+          <p className="text-2xl text-gray-600 max-w-2xl mx-auto">
+            Transform your customer experience with intelligent queue management
+          </p>
+        </div>
 
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-center mb-4">{icon}</div>
-        <CardTitle className="text-center">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-center text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
+        <div className="grid gap-8 md:grid-cols-3">
+          {[
+            {
+              icon: <Users className="h-12 w-12" />,
+              title: "Smart Crowd Management",
+              description:
+                "Advanced algorithms to organize and optimize customer flow in real-time",
+            },
+            {
+              icon: <Clock className="h-12 w-12" />,
+              title: "Minimal Wait Times",
+              description:
+                "Smart predictions and resource allocation to reduce customer waiting",
+            },
+            {
+              icon: <BarChart className="h-12 w-12" />,
+              title: "Real-time Analytics",
+              description:
+                "Comprehensive dashboards with actionable insights for better decision-making",
+            },
+          ].map((feature, index) => (
+            <div
+              key={index}
+              className="relative bg-transparent"
+              onMouseEnter={() => setHoveredCard(index)}
+              onMouseLeave={() => setHoveredCard(null)}
+            >
+              <Card
+                className={`h-full transition-all duration-300 ${
+                  hoveredCard === index
+                    ? "transform -translate-y-2 shadow-lg"
+                    : ""
+                }`}
+              >
+                <CardHeader>
+                  <div
+                    className={`flex justify-center mb-4 transition-colors duration-300 ${
+                      hoveredCard === index ? "text-primary" : "text-gray-600"
+                    }`}
+                  >
+                    {feature.icon}
+                  </div>
+                  <CardTitle className="text-xl text-center mb-2">
+                    {feature.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-center text-gray-600">
+                    {feature.description}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-center mt-12">
+          <Button
+            size="lg"
+            onClick={handleContinue}
+            disabled={isLoading}
+            className="text-lg px-8 py-6 rounded-full transition-all duration-300 hover:scale-105 bg-blue-800"
+          >
+            {isLoading ? (
+              "Loading..."
+            ) : (
+              <span className="flex items-center gap-2">
+                Get Started
+                <ArrowRight className="w-5 h-5" />
+              </span>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

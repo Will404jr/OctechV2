@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { User, ArrowRight, Calendar, Volume2, VolumeX } from "lucide-react";
+import { User, ArrowRight, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,7 +26,7 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { Marquee } from "@/components/Marquee";
-import { Toast, ToastProvider, ToastViewport } from "@/components/ui/toast";
+import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { LoginDialog } from "@/components/LoginDialog";
 
@@ -199,7 +199,7 @@ export default function HallDisplay() {
         await Promise.all([
           fetch(`/api/bank/ticket?status=Serving&branchId=${branchId}`),
           fetch("/api/bank/exchange-rates"),
-          fetch(`/api/bank/ads?branchId=${branchId}`),
+          fetch(`http://localhost:5000/api/ads?branchId=${branchId}`),
           fetch(`/api/settings?branchId=${branchId}`),
         ]);
 
@@ -388,7 +388,9 @@ export default function HallDisplay() {
                   >
                     <div className="w-full h-full">
                       <img
-                        src={ad.image || "/placeholder.svg"}
+                        src={`http://localhost:5000/api/ads/image/${ad.image
+                          .split("/")
+                          .pop()}`}
                         alt={ad.name}
                         className="w-full h-full object-cover"
                       />

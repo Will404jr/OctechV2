@@ -252,6 +252,7 @@ const bankTicketSchema = new mongoose.Schema(
       required: true,
     },
     callAgain: { type: Boolean, default: false },
+    noShow: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

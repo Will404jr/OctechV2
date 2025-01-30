@@ -16,13 +16,16 @@ export async function POST(request: Request) {
     const { email, password, isAdminLogin }: LoginRequestBody =
       await request.json();
 
+    const session = await getSession();
+    const expirationTime = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
     if (isAdminLogin) {
       // Admin login logic (unchanged)
       const settings = await Settings.findOne();
-      console.log("Admin login attempt:", {
-        email,
-        settingsEmail: settings?.email,
-      });
+      // console.log("Admin login attempt:", {
+      //   email,
+      //   settingsEmail: settings?.email,
+      // });
 
       if (!settings) {
         console.log("Settings not found");
@@ -32,14 +35,14 @@ export async function POST(request: Request) {
         );
       }
 
-      console.log("Stored hashed password:", settings.password);
-      console.log("Provided password:", password);
+      // console.log("Stored hashed password:", settings.password);
+      // console.log("Provided password:", password);
       const isValidPassword = await settings.compareAdminPassword(password);
-      console.log(
-        "Password validation result:",
-        isValidPassword,
-        "using compareAdminPassword method"
-      );
+      // console.log(
+      //   "Password validation result:",
+      //   isValidPassword,
+      //   "using compareAdminPassword method"
+      // );
 
       if (settings.email !== email || !isValidPassword) {
         console.log("Admin authentication failed");
@@ -49,7 +52,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const session = await getSession();
+      // const session = await getSession();
       session.userId = "admin";
       session.isLoggedIn = true;
       session.role = "admin";
@@ -63,11 +66,12 @@ export async function POST(request: Request) {
         Ads: true,
         Settings: true,
       };
+      session.expiresAt = Date.now() + expirationTime;
       await session.save();
 
       return NextResponse.json({ success: true }, { status: 200 });
     } else {
-      // Regular staff login logic
+      // Regular user login logic
       const user = await User.findOne({ email })
         .populate("role")
         .populate("branch");
@@ -86,12 +90,13 @@ export async function POST(request: Request) {
         );
       }
 
-      const session = await getSession();
+      // const session = await getSession();
       session.userId = user._id.toString();
       session.isLoggedIn = true;
       session.role = user.role.name;
       session.permissions = user.role.permissions;
       session.branchId = user.branch ? user.branch._id.toString() : undefined;
+      session.expiresAt = Date.now() + expirationTime;
       await session.save();
 
       return NextResponse.json(

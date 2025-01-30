@@ -4,37 +4,14 @@ import { Ad } from "@/lib/models/bank";
 import { writeFile, mkdir, readFile, unlink } from "fs/promises";
 import path from "path";
 
-export async function GET(req: NextRequest) {
-  const segments = req.nextUrl.pathname.split("/");
-  const lastSegment = segments[segments.length - 1];
-
-  if (lastSegment === "ads") {
-    // This is a request for all ads
-    try {
-      await dbConnect();
-      const ads = await Ad.find({});
-      return NextResponse.json(ads);
-    } catch (error) {
-      return NextResponse.json(
-        { error: "Failed to fetch ads" },
-        { status: 500 }
-      );
-    }
-  } else {
-    // This is a request for an image
-    const filename = lastSegment;
-    const filepath = path.join(process.cwd(), "uploads", filename);
-
-    try {
-      const file = await readFile(filepath);
-      return new NextResponse(file, {
-        headers: {
-          "Content-Type": "image/*",
-        },
-      });
-    } catch (error) {
-      return new NextResponse("Image not found", { status: 404 });
-    }
+export async function GET() {
+  try {
+    const response = await fetch(`http://localhost:5000/api/ads`);
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error fetching ads:", error);
+    return NextResponse.json({ error: "Failed to fetch ads" }, { status: 500 });
   }
 }
 

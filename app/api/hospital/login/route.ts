@@ -21,10 +21,10 @@ export async function POST(request: Request) {
     if (isAdminLogin) {
       // Admin login logic
       const settings = await Settings.findOne();
-      console.log("Admin login attempt:", {
-        email,
-        settingsEmail: settings?.email,
-      });
+      // console.log("Admin login attempt:", {
+      //   email,
+      //   settingsEmail: settings?.email,
+      // });
 
       if (!settings) {
         console.log("Settings not found");
@@ -34,14 +34,14 @@ export async function POST(request: Request) {
         );
       }
 
-      console.log("Stored hashed password:", settings.password);
-      console.log("Provided password:", password);
+      // console.log("Stored hashed password:", settings.password);
+      // console.log("Provided password:", password);
       const isValidPassword = await settings.compareAdminPassword(password);
-      console.log(
-        "Password validation result:",
-        isValidPassword,
-        "using compareAdminPassword method"
-      );
+      // console.log(
+      //   "Password validation result:",
+      //   isValidPassword,
+      //   "using compareAdminPassword method"
+      // );
 
       if (settings.email !== email || !isValidPassword) {
         console.log("Admin authentication failed");
