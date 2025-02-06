@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Settings } from "@/lib/models/hospital";
+import { HospitalSettings } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 
 export async function POST(req: NextRequest) {
@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
     const { username, password } = await req.json();
 
-    const settings = await Settings.findOne({});
+    const settings = await HospitalSettings.findOne({});
 
     if (!settings) {
       return NextResponse.json(

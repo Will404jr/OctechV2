@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile } from "fs/promises";
 import { Error as MongooseError } from "mongoose";
 import path from "path";
-import { Settings } from "@/lib/models/hospital";
+import { HospitalSettings as Settings } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 import bcrypt from "bcryptjs";
 

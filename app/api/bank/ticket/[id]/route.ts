@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Bankticket } from "@/lib/models/bank";
 import { getSession } from "@/lib/session";
@@ -12,12 +12,16 @@ export async function PUT(
   try {
     await dbConnect();
 
-    const body = await req.json();
     const session = await getSession();
+    console.log("Session data:", session); // Log session data for debugging
 
-    if (!session.isLoggedIn || !session.userId) {
+    if (!session.isLoggedIn) {
+      console.log("Unauthorized access attempt"); // Log unauthorized attempts
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const body = await req.json();
+    console.log("Received update request for ticket:", id, "with data:", body); // Log the received data
 
     const updateData: {
       ticketStatus?: string;
@@ -52,7 +56,9 @@ export async function PUT(
     if (body.subItemId) updateData.subItemId = body.subItemId;
     if (body.issueDescription)
       updateData.issueDescription = body.issueDescription;
-    if (body.callAgain) updateData.callAgain = body.callAgain;
+    if (body.callAgain !== undefined) updateData.callAgain = body.callAgain;
+
+    console.log("Updating ticket with data:", updateData); // Log the data being used to update the ticket
 
     const updatedTicket = await Bankticket.findByIdAndUpdate(id, updateData, {
       new: true,

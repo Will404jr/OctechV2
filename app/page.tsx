@@ -14,7 +14,7 @@ import {
 import { Users, Clock, BarChart, ArrowRight } from "lucide-react";
 
 async function getSettings() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   try {
     const res = await fetch(`${apiUrl}/api/settings`, {
       cache: "no-store",
@@ -67,11 +67,11 @@ export default function LandingPage() {
       }}
     >
       <div className="w-full max-w-6xl space-y-12">
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 bg-transparent">
           <h1 className="text-5xl font-bold bg-gradient-to-r from-primary to-blue-800 bg-clip-text text-transparent">
             Queue Management System
           </h1>
-          <p className="text-2xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-2xl text-white max-w-2xl mx-auto">
             Transform your customer experience with intelligent queue management
           </p>
         </div>
@@ -104,7 +104,7 @@ export default function LandingPage() {
               onMouseLeave={() => setHoveredCard(null)}
             >
               <Card
-                className={`h-full transition-all duration-300 ${
+                className={`h-full transition-all duration-300 bg-transparent border-none text-white ${
                   hoveredCard === index
                     ? "transform -translate-y-2 shadow-lg"
                     : ""
@@ -112,7 +112,7 @@ export default function LandingPage() {
               >
                 <CardHeader>
                   <div
-                    className={`flex justify-center mb-4 transition-colors duration-300 ${
+                    className={`flex justify-center mb-4 transition-colors duration-300 text-white ${
                       hoveredCard === index ? "text-primary" : "text-gray-600"
                     }`}
                   >
@@ -123,7 +123,7 @@ export default function LandingPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-center text-gray-600">
+                  <p className="text-center text-white">
                     {feature.description}
                   </p>
                 </CardContent>

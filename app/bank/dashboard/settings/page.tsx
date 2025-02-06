@@ -55,7 +55,7 @@ export default function SettingsDisplayPage() {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch("/api/settings");
+      const response = await fetch("/api/bank/settings");
       if (response.ok) {
         const data = await response.json();
         setSettings(data);
@@ -98,7 +98,7 @@ export default function SettingsDisplayPage() {
         }
       });
 
-      const response = await fetch("/api/settings", {
+      const response = await fetch("/api/bank/settings", {
         method: "PUT",
         body: formData,
       });

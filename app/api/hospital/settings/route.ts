@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { writeFile } from "fs/promises";
 import { Error as MongooseError } from "mongoose";
 import path from "path";
-import { BankSettings } from "@/lib/models/bank";
+import { HospitalSettings } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 import bcrypt from "bcryptjs";
 
@@ -27,7 +27,9 @@ export async function OPTIONS() {
 export async function GET() {
   try {
     await dbConnect();
-    const settings = await BankSettings.findOne().select("-password");
+    const settings = await HospitalSettings.findOne().select(
+      "-password -kioskPassword"
+    );
     const response = NextResponse.json(settings);
     return setCorsHeaders(response);
   } catch (error) {
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
       Object.assign(settingsData, body);
     }
 
-    let existingSettings = await BankSettings.findOne();
+    let existingSettings = await HospitalSettings.findOne();
     if (existingSettings) {
       // Update existing settings
       Object.assign(existingSettings, settingsData);
@@ -93,15 +95,21 @@ export async function POST(req: NextRequest) {
       if (body.password) {
         existingSettings.password = body.password;
       }
+      if (body.kioskPassword) {
+        existingSettings.kioskPassword = body.kioskPassword;
+      }
 
       await existingSettings.save();
     } else {
       // Create new settings
-      existingSettings = new BankSettings(settingsData);
+      existingSettings = new HospitalSettings(settingsData);
 
-      // Set password directly on the model instance
+      // Set passwords directly on the model instance
       if (body.password) {
         existingSettings.password = body.password;
+      }
+      if (body.kioskPassword) {
+        existingSettings.kioskPassword = body.kioskPassword;
       }
 
       await existingSettings.save();
@@ -109,7 +117,9 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({
       message: "Settings saved successfully",
-      settings: await BankSettings.findOne().select("-password"),
+      settings: await HospitalSettings.findOne().select(
+        "-password -kioskPassword"
+      ),
     });
     return setCorsHeaders(response);
   } catch (error) {
@@ -157,7 +167,7 @@ export async function PUT(req: NextRequest) {
         );
         await writeFile(filepath, buffer);
         settingsData[key] = `/uploads/${filename}`;
-      } else if (key === "password") {
+      } else if (key === "password" || key === "kioskPassword") {
         if (value) {
           settingsData[key] = await bcrypt.hash(value.toString(), 10);
         }
@@ -166,14 +176,14 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const updatedSettings = await BankSettings.findOneAndUpdate(
+    const updatedSettings = await HospitalSettings.findOneAndUpdate(
       {},
       settingsData,
       {
         new: true,
         upsert: true,
       }
-    ).select("-password");
+    ).select("-password -kioskPassword");
 
     return NextResponse.json(updatedSettings);
   } catch (error) {

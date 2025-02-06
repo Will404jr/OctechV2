@@ -90,7 +90,7 @@ function LogoUpload({ field, form }: { field: any; form: any }) {
         <div className="w-24 h-24 border rounded-md overflow-hidden flex items-center justify-center bg-gray-100">
           {preview ? (
             <Image
-              src={preview}
+              src={preview || "/placeholder.svg"}
               alt="Logo preview"
               width={96}
               height={96}
@@ -164,7 +164,13 @@ export default function SettingsPage() {
         formData.append("kioskPassword", data.kioskPassword);
       }
 
-      const response = await fetch("/api/settings", {
+      // Determine the API endpoint based on the company type
+      const apiEndpoint =
+        data.companyType === "Hospital"
+          ? "/api/hospital/settings"
+          : "/api/bank/settings";
+
+      const response = await fetch(apiEndpoint, {
         method: "POST",
         body: formData,
       });

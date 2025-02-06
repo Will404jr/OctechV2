@@ -125,8 +125,8 @@ const roleSchema = new mongoose.Schema(
 
 export const Role = mongoose.models.Role || mongoose.model("Role", roleSchema);
 
-//settings schema
-const settingsSchema = new mongoose.Schema(
+//bank settings schema
+const bankSettingsSchema = new mongoose.Schema(
   {
     companyType: { type: String, required: true },
     companyName: { type: String, required: true },
@@ -142,18 +142,18 @@ const settingsSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "settings" }
 );
 
 // Hash password before saving
-settingsSchema.pre("save", async function (next) {
+bankSettingsSchema.pre("save", async function (next) {
   if (this.isModified("password") && this.password) {
     this.password = await bcrypt.hash(this.password, 10);
   }
   next();
 });
 
-settingsSchema.methods.compareAdminPassword = async function (
+bankSettingsSchema.methods.compareAdminPassword = async function (
   candidatePassword: string
 ) {
   console.log("Candidate Password:", candidatePassword);
@@ -161,8 +161,9 @@ settingsSchema.methods.compareAdminPassword = async function (
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-export const Settings =
-  mongoose.models.Settings || mongoose.model("Settings", settingsSchema);
+export const BankSettings =
+  mongoose.models.BankSettings ||
+  mongoose.model("BankSettings", bankSettingsSchema);
 
 //user schema
 const userSchema = new mongoose.Schema(
@@ -252,7 +253,6 @@ const bankTicketSchema = new mongoose.Schema(
       required: true,
     },
     callAgain: { type: Boolean, default: false },
-    noShow: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

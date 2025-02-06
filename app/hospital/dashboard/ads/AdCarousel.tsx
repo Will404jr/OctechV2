@@ -27,7 +27,13 @@ const AdCarousel: React.FC<AdCarouselProps> = ({ ads }) => {
     >
       {ads.map((ad) => (
         <div key={ad._id} className="relative aspect-video">
-          <Image src={ad.image} alt={ad.name} layout="fill" objectFit="cover" />
+          <img
+            src={`http://localhost:5000/api/ads/image/${ad.image
+              .split("/")
+              .pop()}`}
+            alt={ad.name}
+            className="w-full h-full object-cover"
+          />
           <p className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2">
             {ad.name}
           </p>

@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/bank/sidebar";
 import { Navbar } from "@/components/bank/navbar";
+import { MobileSidebar } from "@/components/bank/MobileSidebar";
 
 export default function BankDashboardLayout({
   children,
@@ -12,10 +13,10 @@ export default function BankDashboardLayout({
         <Sidebar />
       </div>
       <main className="md:pl-72">
-        <Navbar />
-        <div className="p-8">
-          {children}
-        </div>
+        <Navbar>
+          <MobileSidebar />
+        </Navbar>
+        <div className="p-8">{children}</div>
       </main>
     </div>
   );

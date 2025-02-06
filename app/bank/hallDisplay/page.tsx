@@ -26,9 +26,8 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { Marquee } from "@/components/Marquee";
-import { ToastProvider, ToastViewport } from "@/components/ui/toast";
-import { useToast } from "@/hooks/use-toast";
 import { LoginDialog } from "@/components/LoginDialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface Ticket {
   _id: string;
@@ -43,7 +42,7 @@ interface Ticket {
 
 interface ExchangeRate {
   _id: string;
-  countryCode: string;
+  currencyCode: string;
   buyingRate: number;
   sellingRate: number;
 }
@@ -74,6 +73,10 @@ export default function HallDisplay() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [session, setSession] = useState<SessionData | null>(null);
+  const [alert, setAlert] = useState<{ message: string; isVisible: boolean }>({
+    message: "",
+    isVisible: false,
+  });
   const isPlaying = useRef(false);
   const audioContext = useRef<AudioContext | null>(null);
   const announcedTickets = useRef<Set<string>>(new Set());
@@ -141,24 +144,26 @@ export default function HallDisplay() {
 
       isPlaying.current = true;
       console.log(
-        `Announcing ticket: ${ticket.ticketNo} for room ${ticket.counterId.counterNumber}`
+        `Announcing ticket: ${ticket.ticketNo} for counter ${ticket.counterId.counterNumber}`
       );
 
       const ticketNumber = ticket.ticketNo;
       const counterNumber = ticket.counterId.counterNumber.toString();
 
-      // Show toast notification
-      toast({
-        title: `Ticket ${ticketNumber}`,
-        description: `Please proceed to Room ${counterNumber}`,
-        duration: 5000,
+      // Show alert
+      setAlert({
+        message: `Ticket ${ticketNumber} - Please proceed to Counter ${counterNumber}`,
+        isVisible: true,
       });
+
+      // Hide alert after 5 seconds
+      setTimeout(() => setAlert({ message: "", isVisible: false }), 5000);
 
       const audioFiles = [
         "/audio/alert.wav",
         "/audio/TicketNumber.wav",
         ...ticketNumber.split("").map((char) => `/audio/${char}.wav`),
-        "/audio/proceedtoroom.wav",
+        "/audio/proceedtocounter.wav",
         ...counterNumber.split("").map((char) => `/audio/${char}.wav`),
       ];
 
@@ -171,13 +176,45 @@ export default function HallDisplay() {
 
       // If this was a "call again" announcement, update the ticket
       if (ticket.callAgain) {
-        await fetch(`/api/bank/ticket/${ticket._id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ callAgain: false }),
-        });
+        try {
+          console.log(
+            `Attempting to update callAgain status for ticket ${ticket._id}`
+          );
+          const response = await fetch(`/api/bank/ticket/${ticket._id}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ callAgain: false }),
+            credentials: "include", // This ensures cookies are sent with the request
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(
+              `Failed to update ticket callAgain status: ${
+                errorData.error || response.statusText
+              }`
+            );
+          }
+
+          const updatedTicket = await response.json();
+          console.log("Successfully updated ticket:", updatedTicket);
+
+          // Update the local state to reflect the change
+          setTickets((prevTickets) =>
+            prevTickets.map((t) =>
+              t._id === ticket._id ? { ...t, callAgain: false } : t
+            )
+          );
+        } catch (error) {
+          console.error("Error updating ticket callAgain status:", error);
+          toast({
+            title: "Error",
+            description: "Failed to update ticket status. Please try again.",
+            duration: 5000,
+          });
+        }
       }
 
       // Check if there are more tickets in the queue
@@ -215,12 +252,17 @@ export default function HallDisplay() {
       setAds(adsData);
       setSettings(settingsData);
 
-      // Announce new tickets and tickets with callAgain set to true
-      ticketsData.forEach((ticket) => {
-        if (!announcedTickets.current.has(ticket._id) || ticket.callAgain) {
-          announceTicket(ticket);
-        }
-      });
+      // Prioritize tickets with callAgain set to true
+      const ticketsToAnnounce = ticketsData
+        .filter(
+          (ticket) =>
+            ticket.callAgain || !announcedTickets.current.has(ticket._id)
+        )
+        .sort((a, b) => (b.callAgain ? 1 : 0) - (a.callAgain ? 1 : 0));
+
+      for (const ticket of ticketsToAnnounce) {
+        await announceTicket(ticket);
+      }
 
       // Remove announced tickets that are no longer in the list
       announcedTickets.current = new Set(
@@ -282,17 +324,31 @@ export default function HallDisplay() {
   };
 
   const fetchSession = useCallback(async () => {
-    const response = await fetch("/api/session");
-    if (response.ok) {
-      const sessionData: SessionData = await response.json();
-      setSession(sessionData);
-      setIsLoggedIn(sessionData.isLoggedIn);
-      setBranchId(sessionData.branchId || null);
+    try {
+      const response = await fetch("/api/session");
+      if (response.ok) {
+        const sessionData: SessionData = await response.json();
+        console.log("Fetched session data:", sessionData);
+        setSession(sessionData);
+        setIsLoggedIn(sessionData.isLoggedIn);
+        setBranchId(sessionData.branchId || null);
+      } else {
+        console.error("Failed to fetch session:", response.statusText);
+        setIsLoggedIn(false);
+        setBranchId(null);
+      }
+    } catch (error) {
+      console.error("Error fetching session:", error);
+      setIsLoggedIn(false);
+      setBranchId(null);
     }
   }, []);
 
   useEffect(() => {
     fetchSession();
+    // Set up an interval to periodically check the session
+    const intervalId = setInterval(fetchSession, 5 * 60 * 1000); // Check every 5 minutes
+    return () => clearInterval(intervalId);
   }, [fetchSession]);
 
   const handleLogout = async () => {
@@ -309,131 +365,128 @@ export default function HallDisplay() {
   }
 
   return (
-    <ToastProvider>
-      <div className="flex flex-col h-screen">
-        <header className="bg-[#0e4480] text-white p-4 flex justify-between items-center">
-          <div className="text-2xl font-bold">Octech</div>
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleMute}
-              className="text-white hover:text-white/80"
-            >
-              {isMuted ? (
-                <VolumeX className="h-6 w-6" />
-              ) : (
-                <Volume2 className="h-6 w-6" />
-              )}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center border">
-                  <User className="h-4 w-4 text-black" />
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>
-                  {session?.hallDisplayUsername || "User"}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout}>
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
+    <div className="flex flex-col h-screen relative">
+      {alert.isVisible && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-white border border-gray-300 shadow-md rounded-md p-4">
+          <p className="text-black font-bold text-center">{alert.message}</p>
+        </div>
+      )}
+      <header className="bg-[#0e4480] text-white p-4 flex justify-between items-center">
+        <div className="text-2xl font-bold">Octech</div>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMute}
+            className="text-white hover:text-white/80"
+          >
+            {isMuted ? (
+              <VolumeX className="h-6 w-6" />
+            ) : (
+              <Volume2 className="h-6 w-6" />
+            )}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center border">
+                <User className="h-4 w-4 text-black" />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>
+                {session?.hallDisplayUsername || "User"}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
 
-        <main className="flex-grow flex p-4 space-x-4 overflow-hidden">
-          <Card className="w-1/5 overflow-auto">
-            <CardContent>
-              <h2 className="text-xl font-bold mb-2 pt-2">Serving Tickets</h2>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ticket</TableHead>
-                    <TableHead className="text-center"></TableHead>
-                    <TableHead>Room</TableHead>
+      <main className="flex-grow flex  space-x-4 overflow-hidden">
+        <Card className="w-1/5 overflow-auto rounded-none">
+          <CardContent>
+            <h2 className="text-xl font-bold mb-2 pt-2">Serving Tickets</h2>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ticket</TableHead>
+                  <TableHead className="text-center"></TableHead>
+                  <TableHead>Counter</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="text-lg font-bold">
+                {tickets.map((ticket) => (
+                  <TableRow key={ticket._id}>
+                    <TableCell>{ticket.ticketNo}</TableCell>
+                    <TableCell className="text-center">
+                      <ArrowRight className="mx-auto text-blue-500" />
+                    </TableCell>
+                    <TableCell>
+                      {ticket.counterId
+                        ? ticket.counterId.counterNumber
+                        : "N/A"}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tickets.map((ticket) => (
-                    <TableRow key={ticket._id}>
-                      <TableCell>{ticket.ticketNo}</TableCell>
-                      <TableCell className="text-center">
-                        <ArrowRight className="mx-auto text-blue-500" />
-                      </TableCell>
-                      <TableCell>
-                        {ticket.counterId
-                          ? ticket.counterId.counterNumber
-                          : "N/A"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <div className="w-3/5 overflow-hidden">
-            <Carousel className="w-full h-full">
-              <CarouselContent className="h-full">
-                {ads.map((ad, index) => (
-                  <CarouselItem
-                    key={ad._id}
-                    className={`h-full ${
-                      index === currentAdIndex ? "" : "hidden"
-                    }`}
-                  >
-                    <div className="w-full h-full">
-                      <img
-                        src={`http://localhost:5000/api/ads/image/${ad.image
-                          .split("/")
-                          .pop()}`}
-                        alt={ad.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  </CarouselItem>
                 ))}
-              </CarouselContent>
-            </Carousel>
-          </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-          <Card className="w-1/5 overflow-auto">
-            <CardContent>
-              <h2 className="text-xl font-bold mb-2 pt-2">Exchange Rates</h2>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Country</TableHead>
-                    <TableHead>Buy</TableHead>
-                    <TableHead>Sell</TableHead>
+        <div className="w-3/5 overflow-hidden">
+          <Carousel className="w-full h-full">
+            <CarouselContent className="h-full">
+              {ads.map((ad, index) => (
+                <CarouselItem
+                  key={ad._id}
+                  className={`h-full ${
+                    index === currentAdIndex ? "" : "hidden"
+                  }`}
+                >
+                  <div className="w-full h-full">
+                    <img
+                      src={`http://localhost:5000/api/ads/image/${ad.image
+                        .split("/")
+                        .pop()}`}
+                      alt={ad.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+        </div>
+
+        <Card className="w-1/5 overflow-auto rounded-none">
+          <CardContent>
+            <h2 className="text-xl font-bold mb-2 pt-2">Exchange Rates</h2>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Currency</TableHead>
+                  <TableHead>Buy</TableHead>
+                  <TableHead>Sell</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="text-md font-bold">
+                {exchangeRates.map((rate) => (
+                  <TableRow key={rate._id}>
+                    <TableCell>{rate.currencyCode}</TableCell>
+                    <TableCell>{rate.buyingRate}</TableCell>
+                    <TableCell>{rate.sellingRate}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {exchangeRates.map((rate) => (
-                    <TableRow key={rate._id}>
-                      <TableCell>{rate.countryCode}</TableCell>
-                      <TableCell>{rate.buyingRate}</TableCell>
-                      <TableCell>{rate.sellingRate}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </main>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </main>
 
-        <footer className="bg-[#0e4480] text-white p-2 overflow-hidden">
-          <Marquee
-            text={settings?.notificationText || "Welcome dear patient"}
-          />
-        </footer>
-
-        <ToastViewport className="fixed top-4 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 w-[350px] max-w-[100vw] m-0 z-[100] outline-none" />
-      </div>
-    </ToastProvider>
+      <footer className="bg-[#0e4480] text-white p-2 overflow-hidden">
+        <Marquee text={settings?.notificationText || "Welcome dear patient"} />
+      </footer>
+    </div>
   );
 }

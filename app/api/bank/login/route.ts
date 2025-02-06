@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { User } from "@/lib/models/bank";
-import { Settings } from "@/lib/models/hospital";
+import { BankSettings } from "@/lib/models/bank";
 import { getSession } from "@/lib/session";
 
 interface LoginRequestBody {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     if (isAdminLogin) {
       // Admin login logic (unchanged)
-      const settings = await Settings.findOne();
+      const settings = await BankSettings.findOne();
       // console.log("Admin login attempt:", {
       //   email,
       //   settingsEmail: settings?.email,

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = "mongodb://localhost:27017/Octech";
+const MONGODB_URI =
+  "mongodb+srv://Junior:test01@cluster0.46lb860.mongodb.net/QMS?retryWrites=true&w=majority";
 
 if (!MONGODB_URI) {
   throw new Error(

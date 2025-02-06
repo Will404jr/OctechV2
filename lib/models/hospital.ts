@@ -101,7 +101,7 @@ export const Staff =
   mongoose.models.Staff || mongoose.model("Staff", staffSchema);
 
 //settings schema
-const settingsSchema = new mongoose.Schema(
+const hospitalSettingsSchema = new mongoose.Schema(
   {
     companyType: { type: String, required: true },
     companyName: { type: String, required: true },
@@ -116,17 +116,17 @@ const settingsSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    kioskUsername: { type: String, required: false },
+    kioskUsername: { type: String, required: true },
     kioskPassword: {
       type: String,
-      required: false,
+      required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "settings" }
 );
 
 // Hash password before saving
-settingsSchema.pre("save", async function (next) {
+hospitalSettingsSchema.pre("save", async function (next) {
   if (this.isModified("password") && this.password) {
     this.password = await bcrypt.hash(this.password, 10);
   }
@@ -136,7 +136,7 @@ settingsSchema.pre("save", async function (next) {
   next();
 });
 
-settingsSchema.methods.compareAdminPassword = async function (
+hospitalSettingsSchema.methods.compareAdminPassword = async function (
   candidatePassword: string
 ) {
   console.log("Candidate Password:", candidatePassword);
@@ -144,14 +144,15 @@ settingsSchema.methods.compareAdminPassword = async function (
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-settingsSchema.methods.compareKioskPassword = async function (
+hospitalSettingsSchema.methods.compareKioskPassword = async function (
   candidatePassword: string
 ): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.kioskPassword);
 };
 
-export const Settings =
-  mongoose.models.Settings || mongoose.model("Settings", settingsSchema);
+export const HospitalSettings =
+  mongoose.models.HospitalSettings ||
+  mongoose.model("HospitalSettings", hospitalSettingsSchema);
 
 // room schema
 const roomSchema = new mongoose.Schema(
