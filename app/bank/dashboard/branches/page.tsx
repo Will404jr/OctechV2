@@ -65,17 +65,19 @@ const IconWithTooltip = ({
   children?: React.ReactNode;
   className?: string;
 }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <div className={`inline-flex items-center ${className}`}>
-        <Icon className="h-4 w-4 text-gray-500 flex-shrink-0" />
-        {children}
-      </div>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p className="text-sm">{text}</p>
-    </TooltipContent>
-  </Tooltip>
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className={`inline-flex items-center ${className}`}>
+          <Icon className="h-4 w-4 text-gray-500 flex-shrink-0" />
+          {children}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="text-sm">{text}</p>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 );
 
 export default function BranchPage() {
