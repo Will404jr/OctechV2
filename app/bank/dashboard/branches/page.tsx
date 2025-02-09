@@ -307,14 +307,12 @@ export default function BranchPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="databasePassword">
-                    Update Database Password
-                  </Label>
+                  <Label htmlFor="databasePassword">Database Password</Label>
                   <Input
                     id="databasePassword"
                     name="databasePassword"
                     type="password"
-                    placeholder="Enter new password to update"
+                    placeholder="Enter password"
                   />
                 </div>
               </div>
@@ -329,12 +327,12 @@ export default function BranchPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="kioskPassword">Update Kiosk Password</Label>
+                  <Label htmlFor="kioskPassword">Kiosk Password</Label>
                   <Input
                     id="kioskPassword"
                     name="kioskPassword"
                     type="password"
-                    placeholder="Enter new password to update"
+                    placeholder="Enter password"
                   />
                 </div>
               </div>
@@ -352,13 +350,13 @@ export default function BranchPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="hallDisplayPassword">
-                    Update Hall Display Password
+                    Hall Display Password
                   </Label>
                   <Input
                     id="hallDisplayPassword"
                     name="hallDisplayPassword"
                     type="password"
-                    placeholder="Enter new password to update"
+                    placeholder="Enter password"
                   />
                 </div>
               </div>

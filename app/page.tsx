@@ -16,7 +16,7 @@ import { Users, Clock, BarChart, ArrowRight } from "lucide-react";
 async function getSettings() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   try {
-    const res = await fetch(`https://octech-v2.vercel.app/api/settings`, {
+    const res = await fetch(`${apiUrl}/api/settings`, {
       cache: "no-store",
       headers: {
         "Cache-Control": "no-cache",

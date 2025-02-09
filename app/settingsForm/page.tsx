@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -46,7 +46,7 @@ const settingsFormSchema = z
     timezone: z.string().optional(),
     defaultLanguage: z.string().optional(),
     notificationText: z.string().min(1, "Notification text is required"),
-    logoImage: z.any().optional(),
+    logoImage: z.string().optional(),
     password: z.string().min(8, "Password must be at least 8 characters"),
     kioskUsername: z.string().optional(),
     kioskPassword: z.string().optional(),
@@ -65,19 +65,44 @@ const settingsFormSchema = z
   );
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
+const imgUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
 
-function LogoUpload({ field, form }: { field: any; form: any }) {
-  const [preview, setPreview] = useState<string | null>(null);
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+function LogoUpload({
+  field,
+  form,
+  preview,
+  setPreview,
+}: {
+  field: any;
+  form: any;
+  preview: string | null;
+  setPreview: (preview: string | null) => void;
+}) {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-      form.setValue("logoImage", file);
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("companyName", form.getValues("companyName"));
+
+      try {
+        const response = await fetch(`${imgUrl}/api/logo`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setPreview(`${imgUrl}/api/logo/image/${data.image}`);
+          form.setValue("logoImage", data.image);
+        } else {
+          console.error("Failed to upload logo");
+        }
+      } catch (error) {
+        console.error("Error uploading logo:", error);
+      }
     } else {
       setPreview(null);
       form.setValue("logoImage", null);
@@ -94,7 +119,7 @@ function LogoUpload({ field, form }: { field: any; form: any }) {
               alt="Logo preview"
               width={96}
               height={96}
-              objectFit="contain"
+              unoptimized
             />
           ) : (
             <span className="text-gray-400">No logo</span>
@@ -121,6 +146,7 @@ function LogoUpload({ field, form }: { field: any; form: any }) {
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -144,13 +170,33 @@ export default function SettingsPage() {
 
   const companyType = form.watch("companyType");
 
+  useEffect(() => {
+    async function fetchLogo() {
+      try {
+        const response = await fetch(`${imgUrl}/api/logo`);
+        if (response.ok) {
+          const logos = await response.json();
+          if (logos.length > 0) {
+            const latestLogo = logos[logos.length - 1];
+            setPreview(`${imgUrl}/api/logo/image/${latestLogo.image}`);
+            form.setValue("logoImage", latestLogo.image);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching logo:", error);
+      }
+    }
+
+    fetchLogo();
+  }, [form]);
+
   async function onSubmit(data: SettingsFormValues) {
     setIsLoading(true);
     try {
       const formData = new FormData();
       Object.entries(data).forEach(([key, value]) => {
-        if (key === "logoImage" && value instanceof File) {
-          formData.append(key, value);
+        if (key === "logoImage") {
+          // The logoImage is now just the filename, so we don't need to append it
         } else if (value !== undefined && value !== null && value !== "") {
           formData.append(key, value as string);
         }
@@ -377,7 +423,12 @@ export default function SettingsPage() {
                     <FormItem>
                       <FormLabel>Company Logo</FormLabel>
                       <FormControl>
-                        <LogoUpload field={field} form={form} />
+                        <LogoUpload
+                          field={field}
+                          form={form}
+                          preview={preview}
+                          setPreview={setPreview}
+                        />
                       </FormControl>
                       <FormDescription>
                         Upload your company's logo image

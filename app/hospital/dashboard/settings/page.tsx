@@ -34,6 +34,14 @@ interface Settings {
   kioskPassword: string;
 }
 
+interface Logo {
+  _id: string;
+  companyName: string;
+  image: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const timezones = ["UTC", "EST", "CST", "PST"];
 const languages = [
   { code: "en", name: "English" },
@@ -48,6 +56,7 @@ export default function SettingsDisplayPage() {
   const { register, handleSubmit, setValue, watch } = useForm<Settings>();
   const { toast } = useToast();
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const imgUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
 
   useEffect(() => {
     fetchSettings();
@@ -64,6 +73,23 @@ export default function SettingsDisplayPage() {
             setValue(key as keyof Settings, data[key]);
           }
         });
+
+        // Fetch logo from external server using the new endpoint
+        if (data.companyName) {
+          const logoResponse = await fetch(
+            `${imgUrl}/api/logo/company/${encodeURIComponent(data.companyName)}`
+          );
+          if (logoResponse.ok) {
+            const logos: Logo[] = await logoResponse.json();
+            if (logos.length > 0) {
+              const latestLogo = logos[logos.length - 1];
+              setValue(
+                "logoImage",
+                `${imgUrl}/api/logo/image/${latestLogo.image}`
+              );
+            }
+          }
+        }
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -78,14 +104,29 @@ export default function SettingsDisplayPage() {
   const onSubmit = async (data: Settings) => {
     try {
       const formData = new FormData();
-      Object.keys(data).forEach((key) => {
+      Object.keys(data).forEach(async (key) => {
         if (key === "password" || key === "kioskPassword") {
           if (data[key as keyof Settings]) {
             formData.append(key, data[key as keyof Settings] as string);
           }
         } else if (key === "logoImage") {
           if (data.logoImage instanceof File) {
-            formData.append("logoImage", data.logoImage);
+            // Upload logo to external server
+            const logoFormData = new FormData();
+            logoFormData.append("image", data.logoImage);
+            logoFormData.append("companyName", data.companyName);
+
+            const logoResponse = await fetch(`${imgUrl}/api/logo`, {
+              method: "POST",
+              body: logoFormData,
+            });
+
+            if (logoResponse.ok) {
+              const logoData = await logoResponse.json();
+              formData.append("logoImage", logoData.image);
+            } else {
+              throw new Error("Failed to upload logo");
+            }
           } else if (
             settings?.logoImage &&
             typeof settings.logoImage === "string"
@@ -270,6 +311,7 @@ export default function SettingsDisplayPage() {
                       width={150}
                       height={150}
                       className="rounded-md"
+                      unoptimized
                     />
                   </div>
                 )}

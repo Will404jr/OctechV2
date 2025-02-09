@@ -16,6 +16,7 @@ interface AdCarouselProps {
 }
 
 const AdCarousel: React.FC<AdCarouselProps> = ({ ads }) => {
+  const imgUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
   return (
     <Carousel
       showArrows={true}
@@ -28,9 +29,7 @@ const AdCarousel: React.FC<AdCarouselProps> = ({ ads }) => {
       {ads.map((ad) => (
         <div key={ad._id} className="relative aspect-video">
           <img
-            src={`http://localhost:5000/api/ads/image/${ad.image
-              .split("/")
-              .pop()}`}
+            src={`${imgUrl}/api/ads/image/${ad.image.split("/").pop()}`}
             alt={ad.name}
             className="w-full h-full object-cover"
           />
