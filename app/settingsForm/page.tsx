@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -46,7 +46,7 @@ const settingsFormSchema = z
     timezone: z.string().optional(),
     defaultLanguage: z.string().optional(),
     notificationText: z.string().min(1, "Notification text is required"),
-    logoImage: z.string().optional(),
+    logoImage: z.any().optional(),
     password: z.string().min(8, "Password must be at least 8 characters"),
     kioskUsername: z.string().optional(),
     kioskPassword: z.string().optional(),
@@ -65,44 +65,19 @@ const settingsFormSchema = z
   );
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
-const imgUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
 
-function LogoUpload({
-  field,
-  form,
-  preview,
-  setPreview,
-}: {
-  field: any;
-  form: any;
-  preview: string | null;
-  setPreview: (preview: string | null) => void;
-}) {
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+function LogoUpload({ field, form }: { field: any; form: any }) {
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const formData = new FormData();
-      formData.append("image", file);
-      formData.append("companyName", form.getValues("companyName"));
-
-      try {
-        const response = await fetch(`${imgUrl}/api/logo`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setPreview(`${imgUrl}/api/logo/image/${data.image}`);
-          form.setValue("logoImage", data.image);
-        } else {
-          console.error("Failed to upload logo");
-        }
-      } catch (error) {
-        console.error("Error uploading logo:", error);
-      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      form.setValue("logoImage", file);
     } else {
       setPreview(null);
       form.setValue("logoImage", null);
@@ -119,7 +94,7 @@ function LogoUpload({
               alt="Logo preview"
               width={96}
               height={96}
-              unoptimized
+              objectFit="contain"
             />
           ) : (
             <span className="text-gray-400">No logo</span>
@@ -146,7 +121,6 @@ function LogoUpload({
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -170,33 +144,13 @@ export default function SettingsPage() {
 
   const companyType = form.watch("companyType");
 
-  useEffect(() => {
-    async function fetchLogo() {
-      try {
-        const response = await fetch(`${imgUrl}/api/logo`);
-        if (response.ok) {
-          const logos = await response.json();
-          if (logos.length > 0) {
-            const latestLogo = logos[logos.length - 1];
-            setPreview(`${imgUrl}/api/logo/image/${latestLogo.image}`);
-            form.setValue("logoImage", latestLogo.image);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching logo:", error);
-      }
-    }
-
-    fetchLogo();
-  }, [form]);
-
   async function onSubmit(data: SettingsFormValues) {
     setIsLoading(true);
     try {
       const formData = new FormData();
       Object.entries(data).forEach(([key, value]) => {
-        if (key === "logoImage") {
-          // The logoImage is now just the filename, so we don't need to append it
+        if (key === "logoImage" && value instanceof File) {
+          formData.append(key, value);
         } else if (value !== undefined && value !== null && value !== "") {
           formData.append(key, value as string);
         }
@@ -210,12 +164,10 @@ export default function SettingsPage() {
         formData.append("kioskPassword", data.kioskPassword);
       }
 
-      // Determine the API endpoint based on the company type
       const apiEndpoint =
-        data.companyType === "Hospital"
-          ? "/api/hospital/settings"
-          : "/api/bank/settings";
-
+        data.companyType === "Bank"
+          ? "/api/bank/settings"
+          : "/api/hospital/settings";
       const response = await fetch(apiEndpoint, {
         method: "POST",
         body: formData,
@@ -254,198 +206,229 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col justify-center items-center p-6">
-      <Card className="w-full max-w-4xl mx-auto">
-        <CardHeader>
-          <CardTitle>Company Settings</CardTitle>
-          <CardDescription>
-            Configure your company's general settings and access details.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="companyType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company Type</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select company type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Hospital">Hospital</SelectItem>
-                          <SelectItem value="Bank">Bank</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="companyName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company Name</FormLabel>
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle>Company Settings</CardTitle>
+        <CardDescription>
+          Configure your company's general settings and access details.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="companyType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Type</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
-                        <Input placeholder="Your company's name" {...field} />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select company type" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <SelectContent>
+                        <SelectItem value="Hospital">Hospital</SelectItem>
+                        <SelectItem value="Bank">Bank</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="companyName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Your company's name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="contact@company.com"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="contact"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact Number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="+1 (555) 000-0000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="123 Company St, City, Country"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="timezone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Timezone</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="contact@company.com"
-                          {...field}
-                        />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a timezone" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="contact"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Number</FormLabel>
+                      <SelectContent>
+                        <SelectItem value="UTC">UTC</SelectItem>
+                        <SelectItem value="EST">EST</SelectItem>
+                        <SelectItem value="CST">CST</SelectItem>
+                        <SelectItem value="PST">PST</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="defaultLanguage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Default Language</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
-                        <Input placeholder="+1 (555) 000-0000" {...field} />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a language" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Address</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="123 Company St, City, Country"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="timezone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Timezone</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a timezone" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="UTC">UTC</SelectItem>
-                          <SelectItem value="EST">EST</SelectItem>
-                          <SelectItem value="CST">CST</SelectItem>
-                          <SelectItem value="PST">PST</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="defaultLanguage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Default Language</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a language" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="en">English</SelectItem>
-                          <SelectItem value="es">Spanish</SelectItem>
-                          <SelectItem value="fr">French</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="notificationText"
-                  render={({ field }) => (
-                    <FormItem className="col-span-full">
-                      <FormLabel>Notification Text</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Default notification message"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="logoImage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company Logo</FormLabel>
-                      <FormControl>
-                        <LogoUpload
-                          field={field}
-                          form={form}
-                          preview={preview}
-                          setPreview={setPreview}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Upload your company's logo image
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      <SelectContent>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="es">Spanish</SelectItem>
+                        <SelectItem value="fr">French</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="notificationText"
+                render={({ field }) => (
+                  <FormItem className="col-span-full">
+                    <FormLabel>Notification Text</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Default notification message"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="logoImage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Logo</FormLabel>
+                    <FormControl>
+                      <LogoUpload field={field} form={form} />
+                    </FormControl>
+                    <FormDescription>
+                      Upload your company's logo image
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Admin Access</h3>
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Admin Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Set the password for admin access
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            {companyType === "Hospital" && (
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Admin Access</h3>
+                <h3 className="text-lg font-medium">Kiosk Access</h3>
                 <FormField
                   control={form.control}
-                  name="password"
+                  name="kioskUsername"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Admin Password</FormLabel>
+                      <FormLabel>Kiosk Username</FormLabel>
+                      <FormControl>
+                        <Input placeholder="kiosk_user" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="kioskPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Kiosk Password</FormLabel>
                       <FormControl>
                         <Input
                           type="password"
@@ -453,58 +436,20 @@ export default function SettingsPage() {
                           {...field}
                         />
                       </FormControl>
-                      <FormDescription>
-                        Set the password for admin access
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              {companyType === "Hospital" && (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Kiosk Access</h3>
-                  <FormField
-                    control={form.control}
-                    name="kioskUsername"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Kiosk Username</FormLabel>
-                        <FormControl>
-                          <Input placeholder="kiosk_user" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="kioskPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Kiosk Password</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="••••••••"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-            </form>
-          </Form>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading}>
-            {isLoading ? "Saving..." : "Save Settings"}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
+            )}
+          </form>
+        </Form>
+      </CardContent>
+      <CardFooter>
+        <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading}>
+          {isLoading ? "Saving..." : "Save Settings"}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
