@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, ImageIcon, Trash2, Loader } from "lucide-react";
 import { useForm } from "react-hook-form";
 import AdCarousel from "./AdCarousel";
-import type { Ad } from "./Ad";
+import { Ad } from "./Ad";
 import { QueueSpinner } from "@/components/queue-spinner";
 import {
   Select,
@@ -39,7 +39,6 @@ export default function DisplayAdsPage() {
   const [branches, setBranches] = useState<{ _id: string; name: string }[]>([]); // Added state for branches
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const imgUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
   const {
     register,
     handleSubmit,
@@ -55,7 +54,7 @@ export default function DisplayAdsPage() {
   const fetchAds = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${imgUrl}/api/ads`);
+      const response = await fetch("/api/bank/ads");
       if (response.ok) {
         const data: Ad[] = await response.json();
         setAds(data);
@@ -90,7 +89,7 @@ export default function DisplayAdsPage() {
         formData.append("image", data.image[0]);
       }
 
-      const response = await fetch(`${imgUrl}/api/ads`, {
+      const response = await fetch("/api/bank/ads", {
         method: "POST",
         body: formData,
       });
@@ -113,7 +112,7 @@ export default function DisplayAdsPage() {
 
   const deleteAd = async (id: string) => {
     try {
-      const response = await fetch(`${imgUrl}/api/ads/${id}`, {
+      const response = await fetch(`/api/bank/ads/${id}`, {
         method: "DELETE",
       });
 
@@ -237,9 +236,7 @@ export default function DisplayAdsPage() {
                     {ad.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`${imgUrl}/api/ads/image/${ad.image
-                          .split("/")
-                          .pop()}`}
+                        src={ad.image}
                         alt={ad.name}
                         className="object-cover w-full h-full"
                       />

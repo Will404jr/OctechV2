@@ -1,43 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { writeFile } from "fs/promises";
-import { Error as MongooseError } from "mongoose";
+import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-import { HospitalSettings } from "@/lib/models/hospital";
+import { HospitalSettings as Settings } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 import bcrypt from "bcryptjs";
 
-// CORS middleware
-function setCorsHeaders(response: NextResponse) {
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set(
-    "Access-Control-Allow-Methods",
-    "GET, POST, OPTIONS, PUT"
-  );
-  response.headers.set(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
-  return response;
-}
+const setCorsHeaders = (res: NextResponse) => {
+  res.headers.set("Access-Control-Allow-Origin", "*");
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  res.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  return res;
+};
 
 export async function OPTIONS() {
-  return setCorsHeaders(new NextResponse(null, { status: 204 }));
+  return setCorsHeaders(NextResponse.json({}));
 }
 
 export async function GET() {
   try {
     await dbConnect();
-    const settings = await HospitalSettings.findOne().select(
+    const settings = await Settings.findOne().select(
       "-password -kioskPassword"
     );
     const response = NextResponse.json(settings);
     return setCorsHeaders(response);
   } catch (error) {
-    const response = NextResponse.json(
+    console.error("Error fetching settings:", error);
+    const errorResponse = NextResponse.json(
       { error: "Failed to fetch settings" },
       { status: 500 }
     );
-    return setCorsHeaders(response);
+    return setCorsHeaders(errorResponse);
   }
 }
 
@@ -62,14 +55,14 @@ export async function POST(req: NextRequest) {
             const buffer = Buffer.from(await value.arrayBuffer());
             const filename =
               Date.now() + "-logo" + path.extname(value.name || ".png");
-            const filepath = path.join(
-              process.cwd(),
-              "public",
-              "uploads",
-              filename
-            );
+            const uploadsDir = path.join(process.cwd(), "uploads");
+            const filepath = path.join(uploadsDir, filename);
+
+            // Create the uploads directory if it doesn't exist
+            await mkdir(uploadsDir, { recursive: true });
+
             await writeFile(filepath, buffer);
-            settingsData[key] = `/uploads/${filename}`;
+            settingsData[key] = `/api/hospital/settings/images/${filename}`;
           } catch (fileError) {
             console.error("Error saving logo file:", fileError);
             const errorResponse = NextResponse.json(
@@ -86,7 +79,7 @@ export async function POST(req: NextRequest) {
       Object.assign(settingsData, body);
     }
 
-    let existingSettings = await HospitalSettings.findOne();
+    let existingSettings = await Settings.findOne();
     if (existingSettings) {
       // Update existing settings
       Object.assign(existingSettings, settingsData);
@@ -102,7 +95,7 @@ export async function POST(req: NextRequest) {
       await existingSettings.save();
     } else {
       // Create new settings
-      existingSettings = new HospitalSettings(settingsData);
+      existingSettings = new Settings(settingsData);
 
       // Set passwords directly on the model instance
       if (body.password) {
@@ -117,31 +110,13 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({
       message: "Settings saved successfully",
-      settings: await HospitalSettings.findOne().select(
-        "-password -kioskPassword"
-      ),
+      settings: await Settings.findOne().select("-password -kioskPassword"),
     });
     return setCorsHeaders(response);
   } catch (error) {
     console.error("Error saving settings:", error);
-
-    if (error instanceof MongooseError.ValidationError) {
-      const validationErrors: Record<string, string> = {};
-      for (const field in error.errors) {
-        validationErrors[field] = error.errors[field].message;
-      }
-      const errorResponse = NextResponse.json(
-        {
-          error: "Validation failed",
-          details: validationErrors,
-        },
-        { status: 400 }
-      );
-      return setCorsHeaders(errorResponse);
-    }
-
     const errorResponse = NextResponse.json(
-      { error: "Failed to save settings. Please try again." },
+      { error: "Failed to save settings" },
       { status: 500 }
     );
     return setCorsHeaders(errorResponse);
@@ -159,14 +134,14 @@ export async function PUT(req: NextRequest) {
         const buffer = Buffer.from(await value.arrayBuffer());
         const filename =
           Date.now() + "-logo" + path.extname(value.name || ".png");
-        const filepath = path.join(
-          process.cwd(),
-          "public",
-          "uploads",
-          filename
-        );
+        const uploadsDir = path.join(process.cwd(), "uploads");
+        const filepath = path.join(uploadsDir, filename);
+
+        // Create the uploads directory if it doesn't exist
+        await mkdir(uploadsDir, { recursive: true });
+
         await writeFile(filepath, buffer);
-        settingsData[key] = `/uploads/${filename}`;
+        settingsData[key] = `/api/hospital/settings/images/${filename}`;
       } else if (key === "password" || key === "kioskPassword") {
         if (value) {
           settingsData[key] = await bcrypt.hash(value.toString(), 10);
@@ -176,14 +151,10 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const updatedSettings = await HospitalSettings.findOneAndUpdate(
-      {},
-      settingsData,
-      {
-        new: true,
-        upsert: true,
-      }
-    ).select("-password -kioskPassword");
+    const updatedSettings = await Settings.findOneAndUpdate({}, settingsData, {
+      new: true,
+      upsert: true,
+    }).select("-password -kioskPassword");
 
     return NextResponse.json(updatedSettings);
   } catch (error) {

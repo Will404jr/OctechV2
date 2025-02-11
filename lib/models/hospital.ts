@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { string } from "zod";
 
 //ad schema
-const adSchema = new mongoose.Schema(
+const hospitalAdSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     image: { type: String, required: true },
@@ -11,7 +11,8 @@ const adSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const Ad = mongoose.models.Ad || mongoose.model("Ad", adSchema);
+export const HospitalAd =
+  mongoose.models.HospitalAd || mongoose.model("HospitalAd", hospitalAdSchema);
 
 // event schema
 const eventSchema = new mongoose.Schema(

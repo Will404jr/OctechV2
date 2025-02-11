@@ -17,8 +17,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Ad not found" }, { status: 404 });
     }
 
+    // Extract filename from the image path
+    const filename = path.basename(ad.image);
+
     // Delete the image file
-    const imagePath = path.join(process.cwd(), "public", ad.image);
+    const imagePath = path.join(process.cwd(), "uploads", filename);
     await unlink(imagePath);
 
     // Delete the ad from the database

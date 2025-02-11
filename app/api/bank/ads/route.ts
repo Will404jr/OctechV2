@@ -1,16 +1,15 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ad } from "@/lib/models/bank";
-import { writeFile, mkdir, readFile, unlink } from "fs/promises";
+import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
 export async function GET() {
   try {
-    const response = await fetch(`http://localhost:5000/api/ads`);
-    const data = await response.json();
-    return NextResponse.json(data);
+    await dbConnect();
+    const ads = await Ad.find({}).sort({ createdAt: -1 });
+    return NextResponse.json(ads);
   } catch (error) {
-    console.error("Error fetching ads:", error);
     return NextResponse.json({ error: "Failed to fetch ads" }, { status: 500 });
   }
 }
@@ -49,7 +48,7 @@ export async function POST(req: NextRequest) {
     const newAd = new Ad({
       name,
       branchId,
-      image: filename, // Store only the filename, not the full path
+      image: `/api/bank/ads/images/${filename}`,
     });
 
     await newAd.save();

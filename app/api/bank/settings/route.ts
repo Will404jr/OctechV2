@@ -1,41 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { writeFile } from "fs/promises";
-import { Error as MongooseError } from "mongoose";
+import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { BankSettings } from "@/lib/models/bank";
 import dbConnect from "@/lib/db";
 import bcrypt from "bcryptjs";
 
-// CORS middleware
-function setCorsHeaders(response: NextResponse) {
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set(
-    "Access-Control-Allow-Methods",
-    "GET, POST, OPTIONS, PUT"
-  );
-  response.headers.set(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
-  return response;
-}
+const setCorsHeaders = (res: NextResponse) => {
+  res.headers.set("Access-Control-Allow-Origin", "*");
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  res.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  return res;
+};
 
 export async function OPTIONS() {
-  return setCorsHeaders(new NextResponse(null, { status: 204 }));
+  return setCorsHeaders(NextResponse.json({}));
 }
 
 export async function GET() {
   try {
     await dbConnect();
-    const settings = await BankSettings.findOne().select("-password");
+    const settings = await BankSettings.findOne().select(
+      "-password -kioskPassword"
+    );
     const response = NextResponse.json(settings);
     return setCorsHeaders(response);
   } catch (error) {
-    const response = NextResponse.json(
+    console.error("Error fetching settings:", error);
+    const errorResponse = NextResponse.json(
       { error: "Failed to fetch settings" },
       { status: 500 }
     );
-    return setCorsHeaders(response);
+    return setCorsHeaders(errorResponse);
   }
 }
 
@@ -60,14 +55,14 @@ export async function POST(req: NextRequest) {
             const buffer = Buffer.from(await value.arrayBuffer());
             const filename =
               Date.now() + "-logo" + path.extname(value.name || ".png");
-            const filepath = path.join(
-              process.cwd(),
-              "public",
-              "uploads",
-              filename
-            );
+            const uploadsDir = path.join(process.cwd(), "uploads");
+            const filepath = path.join(uploadsDir, filename);
+
+            // Create the uploads directory if it doesn't exist
+            await mkdir(uploadsDir, { recursive: true });
+
             await writeFile(filepath, buffer);
-            settingsData[key] = `/uploads/${filename}`;
+            settingsData[key] = `/api/bank/settings/images/${filename}`;
           } catch (fileError) {
             console.error("Error saving logo file:", fileError);
             const errorResponse = NextResponse.json(
@@ -93,15 +88,21 @@ export async function POST(req: NextRequest) {
       if (body.password) {
         existingSettings.password = body.password;
       }
+      if (body.kioskPassword) {
+        existingSettings.kioskPassword = body.kioskPassword;
+      }
 
       await existingSettings.save();
     } else {
       // Create new settings
       existingSettings = new BankSettings(settingsData);
 
-      // Set password directly on the model instance
+      // Set passwords directly on the model instance
       if (body.password) {
         existingSettings.password = body.password;
+      }
+      if (body.kioskPassword) {
+        existingSettings.kioskPassword = body.kioskPassword;
       }
 
       await existingSettings.save();
@@ -109,29 +110,13 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({
       message: "Settings saved successfully",
-      settings: await BankSettings.findOne().select("-password"),
+      settings: await BankSettings.findOne().select("-password -kioskPassword"),
     });
     return setCorsHeaders(response);
   } catch (error) {
     console.error("Error saving settings:", error);
-
-    if (error instanceof MongooseError.ValidationError) {
-      const validationErrors: Record<string, string> = {};
-      for (const field in error.errors) {
-        validationErrors[field] = error.errors[field].message;
-      }
-      const errorResponse = NextResponse.json(
-        {
-          error: "Validation failed",
-          details: validationErrors,
-        },
-        { status: 400 }
-      );
-      return setCorsHeaders(errorResponse);
-    }
-
     const errorResponse = NextResponse.json(
-      { error: "Failed to save settings. Please try again." },
+      { error: "Failed to save settings" },
       { status: 500 }
     );
     return setCorsHeaders(errorResponse);
@@ -149,15 +134,15 @@ export async function PUT(req: NextRequest) {
         const buffer = Buffer.from(await value.arrayBuffer());
         const filename =
           Date.now() + "-logo" + path.extname(value.name || ".png");
-        const filepath = path.join(
-          process.cwd(),
-          "public",
-          "uploads",
-          filename
-        );
+        const uploadsDir = path.join(process.cwd(), "uploads");
+        const filepath = path.join(uploadsDir, filename);
+
+        // Create the uploads directory if it doesn't exist
+        await mkdir(uploadsDir, { recursive: true });
+
         await writeFile(filepath, buffer);
-        settingsData[key] = `/uploads/${filename}`;
-      } else if (key === "password") {
+        settingsData[key] = `/api/bank/settings/images/${filename}`;
+      } else if (key === "password" || key === "kioskPassword") {
         if (value) {
           settingsData[key] = await bcrypt.hash(value.toString(), 10);
         }
@@ -173,7 +158,7 @@ export async function PUT(req: NextRequest) {
         new: true,
         upsert: true,
       }
-    ).select("-password");
+    ).select("-password -kioskPassword");
 
     return NextResponse.json(updatedSettings);
   } catch (error) {

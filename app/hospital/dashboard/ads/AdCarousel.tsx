@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import type React from "react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import Image from "next/image";
@@ -16,7 +16,6 @@ interface AdCarouselProps {
 }
 
 const AdCarousel: React.FC<AdCarouselProps> = ({ ads }) => {
-  const imgUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
   return (
     <Carousel
       showArrows={true}
@@ -28,10 +27,11 @@ const AdCarousel: React.FC<AdCarouselProps> = ({ ads }) => {
     >
       {ads.map((ad) => (
         <div key={ad._id} className="relative aspect-video">
-          <img
-            src={`${imgUrl}/api/ads/image/${ad.image.split("/").pop()}`}
+          <Image
+            src={ad.image || "/placeholder.svg"}
             alt={ad.name}
-            className="w-full h-full object-cover"
+            layout="fill"
+            objectFit="cover"
           />
           <p className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2">
             {ad.name}

@@ -8,15 +8,13 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  images: {
-    remotePatterns: [
+  async rewrites() {
+    return [
       {
-        protocol: "http",
-        hostname: "localhost",
-        port: "5000",
-        pathname: "/api/logo/image/**",
+        source: "/uploads/:path*",
+        destination: "/api/uploads/:path*",
       },
-    ],
+    ];
   },
 };
 

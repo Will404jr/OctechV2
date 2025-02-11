@@ -32,7 +32,6 @@ export default function DisplayAdsPage() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const imgUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
   const {
     register,
     handleSubmit,
@@ -47,7 +46,7 @@ export default function DisplayAdsPage() {
   const fetchAds = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${imgUrl}/api/hospital-ads`);
+      const response = await fetch("/api/hospital/ads");
       if (response.ok) {
         const data: Ad[] = await response.json();
         setAds(data);
@@ -67,7 +66,7 @@ export default function DisplayAdsPage() {
         formData.append("image", data.image[0]);
       }
 
-      const response = await fetch(`${imgUrl}/api/hospital-ads`, {
+      const response = await fetch("/api/hospital/ads", {
         method: "POST",
         body: formData,
       });
@@ -90,7 +89,7 @@ export default function DisplayAdsPage() {
 
   const deleteAd = async (id: string) => {
     try {
-      const response = await fetch(`${imgUrl}/api/hospital-ads/${id}`, {
+      const response = await fetch(`/api/hospital/ads/${id}`, {
         method: "DELETE",
       });
 
@@ -191,9 +190,7 @@ export default function DisplayAdsPage() {
                       {ad.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={`${imgUrl}/api/hospital-ads/image/${ad.image
-                            .split("/")
-                            .pop()}`}
+                          src={ad.image}
                           alt={ad.name}
                           className="object-cover w-full h-full"
                         />
