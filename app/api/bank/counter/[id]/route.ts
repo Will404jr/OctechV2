@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { Counter } from "@/lib/models/bank";
 import dbConnect from "@/lib/db";
 import { getSession } from "@/lib/session";
 
 export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
   try {
     await dbConnect();
     const session = await getSession();
@@ -15,7 +16,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const counter = await Counter.findById(params.id).populate("queueId");
+    const counter = await Counter.findById(id).populate("queueId");
 
     if (!counter) {
       return NextResponse.json({ error: "Counter not found" }, { status: 404 });
@@ -37,9 +38,10 @@ export async function GET(
 }
 
 export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await context.params;
   try {
     await dbConnect();
     const session = await getSession();
@@ -48,7 +50,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const counter = await Counter.findById(params.id);
+    const counter = await Counter.findById(id);
 
     if (!counter) {
       return NextResponse.json({ error: "Counter not found" }, { status: 404 });
@@ -59,7 +61,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await Counter.findByIdAndDelete(params.id);
+    await Counter.findByIdAndDelete(id);
 
     return NextResponse.json(
       { message: "Counter deleted successfully" },
