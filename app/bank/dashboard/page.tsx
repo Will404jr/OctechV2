@@ -268,7 +268,7 @@ export default function BankDashboard() {
             <p className="text-xs text-muted-foreground">Serving</p>
           </CardContent>
         </Card>
-        <Card>
+        {/* <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Cancelled Tickets
@@ -281,7 +281,7 @@ export default function BankDashboard() {
             </div>
             <p className="text-xs text-muted-foreground">No Show</p>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       <Card>
