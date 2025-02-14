@@ -45,12 +45,6 @@ export async function GET(req: NextRequest) {
       createdAt: { $gte: today, $lt: tomorrow },
     });
 
-    const cancelledTickets = await Bankticket.countDocuments({
-      branchId,
-      noShow: true,
-      createdAt: { $gte: today, $lt: tomorrow },
-    });
-
     const ticketsPerHour = await Bankticket.aggregate([
       {
         $match: {
@@ -79,7 +73,6 @@ export async function GET(req: NextRequest) {
       ticketsServed,
       waitingTickets,
       inProgressTickets,
-      cancelledTickets,
       ticketsPerHour: ticketsPerHourArray,
     });
   } catch (error) {

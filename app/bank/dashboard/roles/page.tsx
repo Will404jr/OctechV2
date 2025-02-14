@@ -41,6 +41,7 @@ const menuItems = [
   "ExchangeRates",
   "Ads",
   "Settings",
+  "Receptionist",
 ];
 
 export default function RolesPage() {

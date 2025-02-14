@@ -118,6 +118,7 @@ const roleSchema = new mongoose.Schema(
       ExchangeRates: { type: Boolean, default: false },
       Ads: { type: Boolean, default: false },
       Settings: { type: Boolean, default: false },
+      Receptionist: { type: Boolean, default: false },
     },
   },
   { timestamps: true }
