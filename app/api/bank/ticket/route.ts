@@ -49,22 +49,24 @@ export async function GET(req: NextRequest) {
     const queueId = searchParams.get("queueId");
     const status = searchParams.get("status");
     const branchId = searchParams.get("branchId");
+    const counterId = searchParams.get("counterId");
 
     console.log(
       "Received request with queueId:",
       queueId,
       "status:",
       status,
-      "and branchId:",
-      branchId
+      "branchId:",
+      branchId,
+      "counterId:",
+      counterId
     );
 
-    let query: any = {};
+    const query: any = {};
     if (queueId) query.queueId = queueId;
     if (status) query.ticketStatus = status;
     if (branchId) query.branchId = branchId;
-
-    // console.log("Executing query:", query);
+    if (counterId) query.counterId = counterId;
 
     const tickets = await Bankticket.find(query)
       .populate({
@@ -72,14 +74,6 @@ export async function GET(req: NextRequest) {
         model: Counter,
       })
       .sort({ createdAt: 1 });
-
-    // console.log("Found tickets:", tickets.length);
-    // console.log(
-    //   "Sample ticket:",
-    //   tickets.length > 0
-    //     ? JSON.stringify(tickets[0], null, 2)
-    //     : "No tickets found"
-    // );
 
     return NextResponse.json(tickets);
   } catch (error) {
@@ -90,7 +84,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();

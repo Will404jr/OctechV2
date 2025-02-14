@@ -236,7 +236,7 @@ export default function HallDisplay() {
         await Promise.all([
           fetch(`/api/bank/ticket?status=Serving&branchId=${branchId}`),
           fetch("/api/bank/exchange-rates"),
-          fetch(`http://localhost:5000/api/ads?branchId=${branchId}`),
+          fetch(`/api/bank/ads?branchId=${branchId}`),
           fetch(`/api/settings?branchId=${branchId}`),
         ]);
 
@@ -446,9 +446,7 @@ export default function HallDisplay() {
                 >
                   <div className="w-full h-full">
                     <img
-                      src={`http://localhost:5000/api/ads/image/${ad.image
-                        .split("/")
-                        .pop()}`}
+                      src={ad.image}
                       alt={ad.name}
                       className="w-full h-full object-cover"
                     />

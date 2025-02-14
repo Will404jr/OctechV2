@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Bankticket } from "@/lib/models/bank";
+import { Bankticket, Counter } from "@/lib/models/bank";
 import { getSession } from "@/lib/session";
-import { Counter } from "@/lib/models/bank";
 
 export async function PUT(
   req: Request,
@@ -13,15 +12,15 @@ export async function PUT(
     await dbConnect();
 
     const session = await getSession();
-    console.log("Session data:", session); // Log session data for debugging
+    console.log("Session data:", session);
 
     if (!session.isLoggedIn) {
-      console.log("Unauthorized access attempt"); // Log unauthorized attempts
+      console.log("Unauthorized access attempt");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
-    console.log("Received update request for ticket:", id, "with data:", body); // Log the received data
+    console.log("Received update request for ticket:", id, "with data:", body);
 
     const updateData: {
       ticketStatus?: string;
@@ -36,10 +35,7 @@ export async function PUT(
       updateData.ticketStatus = body.ticketStatus;
 
       if (body.ticketStatus === "Serving") {
-        const activeCounter = await Counter.findOne({
-          userId: session.userId,
-          isActive: true,
-        });
+        const activeCounter = await Counter.findOne({ userId: session.userId });
         if (activeCounter) {
           updateData.counterId = activeCounter._id;
         } else {
@@ -49,6 +45,9 @@ export async function PUT(
             { status: 400 }
           );
         }
+      } else if (body.ticketStatus === "Hold") {
+        // When putting a ticket on hold, remove the counterId
+        updateData.counterId = null;
       }
     }
 
@@ -58,7 +57,14 @@ export async function PUT(
       updateData.issueDescription = body.issueDescription;
     if (body.callAgain !== undefined) updateData.callAgain = body.callAgain;
 
-    console.log("Updating ticket with data:", updateData); // Log the data being used to update the ticket
+    // Handle redirect scenario
+    if (body.counterId) {
+      updateData.counterId = body.counterId;
+      // Ensure the ticket status remains "Serving" when redirected
+      updateData.ticketStatus = "Serving";
+    }
+
+    console.log("Updating ticket with data:", updateData);
 
     const updatedTicket = await Bankticket.findByIdAndUpdate(id, updateData, {
       new: true,

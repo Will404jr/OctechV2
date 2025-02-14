@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Play, Pause, SkipForward, Check, PhoneCall } from "lucide-react";
+import {
+  Play,
+  Pause,
+  Check,
+  PhoneCall,
+  PauseCircle,
+  ArrowRight,
+} from "lucide-react";
 import { QueueSpinner } from "@/components/queue-spinner";
 
 interface SubMenuItem {
@@ -38,27 +44,40 @@ interface QueueItem {
   menuItem: MenuItem;
 }
 
-interface QueueItem {
-  _id: string;
-  menuItem: MenuItem;
-}
-
 interface Ticket {
   _id: string;
   ticketNo: string;
   queueId: string;
   subItemId: string;
   issueDescription: string;
-  ticketStatus: "Not Served" | "Serving" | "Served";
-  callAgain?: boolean; // Added callAgain property
+  ticketStatus: "Not Served" | "Serving" | "Served" | "Hold";
+  counterId: string | null;
+  callAgain?: boolean;
 }
 
 interface ActiveCounter {
+  _id: string;
+  userId: string;
   counterNumber: number;
   queueId: {
     _id: string;
     menuItem: MenuItem;
   };
+  branchId: string;
+}
+
+interface SessionData {
+  userId?: string;
+  isLoggedIn: boolean;
+  role?: string;
+  branchId?: string;
+  department?: string;
+  permissions?: Record<string, boolean>;
+}
+
+interface CounterInfo {
+  availableCounters: number[];
+  createdCounters: { number: number; userId: string; _id: string }[];
 }
 
 export default function ServingPage() {
@@ -93,15 +112,40 @@ export default function ServingPage() {
     useState(false);
   const [newCounterNumber, setNewCounterNumber] = useState("");
   const [isPaused, setIsPaused] = useState(false);
-  const [userBranchId, setUserBranchId] = useState<string | null>(null); // Added userBranchId state
+  const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [counterInfo, setCounterInfo] = useState<CounterInfo>({
+    availableCounters: [],
+    createdCounters: [],
+  });
+  const [activeCounterId, setActiveCounterId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [heldTickets, setHeldTickets] = useState<Ticket[]>([]);
+
+  const fetchSessionData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/session");
+      if (!response.ok) {
+        throw new Error("Failed to fetch session data");
+      }
+      const data = await response.json();
+      setSessionData(data);
+    } catch (error) {
+      console.error("Error fetching session data:", error);
+      setError("Failed to fetch session data. Please try again.");
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessionData();
+  }, [fetchSessionData]);
 
   const fetchQueuePreview = useCallback(async () => {
-    if (!selectedQueueId || !userBranchId) return;
+    if (!selectedQueueId || !sessionData?.branchId) return;
 
     try {
       console.log("Fetching queue preview for queueId:", selectedQueueId);
       const response = await fetch(
-        `/api/bank/ticket?queueId=${selectedQueueId}&status=Not Served&branchId=${userBranchId}`
+        `/api/bank/ticket?queueId=${selectedQueueId}&status=Not Served&branchId=${sessionData.branchId}`
       );
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -116,12 +160,15 @@ export default function ServingPage() {
       setQueuePreview([]);
       setQueueStatus(0);
     }
-  }, [selectedQueueId, userBranchId]);
+  }, [selectedQueueId, sessionData?.branchId]);
 
   useEffect(() => {
-    fetchQueueItems();
-    fetchActiveCounter();
-  }, []);
+    if (sessionData?.branchId) {
+      fetchQueueItems();
+      fetchActiveCounter();
+      fetchCounterInfo();
+    }
+  }, [sessionData?.branchId]);
 
   useEffect(() => {
     if (selectedQueueId) {
@@ -157,10 +204,12 @@ export default function ServingPage() {
       const data = await response.json();
       if (data.counter) {
         setActiveCounter(data.counter);
+        setActiveCounterId(data.counter._id);
         setSelectedQueueId(data.counter.queueId._id);
         setCounterNumber(data.counter.counterNumber.toString());
         setIsDialogOpen(false);
       } else {
+        // If no counter is returned, open the dialog to create one
         setIsDialogOpen(true);
       }
     } catch (error) {
@@ -170,9 +219,26 @@ export default function ServingPage() {
     }
   };
 
+  const fetchCounterInfo = useCallback(async () => {
+    if (!sessionData?.branchId) return;
+    try {
+      const response = await fetch(
+        `/api/bank/counter/available?branchId=${sessionData.branchId}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch counter information");
+      }
+      const data = await response.json();
+      setCounterInfo(data);
+    } catch (error) {
+      console.error("Error fetching counter information:", error);
+      setError("Failed to fetch counter information. Please try again.");
+    }
+  }, [sessionData?.branchId]);
+
   const handleDialogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userBranchId) {
+    if (!sessionData?.branchId) {
       setError(
         "You don't have permission to serve tickets. Please contact your administrator."
       );
@@ -186,9 +252,8 @@ export default function ServingPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            counterNumber: parseInt(counterNumber),
+            counterNumber: Number.parseInt(counterNumber),
             queueId: selectedQueueId,
-            branchId: userBranchId, // Added branchId
           }),
         });
 
@@ -203,6 +268,7 @@ export default function ServingPage() {
           (item) => item._id === selectedQueueId
         );
         setSelectedQueueItem(selected || null);
+        fetchCounterInfo(); // Refresh counter information after creating a new counter
       } catch (error) {
         console.error("Error creating counter:", error);
         setError("Failed to start serving. Please try again.");
@@ -225,12 +291,12 @@ export default function ServingPage() {
   };
 
   const fetchNextTicket = async () => {
-    if (isPaused || !userBranchId) return;
+    if (isPaused || !sessionData?.branchId || !activeCounterId) return;
 
     try {
       // Check if there's a currently serving ticket
       const servingResponse = await fetch(
-        `/api/bank/ticket?queueId=${selectedQueueId}&status=Serving&branchId=${userBranchId}`
+        `/api/bank/ticket?queueId=${selectedQueueId}&status=Serving&branchId=${sessionData.branchId}&counterId=${activeCounterId}`
       );
       if (!servingResponse.ok) {
         throw new Error("Failed to fetch serving ticket");
@@ -243,15 +309,19 @@ export default function ServingPage() {
       } else {
         // If no serving ticket, fetch the next 'Not Served' ticket
         const response = await fetch(
-          `/api/bank/ticket?queueId=${selectedQueueId}&status=Not Served&branchId=${userBranchId}`
+          `/api/bank/ticket?queueId=${selectedQueueId}&status=Not Served&branchId=${sessionData.branchId}`
         );
         if (!response.ok) {
           throw new Error("Failed to fetch next ticket");
         }
         const data = await response.json();
         if (data.length > 0) {
-          setCurrentTicket(data[0]);
-          await updateTicketStatus(data[0]._id, "Serving");
+          const nextTicket = data[0];
+          const updatedTicket = await updateTicketStatus(
+            nextTicket._id,
+            "Serving"
+          );
+          setCurrentTicket(updatedTicket);
         } else {
           setCurrentTicket(null);
         }
@@ -265,12 +335,11 @@ export default function ServingPage() {
   const markAsServed = async () => {
     if (currentTicket) {
       try {
-        const response = await updateTicketStatus(currentTicket._id, "Served");
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log("Ticket marked as served:", data);
+        const updatedTicket = await updateTicketStatus(
+          currentTicket._id,
+          "Served"
+        );
+        console.log("Ticket marked as served:", updatedTicket);
 
         if (!isPaused) {
           await fetchNextTicket();
@@ -286,8 +355,8 @@ export default function ServingPage() {
 
   const updateTicketStatus = async (
     ticketId: string,
-    status: "Serving" | "Served"
-  ): Promise<Response> => {
+    status: "Serving" | "Served" | "Hold"
+  ): Promise<Ticket> => {
     const response = await fetch(`/api/bank/ticket/${ticketId}`, {
       method: "PUT",
       headers: {
@@ -302,7 +371,8 @@ export default function ServingPage() {
       throw new Error(errorData.error || "Failed to update ticket status");
     }
 
-    return response;
+    const updatedTicket = await response.json();
+    return updatedTicket.data;
   };
 
   const changeQueue = async (
@@ -363,8 +433,9 @@ export default function ServingPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            counterNumber: parseInt(newCounterNumber),
+            counterNumber: Number.parseInt(newCounterNumber),
             queueId: selectedQueueId,
+            branchId: sessionData?.branchId,
           }),
         });
 
@@ -380,6 +451,7 @@ export default function ServingPage() {
           (item) => item._id === selectedQueueId
         );
         setSelectedQueueItem(selected || null);
+        fetchCounterInfo(); // Refresh counter information after changing counter
       } catch (error) {
         console.error("Error updating counter:", error);
         setError("Failed to update counter. Please try again.");
@@ -389,10 +461,10 @@ export default function ServingPage() {
 
   useEffect(() => {
     const fetchServingTicket = async () => {
-      if (selectedQueueId && userBranchId) {
+      if (selectedQueueId && sessionData?.branchId && activeCounterId) {
         try {
           const response = await fetch(
-            `/api/bank/ticket?queueId=${selectedQueueId}&status=Serving&branchId=${userBranchId}`
+            `/api/bank/ticket?queueId=${selectedQueueId}&status=Serving&branchId=${sessionData.branchId}&counterId=${activeCounterId}`
           );
           if (!response.ok) {
             throw new Error("Failed to fetch serving ticket");
@@ -408,25 +480,7 @@ export default function ServingPage() {
     };
 
     fetchServingTicket();
-  }, [selectedQueueId, userBranchId]);
-
-  useEffect(() => {
-    const fetchUserSession = async () => {
-      try {
-        const response = await fetch("/api/session");
-        if (!response.ok) {
-          throw new Error("Failed to fetch user session");
-        }
-        const sessionData = await response.json();
-        setUserBranchId(sessionData.branchId);
-      } catch (error) {
-        console.error("Error fetching user session:", error);
-        setError("Failed to fetch user session. Please try again.");
-      }
-    };
-
-    fetchUserSession();
-  }, []);
+  }, [selectedQueueId, sessionData?.branchId, activeCounterId]);
 
   const callAgain = async () => {
     if (currentTicket) {
@@ -443,13 +497,108 @@ export default function ServingPage() {
           throw new Error("Failed to call ticket again");
         }
 
-        // Optionally, you can update the local state or refetch the current ticket
-        // to reflect the change immediately in the UI
         setCurrentTicket({ ...currentTicket, callAgain: true });
       } catch (error) {
         console.error("Error calling ticket again:", error);
-        // Handle the error (e.g., show an error message to the user)
+        setError("Failed to call ticket again. Please try again.");
       }
+    }
+  };
+
+  const handleRedirect = async (newCounterId: string) => {
+    if (!currentTicket) {
+      console.log("No current ticket to redirect");
+      return;
+    }
+    if (newCounterId === activeCounterId) {
+      console.log("Cannot redirect to the same counter");
+      return;
+    }
+    console.log(
+      "Redirecting ticket:",
+      currentTicket.ticketNo,
+      "to counter:",
+      newCounterId
+    );
+
+    try {
+      const response = await fetch(`/api/bank/ticket/${currentTicket._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ counterId: newCounterId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to redirect ticket");
+      }
+
+      const updatedTicket = await response.json();
+      console.log("Ticket redirected successfully:", updatedTicket);
+      setCurrentTicket(null);
+      await fetchNextTicket();
+      setError(null);
+      setSuccessMessage("Ticket redirected successfully");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error) {
+      console.error("Error redirecting ticket:", error);
+      setError("Failed to redirect ticket. Please try again.");
+    }
+  };
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (sessionData?.branchId) {
+        fetchCounterInfo();
+      }
+    }, 30000); // Refetch every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [sessionData?.branchId, fetchCounterInfo]);
+
+  useEffect(() => {
+    console.log("Current state:", {
+      currentTicket,
+      isServing,
+      activeCounterId,
+      counterInfo,
+    });
+  }, [currentTicket, isServing, activeCounterId, counterInfo]);
+
+  const holdTicket = async () => {
+    if (currentTicket) {
+      try {
+        const updatedTicket = await updateTicketStatus(
+          currentTicket._id,
+          "Hold"
+        );
+        console.log("Ticket put on hold:", updatedTicket);
+        setHeldTickets([...heldTickets, updatedTicket]);
+        setCurrentTicket(null);
+        if (!isPaused) {
+          await fetchNextTicket();
+        }
+      } catch (error) {
+        console.error("Error putting ticket on hold:", error);
+        setError("Failed to put ticket on hold. Please try again.");
+      }
+    }
+  };
+
+  const unholdTicket = async (ticketId: string) => {
+    try {
+      const updatedTicket = await updateTicketStatus(ticketId, "Serving");
+      console.log("Ticket unholded:", updatedTicket);
+      setHeldTickets(heldTickets.filter((ticket) => ticket._id !== ticketId));
+      if (currentTicket) {
+        // If there's a current ticket being served, put it on hold
+        await holdTicket();
+      }
+      setCurrentTicket(updatedTicket);
+    } catch (error) {
+      console.error("Error unholding ticket:", error);
+      setError("Failed to unhold ticket. Please try again.");
     }
   };
 
@@ -505,13 +654,21 @@ export default function ServingPage() {
                 <label htmlFor="counterNumber" className="text-right">
                   Counter
                 </label>
-                <Input
-                  id="counterNumber"
-                  type="number"
-                  value={counterNumber}
-                  onChange={(e) => setCounterNumber(e.target.value)}
-                  className="col-span-3"
-                />
+                <Select onValueChange={setCounterNumber} value={counterNumber}>
+                  <SelectTrigger id="counterNumber" className="col-span-3">
+                    <SelectValue placeholder="Select a counter number" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {counterInfo.availableCounters.map((counterNumber) => (
+                      <SelectItem
+                        key={counterNumber}
+                        value={counterNumber.toString()}
+                      >
+                        {counterNumber}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
@@ -540,8 +697,8 @@ export default function ServingPage() {
             </h2>
             <p className="text-muted-foreground">
               Managing{" "}
-              {selectedQueueItem ? selectedQueueItem.menuItem.name : "queue"} at
-              Counter {counterNumber}
+              {activeCounter ? activeCounter.queueId.menuItem.name : "queue"} at
+              Counter {activeCounter ? activeCounter.counterNumber : ""}
             </p>
           </div>
           <Button onClick={() => setIsChangeCounterDialogOpen(true)}>
@@ -627,16 +784,20 @@ export default function ServingPage() {
             <Pause className="mr-2 h-4 w-4" />
             {isPaused ? "Resume" : "Pause"}
           </Button>
-          <Button
-            size="lg"
-            variant="secondary"
-            className="w-full"
-            onClick={fetchNextTicket}
-            disabled={!isServing || isPaused}
-          >
-            <SkipForward className="mr-2 h-4 w-4" />
-            Next Customer
-          </Button>
+          <Select onValueChange={handleRedirect} disabled={!currentTicket}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Redirect" />
+            </SelectTrigger>
+            <SelectContent>
+              {counterInfo.createdCounters
+                .filter((counter) => counter.userId !== sessionData?.userId)
+                .map((counter) => (
+                  <SelectItem key={counter._id} value={counter._id}>
+                    Counter {counter.number}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
           {currentTicket && (
             <Button
               size="lg"
@@ -646,6 +807,28 @@ export default function ServingPage() {
             >
               <Check className="mr-2 h-4 w-4" />
               Mark as Served
+            </Button>
+          )}
+          {currentTicket && (
+            <Button
+              size="lg"
+              variant="secondary"
+              className="w-full"
+              onClick={holdTicket}
+            >
+              <PauseCircle className="mr-2 h-4 w-4" />
+              Hold
+            </Button>
+          )}
+          {!currentTicket && queuePreview.length > 0 && (
+            <Button
+              size="lg"
+              variant="default"
+              className="w-full"
+              onClick={fetchNextTicket}
+            >
+              <ArrowRight className="mr-2 h-4 w-4" />
+              Next
             </Button>
           )}
         </div>
@@ -667,6 +850,33 @@ export default function ServingPage() {
                   <span className="text-muted-foreground">
                     {ticket.issueDescription}
                   </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Held Tickets</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {heldTickets.map((ticket) => (
+                <div
+                  key={ticket._id}
+                  className="flex justify-between items-center p-2 bg-yellow-50 rounded"
+                >
+                  <span className="font-semibold">{ticket.ticketNo}</span>
+                  <span className="text-muted-foreground">
+                    {ticket.issueDescription}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => unholdTicket(ticket._id)}
+                  >
+                    Unhold
+                  </Button>
                 </div>
               ))}
             </div>
@@ -776,13 +986,24 @@ export default function ServingPage() {
                 <label htmlFor="newCounterNumber" className="text-right">
                   New Counter
                 </label>
-                <Input
-                  id="newCounterNumber"
-                  type="number"
+                <Select
+                  onValueChange={setNewCounterNumber}
                   value={newCounterNumber}
-                  onChange={(e) => setNewCounterNumber(e.target.value)}
-                  className="col-span-3"
-                />
+                >
+                  <SelectTrigger id="newCounterNumber" className="col-span-3">
+                    <SelectValue placeholder="Select a new counter number" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {counterInfo.availableCounters.map((counterNumber) => (
+                      <SelectItem
+                        key={counterNumber}
+                        value={counterNumber.toString()}
+                      >
+                        {counterNumber}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>

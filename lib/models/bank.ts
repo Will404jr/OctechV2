@@ -200,7 +200,7 @@ userSchema.methods.comparePassword = async function (
 
 export const User = mongoose.models.User || mongoose.model("User", userSchema);
 
-// counter schema
+//counter schema
 const counterSchema = new mongoose.Schema(
   {
     userId: {
@@ -214,10 +214,17 @@ const counterSchema = new mongoose.Schema(
       ref: "Queue",
       required: true,
     },
-    isActive: { type: Boolean, default: true },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+    },
   },
   { timestamps: true }
 );
+
+// Remove the unique constraint
+// counterSchema.index({ counterNumber: 1, branchId: 1 }, { unique: true });
 
 export const Counter =
   mongoose.models.Counter || mongoose.model("Counter", counterSchema);
@@ -238,7 +245,7 @@ const bankTicketSchema = new mongoose.Schema(
     issueDescription: { type: String, required: true },
     ticketStatus: {
       type: String,
-      enum: ["Not Served", "Serving", "Served"],
+      enum: ["Not Served", "Serving", "Served", "Hold"],
       default: "Not Served",
       required: true,
     },
