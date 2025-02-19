@@ -1,100 +1,121 @@
 import { NextResponse } from "next/server";
-import { Counter, Queue } from "@/lib/models/bank";
 import dbConnect from "@/lib/db";
+import { Counter } from "@/lib/models/bank";
 import { getSession } from "@/lib/session";
 
-export async function GET() {
+export async function POST(request: Request) {
   try {
     await dbConnect();
     const session = await getSession();
+    const { queueId, counterNumber } = await request.json();
 
-    if (!session.isLoggedIn || !session.branchId) {
+    if (!session.userId || !session.branchId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const counter = await Counter.findOne({
+    const counter = new Counter({
       userId: session.userId,
-      createdAt: { $gte: today },
-    }).populate("queueId");
+      counterNumber: Number(counterNumber),
+      queueId,
+      branchId: session.branchId,
+    });
 
-    if (!counter) {
-      return NextResponse.json(
-        { message: "No active counter found for today" },
-        { status: 200 }
-      );
-    }
+    await counter.save();
 
-    return NextResponse.json({ counter }, { status: 200 });
+    // Update the session with the new counterId
+    session.counterId = counter._id.toString();
+    await session.save();
+
+    return NextResponse.json({ success: true, counter }, { status: 201 });
   } catch (error) {
-    console.error("Error fetching counter:", error);
+    console.error("Counter creation error:", error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
 }
 
-export async function PUT(req: Request) {
+export async function PUT(request: Request) {
+  try {
+    await dbConnect();
+    const session = await getSession();
+    const { queueId, counterNumber, available } = await request.json();
+
+    if (!session.userId || !session.branchId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let counter;
+
+    if (session.counterId) {
+      // Update existing counter
+      counter = await Counter.findByIdAndUpdate(
+        session.counterId,
+        {
+          counterNumber: Number(counterNumber),
+          queueId,
+          available: available !== undefined ? available : undefined,
+        },
+        { new: true }
+      );
+    } else {
+      // Create new counter
+      counter = new Counter({
+        userId: session.userId,
+        counterNumber: Number(counterNumber),
+        queueId,
+        branchId: session.branchId,
+        available: available !== undefined ? available : false,
+      });
+      await counter.save();
+    }
+
+    // Update the session with the counterId
+    session.counterId = counter._id.toString();
+    await session.save();
+
+    return NextResponse.json({ success: true, counter }, { status: 200 });
+  } catch (error) {
+    console.error("Counter update error:", error);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: Request) {
   try {
     await dbConnect();
     const session = await getSession();
 
-    if (!session.isLoggedIn || !session.branchId) {
+    if (!session.userId || !session.branchId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { counterNumber, queueId } = await req.json();
+    const counter = await Counter.findOne({ userId: session.userId }).populate(
+      "queueId"
+    );
 
-    if (!counterNumber || !queueId) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+    if (!counter) {
+      return NextResponse.json({ error: "Counter not found" }, { status: 404 });
     }
 
-    const queue = await Queue.findById(queueId);
-    if (!queue) {
-      return NextResponse.json({ error: "Queue not found" }, { status: 404 });
-    }
-
-    // Check if the counter number is already in use for this branch today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const existingCounter = await Counter.findOne({
-      counterNumber,
-      branchId: session.branchId,
-      createdAt: { $gte: today },
-    });
-
-    if (
-      existingCounter &&
-      existingCounter.userId.toString() !== session.userId
-    ) {
-      return NextResponse.json(
-        { error: "Counter number is already in use today" },
-        { status: 400 }
-      );
-    }
-
-    // Create a new counter for today
-    const counter = await Counter.create({
-      userId: session.userId,
-      counterNumber,
-      queueId,
-      branchId: session.branchId,
-    });
-
-    await counter.populate("queueId");
-
-    return NextResponse.json({ counter }, { status: 200 });
+    return NextResponse.json({ success: true, counter }, { status: 200 });
   } catch (error) {
-    console.error("Error updating counter:", error);
+    console.error("Counter fetch error:", error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

@@ -220,12 +220,10 @@ const counterSchema = new mongoose.Schema(
       ref: "Branch",
       required: true,
     },
+    available: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
-
-// Remove the unique constraint
-// counterSchema.index({ counterNumber: 1, branchId: 1 }, { unique: true });
 
 export const Counter =
   mongoose.models.Counter || mongoose.model("Counter", counterSchema);

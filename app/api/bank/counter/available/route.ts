@@ -26,31 +26,31 @@ export async function GET(req: Request) {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    // Fetch all counters created for the current day and branch
-    const createdCounters = await Counter.find({
+    // Fetch available counters created today for the branch
+    const availableCounters = await Counter.find({
       branchId: branchId,
       createdAt: { $gte: startOfDay },
-    }).select("counterNumber userId _id");
+      available: true, // Only get counters that are available
+    })
+      .populate({
+        path: "queueId",
+        select: "menuItem",
+        populate: {
+          path: "menuItem",
+          select: "name",
+        },
+      })
+      .select("counterNumber userId _id queueId");
 
-    // Extract the counter numbers, user IDs, and counter IDs
-    const createdCounterInfo = createdCounters.map((counter) => ({
+    // Format the counter information
+    const counterInfo = availableCounters.map((counter) => ({
+      _id: counter._id.toString(),
       number: counter.counterNumber,
       userId: counter.userId.toString(),
-      _id: counter._id.toString(),
+      queueName: counter.queueId?.menuItem?.name || "Unknown Queue",
     }));
 
-    // Generate all possible counter numbers (1-50)
-    const allCounterNumbers = Array.from({ length: 50 }, (_, i) => i + 1);
-
-    // Filter out the created counter numbers to get available counter numbers
-    const availableCounters = allCounterNumbers.filter(
-      (num) => !createdCounterInfo.some((c) => c.number === num)
-    );
-
-    return NextResponse.json(
-      { availableCounters, createdCounters: createdCounterInfo },
-      { status: 200 }
-    );
+    return NextResponse.json({ counters: counterInfo }, { status: 200 });
   } catch (error) {
     console.error("Error fetching counter information:", error);
     return NextResponse.json(

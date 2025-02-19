@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,38 +13,86 @@ import {
 } from "@/components/ui/card";
 import { Users, Clock, BarChart, ArrowRight } from "lucide-react";
 
-async function getSettings() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  try {
-    const res = await fetch(`${apiUrl}/api/settings`, {
-      cache: "no-store",
-      headers: {
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-      },
-    });
-    if (!res.ok) {
-      console.error(
-        `Failed to fetch settings: ${res.status} ${res.statusText}`
-      );
-      return null;
-    }
-    const data = await res.json();
-    return Object.keys(data).length > 0 ? data : null;
-  } catch (error) {
-    console.error("Error fetching settings:", error);
-    return null;
-  }
+interface Settings {
+  companyType: string;
+  companyName: string;
+  email: string;
+  contact: string;
+  address: string;
+  timezone: string;
+  defaultLanguage: string;
+  notificationText: string;
+  logoImage: string | File;
+  password: string;
+  kioskUsername: string;
+  kioskPassword: string;
 }
+
+// async function getSettings() {
+//   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+//   try {
+//     const res = await fetch(`${apiUrl}/api/settings`, {
+//       cache: "no-store",
+//       headers: {
+//         "Cache-Control": "no-cache",
+//         Pragma: "no-cache",
+//       },
+//     });
+//     if (!res.ok) {
+//       console.error(
+//         `Failed to fetch settings: ${res.status} ${res.statusText}`
+//       );
+//       return null;
+//     }
+//     const data = await res.json();
+//     return Object.keys(data).length > 0 ? data : null;
+//   } catch (error) {
+//     console.error("Error fetching settings:", error);
+//     return null;
+//   }
+// }
 
 export default function LandingPage() {
   const router = useRouter();
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
 
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/settings", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+      if (!res.ok) {
+        console.error(
+          `Failed to fetch settings: ${res.status} ${res.statusText}`
+        );
+        return null;
+      }
+      const data = await res.json();
+      const result = Object.keys(data).length > 0 ? data : null;
+      setSettings(result);
+      setIsLoading(false);
+      return result;
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      setIsLoading(false);
+      return null;
+    }
+  };
+
   const handleContinue = async () => {
     setIsLoading(true);
-    const settings = await getSettings();
+    const settingsData = await fetchSettings();
     setIsLoading(false);
 
     if (!settings) {

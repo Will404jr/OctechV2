@@ -46,8 +46,6 @@ export async function PUT(
           );
         }
       } else if (body.ticketStatus === "Hold") {
-        // When putting a ticket on hold, remove the counterId
-        updateData.counterId = null;
       }
     }
 
