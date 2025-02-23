@@ -77,10 +77,12 @@ export default function HallDisplay() {
     message: "",
     isVisible: false,
   });
+
   const isPlaying = useRef(false);
   const audioContext = useRef<AudioContext | null>(null);
   const announcedTickets = useRef<Set<string>>(new Set());
   const announcementQueue = useRef<Ticket[]>([]);
+  const ticketAnnouncements = useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
 
   const initializeAudioContext = () => {
@@ -138,13 +140,28 @@ export default function HallDisplay() {
 
       if (isPlaying.current) {
         console.log("Already playing audio, queueing ticket");
-        announcementQueue.current.push(ticket);
+        // Only queue if we haven't announced it twice yet
+        const announceCount = ticketAnnouncements.current.get(ticket._id) || 0;
+        if (announceCount < 2) {
+          announcementQueue.current.push(ticket);
+        }
+        return;
+      }
+
+      const currentAnnounceCount =
+        ticketAnnouncements.current.get(ticket._id) || 0;
+      if (currentAnnounceCount >= 2 && !ticket.callAgain) {
+        console.log(
+          `Ticket ${ticket.ticketNo} has already been announced twice`
+        );
         return;
       }
 
       isPlaying.current = true;
       console.log(
-        `Announcing ticket: ${ticket.ticketNo} for counter ${ticket.counterId.counterNumber}`
+        `Announcing ticket: ${ticket.ticketNo} for counter ${
+          ticket.counterId.counterNumber
+        } (Announcement #${currentAnnounceCount + 1})`
       );
 
       const ticketNumber = ticket.ticketNo;
@@ -172,21 +189,21 @@ export default function HallDisplay() {
       }
 
       isPlaying.current = false;
+
+      // Update announcement count
+      ticketAnnouncements.current.set(ticket._id, currentAnnounceCount + 1);
       announcedTickets.current.add(ticket._id);
 
-      // If this was a "call again" announcement, update the ticket
-      if (ticket.callAgain) {
+      // If this was a "call again" announcement, update the ticket after both announcements
+      if (ticket.callAgain && currentAnnounceCount + 1 >= 2) {
         try {
-          console.log(
-            `Attempting to update callAgain status for ticket ${ticket._id}`
-          );
           const response = await fetch(`/api/bank/ticket/${ticket._id}`, {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ callAgain: false }),
-            credentials: "include", // This ensures cookies are sent with the request
+            credentials: "include",
           });
 
           if (!response.ok) {
@@ -201,7 +218,6 @@ export default function HallDisplay() {
           const updatedTicket = await response.json();
           console.log("Successfully updated ticket:", updatedTicket);
 
-          // Update the local state to reflect the change
           setTickets((prevTickets) =>
             prevTickets.map((t) =>
               t._id === ticket._id ? { ...t, callAgain: false } : t
@@ -215,6 +231,11 @@ export default function HallDisplay() {
             duration: 5000,
           });
         }
+      }
+
+      // If we haven't announced this ticket twice yet, queue it up again
+      if (currentAnnounceCount + 1 < 2) {
+        announcementQueue.current.push(ticket);
       }
 
       // Check if there are more tickets in the queue
@@ -243,28 +264,32 @@ export default function HallDisplay() {
       const ticketsData: Ticket[] = await ticketsRes.json();
       console.log("Fetched tickets:", ticketsData);
 
-      const exchangeRatesData = await exchangeRatesRes.json();
-      const adsData = await adsRes.json();
-      const settingsData = await settingsRes.json();
-
       setTickets(ticketsData);
-      setExchangeRates(exchangeRatesData);
-      setAds(adsData);
-      setSettings(settingsData);
+      setExchangeRates(await exchangeRatesRes.json());
+      setAds(await adsRes.json());
+      setSettings(await settingsRes.json());
+
+      // Clear announcement counts for tickets that are no longer in the list
+      Array.from(ticketAnnouncements.current.keys()).forEach((ticketId) => {
+        if (!ticketsData.some((t) => t._id === ticketId)) {
+          ticketAnnouncements.current.delete(ticketId);
+        }
+      });
 
       // Prioritize tickets with callAgain set to true
       const ticketsToAnnounce = ticketsData
-        .filter(
-          (ticket) =>
-            ticket.callAgain || !announcedTickets.current.has(ticket._id)
-        )
+        .filter((ticket) => {
+          const announceCount =
+            ticketAnnouncements.current.get(ticket._id) || 0;
+          return ticket.callAgain || announceCount < 2;
+        })
         .sort((a, b) => (b.callAgain ? 1 : 0) - (a.callAgain ? 1 : 0));
 
       for (const ticket of ticketsToAnnounce) {
         await announceTicket(ticket);
       }
 
-      // Remove announced tickets that are no longer in the list
+      // Clean up announced tickets that are no longer in the list
       announcedTickets.current = new Set(
         Array.from(announcedTickets.current).filter((id) =>
           ticketsData.some((t) => t._id === id)
@@ -291,20 +316,10 @@ export default function HallDisplay() {
     return () => clearInterval(timer);
   }, [ads.length]);
 
-  const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
-
   const handleLoginSuccess = async (loggedInBranchId: string) => {
     setBranchId(loggedInBranchId);
     setIsLoggedIn(true);
 
-    // Update the session
     try {
       const response = await fetch("/api/session", {
         method: "POST",
@@ -319,7 +334,6 @@ export default function HallDisplay() {
       }
     } catch (error) {
       console.error("Error updating session:", error);
-      // Handle the error (e.g., show a notification to the user)
     }
   };
 
@@ -346,7 +360,6 @@ export default function HallDisplay() {
 
   useEffect(() => {
     fetchSession();
-    // Set up an interval to periodically check the session
     const intervalId = setInterval(fetchSession, 5 * 60 * 1000); // Check every 5 minutes
     return () => clearInterval(intervalId);
   }, [fetchSession]);
@@ -403,7 +416,7 @@ export default function HallDisplay() {
         </div>
       </header>
 
-      <main className="flex-grow flex  space-x-4 overflow-hidden">
+      <main className="flex-grow flex space-x-4 overflow-hidden">
         <Card className="w-1/5 overflow-auto rounded-none">
           <CardContent>
             <h2 className="text-xl font-bold mb-2 pt-2">Serving Tickets</h2>
