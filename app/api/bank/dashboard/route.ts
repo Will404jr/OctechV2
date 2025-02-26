@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Bankticket } from "@/lib/models/bank";
+import { ObjectId } from "mongodb";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,31 +17,36 @@ export async function GET(req: NextRequest) {
 
     await dbConnect();
 
-    const today = new Date();
+    // Create date range in Africa/Kampala timezone
+    const timezone = "Africa/Kampala";
+    const today = new Date(
+      new Date().toLocaleString("en-US", { timeZone: timezone })
+    );
     today.setHours(0, 0, 0, 0);
-
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    console.log("Date range (Africa/Kampala):", today, tomorrow);
+
     const totalTickets = await Bankticket.countDocuments({
-      branchId,
+      branchId: new ObjectId(branchId),
       createdAt: { $gte: today, $lt: tomorrow },
     });
 
     const ticketsServed = await Bankticket.countDocuments({
-      branchId,
+      branchId: new ObjectId(branchId),
       ticketStatus: "Served",
       createdAt: { $gte: today, $lt: tomorrow },
     });
 
     const waitingTickets = await Bankticket.countDocuments({
-      branchId,
+      branchId: new ObjectId(branchId),
       ticketStatus: "Not Served",
       createdAt: { $gte: today, $lt: tomorrow },
     });
 
     const inProgressTickets = await Bankticket.countDocuments({
-      branchId,
+      branchId: new ObjectId(branchId),
       ticketStatus: "Serving",
       createdAt: { $gte: today, $lt: tomorrow },
     });
@@ -48,13 +54,18 @@ export async function GET(req: NextRequest) {
     const ticketsPerHour = await Bankticket.aggregate([
       {
         $match: {
-          branchId: branchId,
+          branchId: new ObjectId(branchId),
           createdAt: { $gte: today, $lt: tomorrow },
         },
       },
       {
         $group: {
-          _id: { $hour: "$createdAt" },
+          _id: {
+            $hour: {
+              date: "$createdAt",
+              timezone: timezone,
+            },
+          },
           count: { $sum: 1 },
         },
       },

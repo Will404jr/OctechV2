@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Users,
-  CheckSquare,
-  Clock,
-  XSquare,
-  ArrowRightCircle,
-} from "lucide-react";
+import { Users, CheckSquare, Clock, ArrowRightCircle } from "lucide-react";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -70,7 +64,7 @@ const chartOptions: ChartOptions<"line"> = {
       },
     },
     y: {
-      display: false,
+      display: false, // Hide the y-axis
       beginAtZero: true,
       grid: {
         display: false,
@@ -84,7 +78,6 @@ interface DashboardData {
   ticketsServed: number;
   waitingTickets: number;
   inProgressTickets: number;
-  cancelledTickets: number;
   ticketsPerHour: number[];
 }
 
@@ -136,6 +129,7 @@ export default function BankDashboard() {
         }
         const data = await response.json();
         setDashboardData(data);
+        console.log("Fetched dashboard data:", data); // Add this line for debugging
       } catch (err) {
         setError("Error fetching dashboard data");
         console.error(err);
@@ -174,17 +168,22 @@ export default function BankDashboard() {
   }
 
   const chartData = {
-    labels: Array.from(
-      { length: 9 },
-      (_, i) => (i + 9).toString().padStart(2, "0") + ":00"
-    ),
+    labels: Array.from({ length: 24 }, (_, i) => {
+      const date = new Date();
+      date.setHours(i, 0, 0, 0);
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        hour12: true,
+        timeZone: "Africa/Kampala",
+      });
+    }),
     datasets: [
       {
         fill: true,
         label: "Tickets",
-        data: dashboardData.ticketsPerHour.slice(9, 18),
+        data: dashboardData.ticketsPerHour,
         borderColor: "rgb(14, 68, 128)",
-        backgroundColor: "rgba(59, 130, 246)",
+        backgroundColor: "rgba(59, 130, 246, 0.2)",
         tension: 0.4,
       },
     ],
@@ -192,29 +191,29 @@ export default function BankDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">
-          Welcome to your bank queue management dashboard
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">{currentDate}</p>
-      </div>
+      <div className="flex flex-row justify-between ">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Displaying stats for {currentDate}
+          </p>
+        </div>
 
-      <div className="flex justify-end">
-        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select Branch" />
-          </SelectTrigger>
-          <SelectContent>
-            {branches.map((branch) => (
-              <SelectItem key={branch._id} value={branch._id}>
-                {branch.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex justify-end">
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select Branch" />
+            </SelectTrigger>
+            <SelectContent>
+              {branches.map((branch) => (
+                <SelectItem key={branch._id} value={branch._id}>
+                  {branch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -272,7 +271,7 @@ export default function BankDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Tickets Per Hour (9:00 - 17:00)</CardTitle>
+          <CardTitle>Tickets Per Hour</CardTitle>
         </CardHeader>
         <CardContent className="h-[300px]">
           <Line options={chartOptions} data={chartData} />

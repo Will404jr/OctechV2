@@ -506,6 +506,11 @@ export default function ServingPage() {
       if (data.counter) {
         setActiveCounter(data.counter);
         setError(null);
+
+        // If the counter is now available and there's no current ticket, fetch the next ticket
+        if (data.counter.available && !currentTicket) {
+          fetchNextTicket();
+        }
       } else {
         throw new Error("Invalid response data");
       }
@@ -576,6 +581,16 @@ export default function ServingPage() {
 
     refreshTickets();
   }, [activeCounter, sessionData, fetchCurrentTicket, fetchHeldTickets]);
+
+  // Remove the useEffect hook that was added for automatic fetching
+  // Delete or comment out the following useEffect:
+  /*
+  useEffect(() => {
+    if (activeCounter?.available && !currentTicket) {
+      fetchNextTicket();
+    }
+  }, [activeCounter?.available, currentTicket]);
+  */
 
   const getQueueTicketCount = (queueId: string) => {
     return queueTicketCounts[queueId] || 0;

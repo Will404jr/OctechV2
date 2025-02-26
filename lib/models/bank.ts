@@ -259,6 +259,11 @@ const bankTicketSchema = new mongoose.Schema(
       required: true,
     },
     callAgain: { type: Boolean, default: false },
+    language: {
+      type: String,
+      enum: ["English", "Luganda", "Swahili"],
+      default: "English",
+    },
   },
   { timestamps: true }
 );

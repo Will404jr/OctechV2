@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error:
-            "Missing required fields: queueId, issueDescription, or branchId",
+            "Missing required fields: queueId, issueDescription, language or branchId",
         },
         { status: 400 }
       );
@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
       issueDescription: body.issueDescription,
       ticketStatus: "Not Served",
       branchId: body.branchId,
+      language: body.language || "English",
     });
 
     const savedTicket = await newTicket.save();
