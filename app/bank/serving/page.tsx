@@ -17,6 +17,13 @@ import { PhoneCall, ArrowRight } from "lucide-react";
 import { QueueSpinner } from "@/components/queue-spinner";
 import { EditCounterDialog } from "@/components/edit-counter-dialog";
 import { Navbar } from "@/components/navbar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface Ticket {
   _id: string;
@@ -85,6 +92,7 @@ export default function ServingPage() {
   const [queueTicketCounts, setQueueTicketCounts] = useState<
     Record<string, number>
   >({});
+  const [isActionsDialogOpen, setIsActionsDialogOpen] = useState(false);
   const router = useRouter();
   const [servingStartTime, setServingStartTime] = useState<
     Record<string, Date>
@@ -134,6 +142,7 @@ export default function ServingPage() {
 
     setIsLoading(true);
     try {
+      const today = new Date().toISOString().split("T")[0];
       const [
         counterRes,
         queueItemsRes,
@@ -144,7 +153,7 @@ export default function ServingPage() {
         fetch("/api/bank/queues"),
         fetch(`/api/bank/counter/available?branchId=${sessionData.branchId}`),
         fetch(
-          `/api/bank/ticket?counterId=${sessionData.counterId}&status=Served&branchId=${sessionData.branchId}`
+          `/api/bank/ticket?counterId=${sessionData.counterId}&status=Served&branchId=${sessionData.branchId}&date=${today}`
         ),
       ]);
 
@@ -188,8 +197,9 @@ export default function ServingPage() {
       if (!counter || !session.branchId || !session.counterId) return;
 
       try {
+        const today = new Date().toISOString().split("T")[0];
         const response = await fetch(
-          `/api/bank/ticket?queueId=${counter.queueId._id}&status=Serving&branchId=${session.branchId}&counterId=${session.counterId}`
+          `/api/bank/ticket?queueId=${counter.queueId._id}&status=Serving&branchId=${session.branchId}&counterId=${session.counterId}&date=${today}`
         );
         if (!response.ok) throw new Error("Failed to fetch current ticket");
 
@@ -220,8 +230,9 @@ export default function ServingPage() {
     if (!session.branchId || !session.counterId) return;
 
     try {
+      const today = new Date().toISOString().split("T")[0];
       const response = await fetch(
-        `/api/bank/ticket?status=Hold&branchId=${session.branchId}&counterId=${session.counterId}`
+        `/api/bank/ticket?status=Hold&branchId=${session.branchId}&counterId=${session.counterId}&date=${today}`
       );
       if (!response.ok) throw new Error("Failed to fetch held tickets");
 
@@ -239,11 +250,12 @@ export default function ServingPage() {
     try {
       const counts: Record<string, number> = {};
       let totalCount = 0;
+      const today = new Date().toISOString().split("T")[0];
 
       const responses = await Promise.all(
         queueItems.map((queue) =>
           fetch(
-            `/api/bank/ticket?queueId=${queue._id}&status=Not Served&branchId=${sessionData.branchId}`
+            `/api/bank/ticket?queueId=${queue._id}&status=Not Served&branchId=${sessionData.branchId}&date=${today}`
           )
         )
       );
@@ -459,8 +471,9 @@ export default function ServingPage() {
       return;
 
     try {
+      const today = new Date().toISOString().split("T")[0];
       const response = await fetch(
-        `/api/bank/ticket?queueId=${activeCounter.queueId._id}&status=Not Served&branchId=${sessionData.branchId}`
+        `/api/bank/ticket?queueId=${activeCounter.queueId._id}&status=Not Served&branchId=${sessionData.branchId}&date=${today}`
       );
       if (!response.ok) throw new Error("Failed to fetch next ticket");
 
@@ -582,6 +595,13 @@ export default function ServingPage() {
     refreshTickets();
   }, [activeCounter, sessionData, fetchCurrentTicket, fetchHeldTickets]);
 
+  // Add this useEffect to automatically open the dialog when a ticket is cleared
+  useEffect(() => {
+    if (activeCounter?.available && !currentTicket) {
+      setIsActionsDialogOpen(true);
+    }
+  }, [activeCounter?.available, currentTicket]);
+
   // Remove the useEffect hook that was added for automatic fetching
   // Delete or comment out the following useEffect:
   /*
@@ -663,7 +683,7 @@ export default function ServingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{ticketsServed}</div>
-              <p className="text-sm text-muted-foreground">Today's total</p>
+              <p className="text-sm text-muted-foreground">My total</p>
             </CardContent>
           </Card>
 
@@ -825,64 +845,85 @@ export default function ServingPage() {
                 </details>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-3 bg-gray-50 p-3 rounded-lg">
-                <div className="flex items-center">
-                  <span className="text-sm mr-3 font-medium text-gray-500">
-                    Status:
-                  </span>
+              <div className="flex items-center justify-center">
+                {!activeCounter?.available ? (
                   <Button
                     onClick={toggleAvailability}
                     size="sm"
-                    variant={
-                      activeCounter?.available ? "destructive" : "outline"
-                    }
-                    className={`h-8 ${
-                      activeCounter?.available
-                        ? ""
-                        : "border-green-300 text-green-700 hover:bg-green-50"
-                    }`}
-                  >
-                    {activeCounter?.available
-                      ? "Go Unavailable"
-                      : "Go Available"}
-                  </Button>
-                </div>
-
-                <div className="ml-auto flex items-center gap-3">
-                  <Button
-                    onClick={() => setIsEditDialogOpen(true)}
-                    size="sm"
+                    className="bg-green-700 text-white hover:bg-green-300 h-8"
                     variant="outline"
-                    className="h-8"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mr-1"
+                    Go Available
+                  </Button>
+                ) : (
+                  <>
+                    <Dialog
+                      open={isActionsDialogOpen}
+                      onOpenChange={setIsActionsDialogOpen}
                     >
-                      <path d="M12 20h9"></path>
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                    </svg>
-                    Change Counter
-                  </Button>
-
-                  <Button
-                    onClick={fetchNextTicket}
-                    disabled={!activeCounter?.available}
-                    size="sm"
-                    className="bg-blue-600 hover:bg-blue-700 h-8 px-4"
-                  >
-                    <ArrowRight className="mr-2 h-4 w-4" />
-                    Call Next
-                  </Button>
-                </div>
+                      <DialogTrigger asChild>
+                        <Button
+                          className="bg-blue-600 hover:bg-blue-700"
+                          onClick={() => setIsActionsDialogOpen(true)}
+                        >
+                          Select Action
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Counter Actions</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <Button
+                            onClick={() => {
+                              toggleAvailability();
+                              setIsActionsDialogOpen(false);
+                            }}
+                            variant="destructive"
+                            className="w-full"
+                          >
+                            Go Unavailable
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setIsEditDialogOpen(true);
+                              setIsActionsDialogOpen(false);
+                            }}
+                            variant="outline"
+                            className="w-full"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="mr-2"
+                            >
+                              <path d="M12 20h9"></path>
+                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                            </svg>
+                            Change serving queue
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              fetchNextTicket();
+                              setIsActionsDialogOpen(false);
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 w-full"
+                          >
+                            <ArrowRight className="mr-2 h-4 w-4" />
+                            Call Next
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </>
+                )}
               </div>
             )}
           </CardContent>

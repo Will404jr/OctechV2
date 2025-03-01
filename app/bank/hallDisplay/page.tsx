@@ -140,9 +140,11 @@ export default function HallDisplay() {
 
       if (isPlaying.current) {
         console.log("Already playing audio, queueing ticket");
-        // Only queue if we haven't announced it twice yet
-        const announceCount = ticketAnnouncements.current.get(ticket._id) || 0;
-        if (announceCount < 2) {
+        // Add to queue regardless of previous announcement count if callAgain is true
+        if (
+          ticket.callAgain ||
+          (ticketAnnouncements.current.get(ticket._id) || 0) < 2
+        ) {
           announcementQueue.current.push(ticket);
         }
         return;
@@ -150,6 +152,8 @@ export default function HallDisplay() {
 
       const currentAnnounceCount =
         ticketAnnouncements.current.get(ticket._id) || 0;
+
+      // Allow announcing again if callAgain is true, regardless of previous count
       if (currentAnnounceCount >= 2 && !ticket.callAgain) {
         console.log(
           `Ticket ${ticket.ticketNo} has already been announced twice`
@@ -188,14 +192,30 @@ export default function HallDisplay() {
         await playAudio(audioSrc);
       }
 
-      isPlaying.current = false;
-
       // Update announcement count
-      ticketAnnouncements.current.set(ticket._id, currentAnnounceCount + 1);
+      const newAnnounceCount = currentAnnounceCount + 1;
+      ticketAnnouncements.current.set(ticket._id, newAnnounceCount);
       announcedTickets.current.add(ticket._id);
 
-      // If this was a "call again" announcement, update the ticket after both announcements
-      if (ticket.callAgain && currentAnnounceCount + 1 >= 2) {
+      isPlaying.current = false;
+
+      // For callAgain tickets, ensure both announcements happen immediately in sequence
+      // by prioritizing it in the queue before processing other tickets
+      if (ticket.callAgain && newAnnounceCount === 1) {
+        // Place this ticket at the front of the queue for immediate re-announcement
+        announcementQueue.current.unshift({ ...ticket });
+        console.log(
+          `Queued ticket ${ticket.ticketNo} for immediate second announcement`
+        );
+      }
+      // For regular tickets or after callAgain tickets have been announced twice
+      else if (!ticket.callAgain && newAnnounceCount < 2) {
+        // Regular tickets get queued normally
+        announcementQueue.current.push(ticket);
+      }
+
+      // Reset callAgain flag after two announcements
+      if (ticket.callAgain && newAnnounceCount >= 2) {
         try {
           const response = await fetch(`/api/bank/ticket/${ticket._id}`, {
             method: "PUT",
@@ -216,7 +236,10 @@ export default function HallDisplay() {
           }
 
           const updatedTicket = await response.json();
-          console.log("Successfully updated ticket:", updatedTicket);
+          console.log(
+            "Successfully updated ticket callAgain status:",
+            updatedTicket
+          );
 
           setTickets((prevTickets) =>
             prevTickets.map((t) =>
@@ -233,12 +256,7 @@ export default function HallDisplay() {
         }
       }
 
-      // If we haven't announced this ticket twice yet, queue it up again
-      if (currentAnnounceCount + 1 < 2) {
-        announcementQueue.current.push(ticket);
-      }
-
-      // Check if there are more tickets in the queue
+      // Check if there are more tickets in the queue and process the next one
       if (announcementQueue.current.length > 0) {
         const nextTicket = announcementQueue.current.shift();
         if (nextTicket) {
@@ -253,9 +271,12 @@ export default function HallDisplay() {
     if (!isLoggedIn || !branchId) return;
 
     try {
+      const today = new Date().toISOString().split("T")[0]; // Get current date in YYYY-MM-DD format
       const [ticketsRes, exchangeRatesRes, adsRes, settingsRes] =
         await Promise.all([
-          fetch(`/api/bank/ticket?status=Serving&branchId=${branchId}`),
+          fetch(
+            `/api/bank/ticket?status=Serving&branchId=${branchId}&date=${today}`
+          ),
           fetch("/api/bank/exchange-rates"),
           fetch(`/api/bank/ads?branchId=${branchId}`),
           fetch(`/api/settings?branchId=${branchId}`),
@@ -281,6 +302,7 @@ export default function HallDisplay() {
         .filter((ticket) => {
           const announceCount =
             ticketAnnouncements.current.get(ticket._id) || 0;
+          // Include tickets that need to be announced (either callAgain or not yet announced twice)
           return ticket.callAgain || announceCount < 2;
         })
         .sort((a, b) => (b.callAgain ? 1 : 0) - (a.callAgain ? 1 : 0));
@@ -459,7 +481,7 @@ export default function HallDisplay() {
                 >
                   <div className="w-full h-full">
                     <img
-                      src={ad.image}
+                      src={ad.image || "/placeholder.svg"}
                       alt={ad.name}
                       className="w-full h-full object-cover"
                     />
