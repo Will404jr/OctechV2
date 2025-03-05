@@ -49,7 +49,7 @@ export const TreeNode =
   mongoose.models.TreeNode || mongoose.model("TreeNode", TreeNodeSchema);
 
 //role schema
-const roleSchema = new mongoose.Schema(
+const hospitalRoleSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     permissions: {
@@ -66,7 +66,9 @@ const roleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const Role = mongoose.models.Role || mongoose.model("Role", roleSchema);
+export const HospitalRole =
+  mongoose.models.HospitalRole ||
+  mongoose.model("HospitalRole", hospitalRoleSchema);
 
 //staff schema
 const staffSchema = new mongoose.Schema(

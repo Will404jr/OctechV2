@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Role } from "@/lib/models/hospital";
+import { HospitalRole } from "@/lib/models/hospital";
 import mongoose from "mongoose";
 
 export async function GET() {
   try {
     await dbConnect();
-    const roles = await Role.find().lean();
+    const roles = await HospitalRole.find().lean();
     return NextResponse.json(roles);
   } catch (error) {
     console.error("Error fetching roles:", error);
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const newRole = new Role(data);
+    const newRole = new HospitalRole(data);
     await newRole.save();
     return NextResponse.json(newRole, { status: 201 });
   } catch (error) {
@@ -68,7 +68,9 @@ export async function PUT(request: Request) {
       }
     }
 
-    const updatedRole = await Role.findByIdAndUpdate(id, data, { new: true });
+    const updatedRole = await HospitalRole.findByIdAndUpdate(id, data, {
+      new: true,
+    });
     if (!updatedRole) {
       return NextResponse.json({ error: "Role not found" }, { status: 404 });
     }
@@ -90,7 +92,7 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "Missing role ID" }, { status: 400 });
     }
-    const deletedRole = await Role.findByIdAndDelete(id);
+    const deletedRole = await HospitalRole.findByIdAndDelete(id);
     if (!deletedRole) {
       return NextResponse.json({ error: "Role not found" }, { status: 404 });
     }
