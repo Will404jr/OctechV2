@@ -79,7 +79,11 @@ const staffSchema = new mongoose.Schema(
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     image: { type: String },
-    role: { type: mongoose.Schema.Types.ObjectId, ref: "Role", required: true },
+    role: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "HospitalRole",
+      required: true,
+    },
     department: { type: String, required: true },
   },
   { timestamps: true }
