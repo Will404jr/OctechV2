@@ -2,24 +2,32 @@ version: "3.8"
 
 services:
   nextjs:
+    image: nextjs-app
     build: .
     ports:
       - "3000:3000"
-    depends_on:
-      - mongodb
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017/Octech
     volumes:
       - uploads-data:/app/uploads
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/Octech
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
 
   mongodb:
     image: mongo:4.4
-    restart: always
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    networks:
+      - app-network
 
 volumes:
   uploads-data:
   mongo-data:
+
+networks:
+  app-network:
+    driver: bridge
