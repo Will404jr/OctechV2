@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  nextjs:
+    image: nextjs-app
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads-data:/app/uploads
+
+volumes:
+  uploads-data:
