@@ -293,3 +293,5 @@ departmentSchema.index({ title: 1, "rooms.roomNumber": 1 }, { unique: true });
 
 export const Department =
   mongoose.models.Department || mongoose.model("Department", departmentSchema);
+
+export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);

@@ -4,12 +4,12 @@ import { Department } from "@/lib/models/hospital";
 import { Staff } from "@/lib/models/hospital";
 
 export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const id = params.id;
 
     const department = await Department.findById(id)
       .populate({
@@ -36,12 +36,12 @@ export async function GET(
 }
 
 export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const id = params.id;
     const body = await req.json();
 
     // Find and update department
@@ -71,12 +71,12 @@ export async function PUT(
 }
 
 export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const id = params.id;
 
     // Find and delete department
     const department = await Department.findByIdAndDelete(id);
@@ -100,12 +100,12 @@ export async function DELETE(
 
 // Endpoint to manage rooms within a department
 export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const id = params.id;
     const body = await req.json();
     const { action, roomId, roomData } = body;
 

@@ -3,12 +3,12 @@ import dbConnect from "@/lib/db";
 import { Ticket } from "@/lib/models/hospital";
 
 export async function POST(
-  req: NextRequest,
-  context: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const { id } = context.params;
     const body = await req.json();
     const {
       userType,

@@ -3,12 +3,12 @@ import dbConnect from "@/lib/db";
 import { Ticket, Journey } from "@/lib/models/hospital";
 
 export async function GET(
-  req: NextRequest,
-  context: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const { id } = context.params;
 
     const ticket = await Ticket.findById(id);
     if (!ticket) {
@@ -26,10 +26,10 @@ export async function GET(
 }
 
 export async function PUT(
-  req: NextRequest,
-  context: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  const { id } = await context.params;
   try {
     await dbConnect();
 

@@ -140,10 +140,8 @@ export default function HallDisplay() {
       const ticketNumber = ticket.ticketNo;
       const currentStep = ticket.currentStep;
       const currentDepartment = ticket.journeyId?.steps[currentStep]?.title;
-      const roomNumber =
-        departments
-          .find((d) => d.title === currentDepartment)
-          ?.roomNumber.toString() || "";
+      const roomNumber = departments.find((d) => d.title === currentDepartment);
+      // ?.roomNumber.toString() || "";
 
       // Show toast notification
       toast({
@@ -161,7 +159,7 @@ export default function HallDisplay() {
         ...(roomNumber
           ? [
               "/audio/proceedtoroom.wav",
-              ...roomNumber.split("").map((char) => `/audio/${char}.wav`),
+              // ...roomNumber.split("").map((char) => `/audio/${char}.wav`),
             ]
           : ["/audio/proceedtothereception.wav"]),
         // : ["/audio/proceedto.wav", "/audio/reception1.wav"]),

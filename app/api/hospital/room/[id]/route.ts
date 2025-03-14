@@ -4,12 +4,13 @@ import { Department } from "@/lib/models/hospital";
 import mongoose from "mongoose";
 
 export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const roomId = params.id;
+    const roomId = id;
 
     // Find the department containing this room
     const department = await Department.findOne({
@@ -38,12 +39,13 @@ export async function GET(
 }
 
 export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const roomId = params.id;
+    const roomId = id;
     const body = await req.json();
     const { roomNumber, available, currentTicket } = body;
 
@@ -108,12 +110,13 @@ export async function PUT(
 }
 
 export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const roomId = params.id;
+    const roomId = id;
 
     // Find the department containing this room
     const department = await Department.findOne({
