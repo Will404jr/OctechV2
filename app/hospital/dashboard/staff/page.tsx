@@ -47,7 +47,7 @@ interface Staff {
   image: string;
   password: string;
   role: RoleOrBranch | null;
-  department: string;
+  // department: string;
 }
 
 interface Role extends RoleOrBranch {}
@@ -67,7 +67,6 @@ export default function UsersPage() {
       username: "",
       role: null,
       password: "",
-      department: "",
     },
   });
 
@@ -141,7 +140,6 @@ export default function UsersPage() {
           username: "",
           password: "",
           role: null,
-          department: "",
         });
         setIsOpen(false);
         setEditingStaff(null);
@@ -212,7 +210,6 @@ export default function UsersPage() {
                     username: "",
                     password: "",
                     role: null,
-                    department: "",
                   });
                 }}
               >
@@ -342,7 +339,7 @@ export default function UsersPage() {
                       )}
                     />
                   </div>
-                  <div className="grid gap-2">
+                  {/* <div className="grid gap-2">
                     <Label htmlFor="department">Department</Label>
                     <Controller
                       name="department"
@@ -373,7 +370,7 @@ export default function UsersPage() {
                         </>
                       )}
                     />
-                  </div>
+                  </div> */}
                   <div className="grid gap-2">
                     <Label htmlFor="password">Password</Label>
                     <Controller
@@ -416,7 +413,7 @@ export default function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Username</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Department</TableHead>
+                {/* <TableHead>Department</TableHead> */}
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -430,7 +427,7 @@ export default function UsersPage() {
                   <TableCell>
                     {staff.role?.name || "No Role Assigned"}
                   </TableCell>
-                  <TableCell>{staff.department}</TableCell>
+                  {/* <TableCell>{staff.department}</TableCell> */}
                   <TableCell>
                     <Button
                       size="sm"

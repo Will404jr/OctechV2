@@ -1,16 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Ticket } from "@/lib/models/hospital";
-import { Journey } from "@/lib/models/hospital";
+import { Ticket, Journey } from "@/lib/models/hospital";
+
+export async function GET(
+  req: NextRequest,
+  context: { params: { id: string } }
+) {
+  try {
+    await dbConnect();
+    const { id } = context.params;
+
+    const ticket = await Ticket.findById(id);
+    if (!ticket) {
+      return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(ticket);
+  } catch (error) {
+    console.error("Error fetching ticket:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch ticket" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function PUT(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
+  req: NextRequest,
+  context: { params: { id: string } }
 ) {
-  const { id } = await context.params;
+  const { id } = context.params;
   try {
     await dbConnect();
 
+    const body = await req.json();
     const {
       journeyId,
       currentStep,
@@ -20,7 +43,18 @@ export async function PUT(
       receptionistNote,
       noShow,
       journeySteps,
-    } = await req.json();
+      held,
+      departmentNote,
+      currentDepartment,
+    } = body;
+
+    console.log(`Updating ticket ${id}:`, body);
+
+    // Find ticket first to check current state
+    const ticket = await Ticket.findById(id);
+    if (!ticket) {
+      return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    }
 
     let updateData: any = {};
 
@@ -54,15 +88,7 @@ export async function PUT(
     }
 
     // Handle step completion
-    if (currentStep !== undefined) {
-      const ticket = await Ticket.findById(id);
-      if (!ticket) {
-        return NextResponse.json(
-          { error: "Ticket not found" },
-          { status: 404 }
-        );
-      }
-
+    if (currentStep !== undefined && ticket.journeyId) {
       const journey = await Journey.findById(ticket.journeyId);
       if (!journey) {
         return NextResponse.json(
@@ -101,6 +127,31 @@ export async function PUT(
       }
     }
 
+    // Handle department note updates
+    if (departmentNote && currentDepartment) {
+      // Initialize departmentHistory if it doesn't exist
+      if (!ticket.departmentHistory) {
+        ticket.departmentHistory = [];
+        updateData.departmentHistory = [];
+      }
+
+      // Find if this department is already in history but not completed
+      const deptIndex = ticket.departmentHistory.findIndex(
+        (hist: any) => hist.department === currentDepartment && !hist.completed
+      );
+
+      if (deptIndex >= 0) {
+        // Update existing entry
+        updateData[`departmentHistory.${deptIndex}.note`] = departmentNote;
+      }
+    }
+
+    // Handle hold/unhold status
+    if (held !== undefined) {
+      updateData.held = held;
+      console.log(`Setting ticket ${id} held status to ${held}`);
+    }
+
     // Handle other updates
     if (call !== undefined) {
       updateData.call = call;
@@ -129,6 +180,7 @@ export async function PUT(
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
+    console.log(`Ticket ${id} updated successfully`);
     return NextResponse.json(updatedTicket);
   } catch (error) {
     console.error("Error updating ticket:", error);

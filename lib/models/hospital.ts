@@ -84,7 +84,7 @@ const staffSchema = new mongoose.Schema(
       ref: "HospitalRole",
       required: true,
     },
-    department: { type: String, required: true },
+    // department: { type: String, required: true },
   },
   { timestamps: true }
 );
@@ -162,24 +162,24 @@ export const HospitalSettings =
   mongoose.model("HospitalSettings", hospitalSettingsSchema);
 
 // room schema
-const roomSchema = new mongoose.Schema(
-  {
-    staffId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Staff",
-      required: true,
-    },
-    department: { type: String, required: true },
-    roomNumber: { type: Number, required: true },
-    servingTicket: { type: String, default: "", required: false },
-  },
-  { timestamps: true }
-);
+// const roomSchema = new mongoose.Schema(
+//   {
+//     staffId: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "Staff",
+//       required: true,
+//     },
+//     department: { type: String, required: true },
+//     roomNumber: { type: Number, required: true },
+//     servingTicket: { type: String, default: "", required: false },
+//   },
+//   { timestamps: true }
+// );
 
-// Add a compound unique index for department and roomNumber
-roomSchema.index({ department: 1, roomNumber: 1 }, { unique: true });
+// // Add a compound unique index for department and roomNumber
+// roomSchema.index({ department: 1, roomNumber: 1 }, { unique: true });
 
-export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
+// export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
 
 //ticket schema
 const ticketSchema = new mongoose.Schema(
@@ -187,23 +187,24 @@ const ticketSchema = new mongoose.Schema(
     ticketNo: { type: String, required: true },
     reasonforVisit: { type: String, default: "", required: false },
     receptionistNote: { type: String, default: "", required: false },
-    journeyId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Journey",
-      required: false,
-    },
-    currentStep: { type: Number, default: 0 },
-    journeySteps: {
-      type: Map,
-      of: new mongoose.Schema({
+    // New departmentHistory field to track the ticket's journey
+    departmentHistory: [
+      {
+        department: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+        note: { type: String, default: "" },
         completed: { type: Boolean, default: false },
-        note: { type: String, default: "", required: false },
-      }),
-      default: new Map(),
+      },
+    ],
+    userType: {
+      type: String,
+      enum: ["Cash", "Insurance", "Staff"],
+      required: false,
     },
     completed: { type: Boolean, default: false },
     call: { type: Boolean, default: false },
     noShow: { type: Boolean, default: false },
+    held: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -258,15 +259,37 @@ JourneySchema.index({ createdAt: -1 });
 export const Journey =
   mongoose.models.Journey || mongoose.model("Journey", JourneySchema);
 
-// Example of how to use the schema
-// const example = {
-//   name: "General Checkup",
-//   steps: [
-//     { id: 1, title: "Reception", icon: "👋" },
-//     { id: 2, title: "Triage", icon: "🔍" },
-//     { id: 3, title: "Laboratory", icon: "🧪" },
-//     { id: 4, title: "General Medicine", icon: "👨‍⚕️" },
-//     { id: 5, title: "Pharmacy", icon: "💊" },
-//     { id: 6, title: "Cashier", icon: "💵" }
-//   ]
-// };
+//department and room schema
+const roomSchema = new mongoose.Schema(
+  {
+    roomNumber: { type: String, required: true },
+    staff: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Staff",
+      required: true,
+    },
+    available: { type: Boolean, default: false },
+    currentTicket: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Ticket",
+      required: false,
+      default: null,
+    },
+  },
+  { timestamps: true }
+);
+
+const departmentSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, unique: true },
+    icon: { type: String, required: true },
+    rooms: [roomSchema],
+  },
+  { timestamps: true }
+);
+
+// Create a compound index to ensure unique room numbers within a department
+departmentSchema.index({ title: 1, "rooms.roomNumber": 1 }, { unique: true });
+
+export const Department =
+  mongoose.models.Department || mongoose.model("Department", departmentSchema);

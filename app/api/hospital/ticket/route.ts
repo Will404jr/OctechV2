@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ticket } from "@/lib/models/hospital";
-import { Journey } from "@/lib/models/hospital";
 
 async function generateTicketNumber() {
   const today = new Date();
@@ -16,7 +15,7 @@ async function generateTicketNumber() {
 
   if (latestTicket) {
     prefix = latestTicket.ticketNo[0];
-    number = parseInt(latestTicket.ticketNo.slice(1)) + 1;
+    number = Number.parseInt(latestTicket.ticketNo.slice(1)) + 1;
 
     if (number > 99) {
       prefix = String.fromCharCode(prefix.charCodeAt(0) + 1);
@@ -35,7 +34,11 @@ export async function POST() {
 
     const newTicket = new Ticket({
       ticketNo,
-      journeyId: null,
+      departmentHistory: [],
+      completed: false,
+      noShow: false,
+      call: false,
+      held: false,
     });
 
     await newTicket.save();
@@ -67,63 +70,76 @@ export async function POST() {
   }
 }
 
+// Update the GET function to properly handle department history completion status
 export async function GET(request: Request) {
   await dbConnect();
 
   const { searchParams } = new URL(request.url);
-  const journeyId = searchParams.get("journeyId");
   const department = searchParams.get("department");
-  const currentStepOnly = searchParams.get("currentStepOnly") === "true";
+  const unassigned = searchParams.get("unassigned") === "true";
+  const held = searchParams.get("held") === "true";
 
-  // console.log(
-  //   `Fetching tickets for department: ${department}, currentStepOnly: ${currentStepOnly}`
-  // );
+  console.log(
+    `GET tickets for department: ${department}, unassigned: ${unassigned}, held: ${held}`
+  );
 
-  let query: any = { noShow: false, completed: false };
+  const query: any = { noShow: false, completed: false };
 
-  if (journeyId === "null") {
-    query = { ...query, journeyId: null };
-  } else if (journeyId) {
-    query = { ...query, journeyId };
-  }
+  if (held && department) {
+    // For held tickets in a specific department
+    // Find tickets where:
+    // 1. The department exists in departmentHistory
+    // 2. The completed field for that department is false
+    // 3. The ticket is marked as held
+    query.$and = [
+      {
+        departmentHistory: {
+          $elemMatch: {
+            department: department,
+            completed: false,
+          },
+        },
+      },
+      { held: true },
+    ];
+  } else if (unassigned) {
+    // For reception - tickets that haven't been assigned to any department yet
+    query.departmentHistory = { $size: 0 };
+    query.held = held === true;
+  } else if (department) {
+    // For specific departments - find tickets that need to be processed by this department
+    // Find tickets where:
+    // 1. The department exists in departmentHistory
+    // 2. The completed field for that department is false
+    // 3. The ticket is not held (unless we're specifically looking for held tickets)
+    query.$and = [
+      {
+        departmentHistory: {
+          $elemMatch: {
+            department: department,
+            completed: false,
+          },
+        },
+      },
+    ];
 
-  if (department) {
-    const journeys = await Journey.find({ "steps.title": department });
-    const journeyIds = journeys.map((journey) => journey._id);
-
-    // console.log(
-    //   `Found ${journeys.length} journeys for department ${department}`
-    // );
-
-    query = {
-      ...query,
-      journeyId: { $in: journeyIds },
-    };
-
-    if (currentStepOnly) {
-      const journeyStepIndices = await Promise.all(
-        journeys.map(async (journey) => {
-          const stepIndex = journey.steps.findIndex(
-            (step: any) => step.title === department
-          );
-          return { journeyId: journey._id, stepIndex };
-        })
-      );
-
-      query.$or = journeyStepIndices.map(({ journeyId, stepIndex }) => ({
-        journeyId,
-        currentStep: stepIndex,
-      }));
-    } else {
-      query[`journeySteps.${department}.completed`] = { $ne: true };
+    // Only get non-held tickets for normal queue
+    if (!held) {
+      query.$and.push({ held: false });
     }
   }
 
-  // console.log("Final query:", JSON.stringify(query, null, 2));
+  console.log("Query:", JSON.stringify(query, null, 2));
 
-  const tickets = await Ticket.find(query).populate("journeyId");
+  const tickets = await Ticket.find(query);
+  console.log(
+    `Found ${tickets.length} tickets for department: ${department}, held: ${held}`
+  );
 
-  // console.log(`Found ${tickets.length} tickets`);
+  // Log the ticket numbers for debugging
+  if (tickets.length > 0) {
+    console.log("Ticket numbers:", tickets.map((t) => t.ticketNo).join(", "));
+  }
 
   return NextResponse.json(tickets);
 }

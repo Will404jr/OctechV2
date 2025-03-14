@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json(); // Parse the incoming JSON body
 
-    // Create a new branch record
+    // Create a new staff record
     const newStaff = await Staff.create(body);
 
     return NextResponse.json(

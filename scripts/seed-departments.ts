@@ -1,9 +1,7 @@
-export interface Department {
-  title: string;
-  icon: string;
-}
+import dbConnect from "@/lib/db";
+import { Department } from "@/lib/models/hospital";
 
-const departments: Department[] = [
+const departments = [
   { title: "Reception", icon: "👋" },
   { title: "Registration", icon: "📋" },
   { title: "Triage", icon: "🔍" },
@@ -61,4 +59,22 @@ const departments: Department[] = [
   { title: "Outpatient Clinic", icon: "🏣" },
 ];
 
-export default departments;
+async function seedDepartments() {
+  try {
+    await dbConnect();
+
+    // Clear existing departments
+    await Department.deleteMany({});
+
+    // Insert departments
+    await Department.insertMany(departments);
+
+    console.log("Departments seeded successfully!");
+  } catch (error) {
+    console.error("Error seeding departments:", error);
+  } finally {
+    process.exit(0);
+  }
+}
+
+seedDepartments();
