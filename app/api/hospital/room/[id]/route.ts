@@ -92,6 +92,7 @@ export async function PUT(
     // Update current ticket if provided
     if (currentTicket !== undefined) {
       department.rooms[roomIndex].currentTicket = currentTicket || null;
+      // Remove any code here that might be setting available to false
     }
 
     await department.save();

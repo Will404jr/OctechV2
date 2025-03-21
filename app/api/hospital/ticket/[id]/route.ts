@@ -9,7 +9,6 @@ export async function GET(
   const { id } = await context.params;
   try {
     await dbConnect();
-
     const ticket = await Ticket.findById(id);
     if (!ticket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
@@ -46,6 +45,7 @@ export async function PUT(
       held,
       departmentNote,
       currentDepartment,
+      roomId,
     } = body;
 
     console.log(`Updating ticket ${id}:`, body);
@@ -143,6 +143,19 @@ export async function PUT(
       if (deptIndex >= 0) {
         // Update existing entry
         updateData[`departmentHistory.${deptIndex}.note`] = departmentNote;
+      }
+    }
+
+    // Handle roomId updates for department history
+    if (roomId && currentDepartment) {
+      // Find if this department is already in history but not completed
+      const deptIndex = ticket.departmentHistory.findIndex(
+        (hist: any) => hist.department === currentDepartment && !hist.completed
+      );
+
+      if (deptIndex >= 0) {
+        // Update existing entry with roomId
+        updateData[`departmentHistory.${deptIndex}.roomId`] = roomId;
       }
     }
 

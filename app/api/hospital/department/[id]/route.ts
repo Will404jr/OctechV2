@@ -25,6 +25,14 @@ export async function GET(
       );
     }
 
+    // Ensure all rooms have the available field explicitly set
+    (department as any).rooms = (department as any).rooms.map(
+      (room: { available: boolean }) => ({
+        ...room,
+        available: room.available === true,
+      })
+    );
+
     return NextResponse.json(department);
   } catch (error) {
     console.error("Error fetching department:", error);

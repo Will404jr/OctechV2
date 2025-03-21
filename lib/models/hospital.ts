@@ -187,13 +187,20 @@ const ticketSchema = new mongoose.Schema(
     ticketNo: { type: String, required: true },
     reasonforVisit: { type: String, default: "", required: false },
     receptionistNote: { type: String, default: "", required: false },
-    // New departmentHistory field to track the ticket's journey
+    // Updated departmentHistory field to track the ticket's journey
     departmentHistory: [
       {
         department: { type: String, required: true },
+        icon: { type: String, default: "" },
         timestamp: { type: Date, default: Date.now },
         note: { type: String, default: "" },
         completed: { type: Boolean, default: false },
+        roomId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Department.rooms",
+          required: true,
+          default: null,
+        }, // Added roomId field
       },
     ],
     userType: {
@@ -205,6 +212,11 @@ const ticketSchema = new mongoose.Schema(
     call: { type: Boolean, default: false },
     noShow: { type: Boolean, default: false },
     held: { type: Boolean, default: false },
+    language: {
+      type: String,
+      enum: ["English", "Luganda"],
+      default: "English",
+    },
   },
   { timestamps: true }
 );

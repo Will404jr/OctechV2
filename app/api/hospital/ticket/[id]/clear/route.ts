@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Ticket } from "@/lib/models/hospital";
+import { Ticket, Department } from "@/lib/models/hospital";
 
 export async function POST(
   req: Request,
@@ -16,6 +16,7 @@ export async function POST(
       receptionistNote,
       departmentNote,
       currentDepartment,
+      roomId,
     } = body;
 
     console.log(`Clearing ticket ${id} from department ${currentDepartment}`);
@@ -34,6 +35,14 @@ export async function POST(
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
+    // Find current department to get its icon
+    const currentDepartmentData = await Department.findOne({
+      title: currentDepartment,
+    });
+    const currentDepartmentIcon = currentDepartmentData
+      ? currentDepartmentData.icon
+      : "";
+
     // Initialize departmentHistory if it doesn't exist
     if (!ticket.departmentHistory) {
       ticket.departmentHistory = [];
@@ -49,17 +58,23 @@ export async function POST(
       ticket.departmentHistory[existingDeptIndex].note = departmentNote || "";
       ticket.departmentHistory[existingDeptIndex].completed = true;
       ticket.departmentHistory[existingDeptIndex].timestamp = new Date();
+      // Add the roomId of the current user to the history
+      if (roomId) {
+        ticket.departmentHistory[existingDeptIndex].roomId = roomId;
+      }
       console.log(`Marked department ${currentDepartment} as completed`);
     } else {
       // Add current department to history with completed status
       ticket.departmentHistory.push({
         department: currentDepartment,
+        icon: currentDepartmentIcon, // Add icon to history
         timestamp: new Date(),
         note: departmentNote || "",
         completed: true,
+        roomId: roomId, // Add the roomId of the current user
       });
       console.log(
-        `Added department ${currentDepartment} to history as completed`
+        `Added department ${currentDepartment} to history as completed with icon ${currentDepartmentIcon}`
       );
     }
 

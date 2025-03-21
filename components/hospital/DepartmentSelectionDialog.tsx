@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -60,12 +60,28 @@ export const DepartmentSelectionDialog: React.FC<
     }
   };
 
+  // Fix the available rooms filtering logic
   const selectedDepartmentData = departments.find(
     (dept) => dept._id === selectedDepartment
   );
 
+  // Debug the available rooms
+  useEffect(() => {
+    if (selectedDepartmentData) {
+      console.log(
+        "All rooms in selected department:",
+        selectedDepartmentData.rooms
+      );
+      console.log(
+        "Available rooms:",
+        selectedDepartmentData.rooms.filter((room) => room.available)
+      );
+    }
+  }, [selectedDepartmentData]);
+
   const availableRooms =
-    selectedDepartmentData?.rooms.filter((room) => room.available) || [];
+    selectedDepartmentData?.rooms.filter((room) => room.available === true) ||
+    [];
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>

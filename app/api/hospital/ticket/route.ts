@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Ticket } from "@/lib/models/hospital";
+import { Ticket, Department } from "@/lib/models/hospital";
 
 async function generateTicketNumber() {
   const today = new Date();
@@ -32,9 +32,22 @@ export async function POST() {
 
     const ticketNo = await generateTicketNumber();
 
+    // Get Reception department icon
+    const receptionDept = await Department.findOne({ title: "Reception" });
+    const receptionIcon = receptionDept ? receptionDept.icon : "👋";
+
     const newTicket = new Ticket({
       ticketNo,
-      departmentHistory: [],
+      departmentHistory: [
+        {
+          department: "Reception",
+          icon: receptionIcon,
+          timestamp: new Date(),
+          note: "",
+          completed: false,
+          // roomId will be assigned when the ticket is picked up by a receptionist
+        },
+      ],
       completed: false,
       noShow: false,
       call: false,
@@ -70,7 +83,7 @@ export async function POST() {
   }
 }
 
-// Update the GET function to properly handle department history completion status
+// Update the GET function to properly handle tickets without specific room assignments
 export async function GET(request: Request) {
   await dbConnect();
 
@@ -78,19 +91,16 @@ export async function GET(request: Request) {
   const department = searchParams.get("department");
   const unassigned = searchParams.get("unassigned") === "true";
   const held = searchParams.get("held") === "true";
+  const roomId = searchParams.get("roomId");
 
   console.log(
-    `GET tickets for department: ${department}, unassigned: ${unassigned}, held: ${held}`
+    `GET tickets for department: ${department}, unassigned: ${unassigned}, held: ${held}, roomId: ${roomId}`
   );
 
   const query: any = { noShow: false, completed: false };
 
   if (held && department) {
     // For held tickets in a specific department
-    // Find tickets where:
-    // 1. The department exists in departmentHistory
-    // 2. The completed field for that department is false
-    // 3. The ticket is marked as held
     query.$and = [
       {
         departmentHistory: {
@@ -103,8 +113,19 @@ export async function GET(request: Request) {
       { held: true },
     ];
   } else if (unassigned) {
-    // For reception - tickets that haven't been assigned to any department yet
-    query.departmentHistory = { $size: 0 };
+    // For reception - tickets that haven't been assigned to any department yet or
+    // tickets that have Reception in departmentHistory but not completed
+    query.$or = [
+      { departmentHistory: { $size: 0 } },
+      {
+        departmentHistory: {
+          $elemMatch: {
+            department: "Reception",
+            completed: false,
+          },
+        },
+      },
+    ];
     query.held = held === true;
   } else if (department) {
     // For specific departments - find tickets that need to be processed by this department
@@ -112,13 +133,20 @@ export async function GET(request: Request) {
     // 1. The department exists in departmentHistory
     // 2. The completed field for that department is false
     // 3. The ticket is not held (unless we're specifically looking for held tickets)
+    // 4. If roomId is provided, either the ticket has that roomId or has no roomId assigned yet
+
+    const departmentMatch = {
+      department: department,
+      completed: false,
+    };
+
+    // Don't filter by roomId in the database query - we'll filter in the component
+    // This allows tickets without a specific room assignment to be visible to all staff
+
     query.$and = [
       {
         departmentHistory: {
-          $elemMatch: {
-            department: department,
-            completed: false,
-          },
+          $elemMatch: departmentMatch,
         },
       },
     ];

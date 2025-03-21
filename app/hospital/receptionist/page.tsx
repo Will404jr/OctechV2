@@ -30,13 +30,14 @@ import {
   CheckCircle2,
   PauseCircle,
   PlayCircle,
+  ArrowRight,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { QueueSpinner } from "@/components/queue-spinner";
 import { Badge } from "@/components/ui/badge";
 import type { SessionData } from "@/lib/session";
-import { RoomSelectionDialog } from "@/components/RoomSelectionDialog";
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog";
+import { Navbar } from "@/components/hospitalNavbar";
 
 interface Ticket {
   _id: string;
@@ -64,8 +65,14 @@ interface Department {
   }[];
 }
 
-const POLLING_INTERVAL = 5000;
 const USER_TYPES = ["Cash", "Insurance", "Staff"];
+const REASON_TYPES = [
+  "General Inquiry",
+  "Appointment",
+  "Emergency",
+  "Follow-up",
+  "Other",
+];
 
 const ReceptionistPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -77,13 +84,14 @@ const ReceptionistPage: React.FC = () => {
   const [receptionistNote, setReceptionistNote] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<SessionData | null>(null);
-  const [showRoomDialog, setShowRoomDialog] = useState(false);
   const [showNextStepDialog, setShowNextStepDialog] = useState(false);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [isServing, setIsServing] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const [roomNumber, setRoomNumber] = useState<string>("");
+  const [isLoadingNextTicket, setIsLoadingNextTicket] = useState(false);
 
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return;
@@ -94,7 +102,7 @@ const ReceptionistPage: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           currentTicket: ticketId,
-          available: ticketId ? false : true,
+          // Do not include available field here
         }),
       });
       if (!response.ok) throw new Error("Failed to update room serving ticket");
@@ -103,6 +111,39 @@ const ReceptionistPage: React.FC = () => {
       toast({
         title: "Error",
         description: "Failed to update room serving ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Assign roomId to ticket's department history
+  const assignRoomToTicket = async (ticketId: string) => {
+    if (!roomId) return;
+
+    try {
+      const response = await fetch(
+        `/api/hospital/ticket/${ticketId}/assign-room`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId: roomId,
+            department: "Reception",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to assign room to ticket");
+      }
+
+      console.log(`Room ${roomId} assigned to ticket ${ticketId}`);
+    } catch (error) {
+      console.error("Error assigning room to ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to assign room to ticket",
         variant: "destructive",
       });
     }
@@ -126,12 +167,17 @@ const ReceptionistPage: React.FC = () => {
 
       // Only set regular tickets (not held)
       const regular = data.filter((ticket: Ticket) => !ticket.held);
-      setTickets(regular);
 
-      if (isServing && !currentTicket && regular.length > 0) {
-        setCurrentTicket(regular[0]);
-        updateRoomServingTicket(regular[0]._id);
-      }
+      // Filter out current ticket if it exists
+      const filteredTickets = currentTicket
+        ? regular.filter(
+            (ticket: { _id: string }) => ticket._id !== currentTicket._id
+          )
+        : regular;
+
+      setTickets(filteredTickets);
+
+      return { regular, heldData };
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -139,8 +185,63 @@ const ReceptionistPage: React.FC = () => {
         description: "Failed to fetch tickets",
         variant: "destructive",
       });
+      return { regular: [], heldData: [] };
     }
-  }, [toast, currentTicket, isServing]);
+  }, [toast, currentTicket]);
+
+  const fetchNextTicket = async () => {
+    if (currentTicket) {
+      toast({
+        title: "Warning",
+        description:
+          "Please complete the current ticket before fetching the next one",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingNextTicket(true);
+    try {
+      const { regular } = await fetchTickets();
+
+      if (regular.length > 0) {
+        const nextTicket = regular[0];
+
+        // First, assign the roomId to the ticket's department history
+        await assignRoomToTicket(nextTicket._id);
+
+        // Then update the current ticket and room
+        setCurrentTicket(nextTicket);
+        updateRoomServingTicket(nextTicket._id);
+
+        // Update tickets list without the new current ticket
+        setTickets(
+          regular.filter(
+            (ticket: { _id: any }) => ticket._id !== nextTicket._id
+          )
+        );
+
+        toast({
+          title: "Success",
+          description: `Ticket ${nextTicket.ticketNo} is now being served`,
+        });
+      } else {
+        toast({
+          title: "No Tickets",
+          description: "There are no tickets waiting to be served",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching next ticket:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch next ticket",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingNextTicket(false);
+    }
+  };
 
   const fetchDepartments = useCallback(async () => {
     try {
@@ -167,13 +268,42 @@ const ReceptionistPage: React.FC = () => {
         if (sessionData.roomId) {
           setRoomId(sessionData.roomId);
           setIsServing(false);
-        } else {
-          setShowRoomDialog(true);
         }
       }
     };
     fetchSession();
   }, []);
+
+  useEffect(() => {
+    const fetchRoomDetails = async () => {
+      if (roomId) {
+        try {
+          const response = await fetch(`/api/hospital/room/${roomId}`);
+          if (response.ok) {
+            const room = await response.json();
+            setRoomNumber(room.roomNumber);
+
+            // Set isServing based on the room's availability status
+            setIsServing(room.available);
+
+            // If room is available and has a current ticket, set it
+            if (room.available && room.currentTicket) {
+              const ticketResponse = await fetch(
+                `/api/hospital/ticket/${room.currentTicket}`
+              );
+              if (ticketResponse.ok) {
+                const ticketData = await ticketResponse.json();
+                setCurrentTicket(ticketData);
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching room details:", error);
+        }
+      }
+    };
+    fetchRoomDetails();
+  }, [roomId]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -183,8 +313,7 @@ const ReceptionistPage: React.FC = () => {
     };
     loadData();
 
-    const pollInterval = setInterval(fetchTickets, POLLING_INTERVAL);
-    return () => clearInterval(pollInterval);
+    // No polling interval
   }, [fetchTickets, fetchDepartments]);
 
   useEffect(() => {
@@ -193,81 +322,35 @@ const ReceptionistPage: React.FC = () => {
     }
   }, [session, router]);
 
-  const handleRoomSelection = async (roomNumber: number) => {
-    try {
-      if (!roomId) {
-        // If no room exists, create a new one
-        const response = await fetch("/api/hospital/room", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            staffId: session?.userId,
-            department: "Reception",
-            roomNumber,
-            available: true,
-          }),
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to create room");
-        }
-        const room = await response.json();
-        setRoomId(room._id);
-
-        // Update session with roomId
-        await fetch("/api/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId: room._id }),
-        });
-      } else {
-        // If room exists, update it
-        const response = await fetch(`/api/hospital/room/${roomId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roomNumber,
-            available: true,
-          }),
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to update room");
-        }
-      }
-
-      setShowRoomDialog(false);
-    } catch (error) {
-      console.error("Error updating room:", error);
-      if (
-        error instanceof Error &&
-        error.message ===
-          "A room with this number already exists in the department"
-      ) {
-        toast({
-          title: "Room Already Exists",
-          description:
-            "A room with this number already exists in the department. Please choose a different room number.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to update room",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleChangeRoom = () => {
-    setShowRoomDialog(true);
-  };
-
   const startServing = async () => {
+    if (!roomId) return;
+
     try {
+      // Update room availability to true when starting to serve
+      const response = await fetch(`/api/hospital/room/${roomId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          available: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Failed to update room availability"
+        );
+      }
+
       setIsServing(true);
-      await fetchTickets();
+
+      // Automatically fetch the next ticket
+      await fetchNextTicket();
+
+      toast({
+        title: "Serving Started",
+        description: "You are now available to serve tickets.",
+      });
     } catch (error) {
       console.error("Error starting serving:", error);
       toast({
@@ -279,7 +362,7 @@ const ReceptionistPage: React.FC = () => {
     }
   };
 
-  const pauseServing = () => {
+  const pauseServing = async () => {
     if (currentTicket) {
       setIsPausing(true);
       toast({
@@ -288,15 +371,42 @@ const ReceptionistPage: React.FC = () => {
           "Please complete or hold the current ticket before pausing",
         variant: "default",
       });
-    } else {
+      return;
+    }
+
+    try {
+      // Update room availability to false when pausing
+      const response = await fetch(`/api/hospital/room/${roomId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          available: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Failed to update room availability"
+        );
+      }
+
       setIsServing(false);
       setIsPausing(false);
       setCurrentTicket(null);
       updateRoomServingTicket(null);
+
       toast({
         title: "Paused",
-        description: "Serving has been paused",
+        description: "Serving has been paused and you are now unavailable",
         variant: "default",
+      });
+    } catch (error) {
+      console.error("Error pausing serving:", error);
+      toast({
+        title: "Error",
+        description: "Failed to pause serving",
+        variant: "destructive",
       });
     }
   };
@@ -337,9 +447,6 @@ const ReceptionistPage: React.FC = () => {
         description: "Ticket forwarded to next department",
       });
 
-      // Update tickets
-      setTickets(tickets.filter((t) => t._id !== currentTicket._id));
-
       // Clear current ticket
       setCurrentTicket(null);
       updateRoomServingTicket(null);
@@ -360,6 +467,9 @@ const ReceptionistPage: React.FC = () => {
       setReasonForVisit("");
       setReceptionistNote("");
       setShowNextStepDialog(false);
+
+      // Update tickets list
+      await fetchTickets();
     } catch (error) {
       console.error("Error assigning next step:", error);
       toast({
@@ -393,6 +503,7 @@ const ReceptionistPage: React.FC = () => {
             reasonForVisit,
             receptionistNote,
             currentDepartment: "Reception",
+            roomId, // More consistent syntax
           }),
         }
       );
@@ -403,9 +514,6 @@ const ReceptionistPage: React.FC = () => {
         title: "Success",
         description: "Ticket cleared successfully",
       });
-
-      // Update tickets
-      setTickets(tickets.filter((t) => t._id !== currentTicket._id));
 
       // Clear current ticket
       setCurrentTicket(null);
@@ -426,6 +534,9 @@ const ReceptionistPage: React.FC = () => {
       setUserType("");
       setReasonForVisit("");
       setReceptionistNote("");
+
+      // Update tickets list
+      await fetchTickets();
     } catch (error) {
       console.error("Error clearing ticket:", error);
       toast({
@@ -450,6 +561,7 @@ const ReceptionistPage: React.FC = () => {
             reasonForVisit,
             receptionistNote,
             currentDepartment: "Reception",
+            roomId,
           }),
         }
       );
@@ -460,9 +572,6 @@ const ReceptionistPage: React.FC = () => {
         title: "Success",
         description: "Ticket placed on hold",
       });
-
-      // Update tickets
-      await fetchTickets();
 
       // Clear current ticket
       setCurrentTicket(null);
@@ -483,6 +592,9 @@ const ReceptionistPage: React.FC = () => {
       setUserType("");
       setReasonForVisit("");
       setReceptionistNote("");
+
+      // Update tickets list
+      await fetchTickets();
     } catch (error) {
       console.error("Error holding ticket:", error);
       toast({
@@ -498,7 +610,10 @@ const ReceptionistPage: React.FC = () => {
       const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ held: false }),
+        body: JSON.stringify({
+          held: false,
+          roomId: roomId, // Include roomId when unholding a ticket
+        }),
       });
 
       if (!response.ok) throw new Error("Failed to unhold ticket");
@@ -508,7 +623,7 @@ const ReceptionistPage: React.FC = () => {
         description: "Ticket returned to queue",
       });
 
-      // Update tickets
+      // Update tickets list
       await fetchTickets();
     } catch (error) {
       console.error("Error unholding ticket:", error);
@@ -540,9 +655,6 @@ const ReceptionistPage: React.FC = () => {
         description: "Ticket cancelled successfully",
       });
 
-      // Update tickets
-      setTickets(tickets.filter((t) => t._id !== currentTicket._id));
-
       // Clear current ticket
       setCurrentTicket(null);
       updateRoomServingTicket(null);
@@ -562,6 +674,9 @@ const ReceptionistPage: React.FC = () => {
       setUserType("");
       setReasonForVisit("");
       setReceptionistNote("");
+
+      // Update tickets list
+      await fetchTickets();
     } catch (error) {
       console.error("Error cancelling ticket:", error);
       toast({
@@ -604,6 +719,17 @@ const ReceptionistPage: React.FC = () => {
     }
   };
 
+  const refreshTickets = async () => {
+    setIsLoading(true);
+    await fetchTickets();
+    setIsLoading(false);
+
+    toast({
+      title: "Refreshed",
+      description: "Ticket list has been updated",
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-4 flex items-center justify-center min-h-[400px]">
@@ -628,280 +754,311 @@ const ReceptionistPage: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1">
-            Receptionist Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Manage patient tickets and department assignments
-          </p>
-        </div>
-        {roomId && (
-          <div className="flex items-center gap-3">
-            <Button onClick={handleChangeRoom} variant="outline">
-              Change Room
-            </Button>
-            {isServing ? (
+    <>
+      <Navbar staffId={session?.userId || ""} />
+      <div className="bg-gradient-to-b from-white to-blue-50 min-h-screen">
+        <div className="container mx-auto p-6 space-y-8">
+          {/* Header Section with Waiting Count Badge */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-3 rounded-xl shadow-sm border border-blue-100">
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight mb-1 text-[#0e4480]">
+                  Receptionist Dashboard
+                </h1>
+                <p className="text-slate-500">
+                  Managing Reception in{" "}
+                  {roomNumber ? `Room ${roomNumber}` : "..."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 bg-[#0e4480]/10 px-4 py-2 rounded-full">
+                <Users className="h-5 w-5 text-[#0e4480]" />
+                <span className="font-medium text-[#0e4480]">
+                  {tickets.length} waiting
+                </span>
+              </div>
               <Button
-                onClick={pauseServing}
-                variant="destructive"
-                className="gap-2"
+                variant="outline"
+                size="sm"
+                onClick={refreshTickets}
+                className="ml-2"
               >
-                <PauseCircle className="h-4 w-4" />
-                {isPausing
-                  ? "Complete Current Ticket to Pause"
-                  : "Pause Serving"}
+                Refresh Tickets
               </Button>
-            ) : (
-              <Button
-                onClick={startServing}
-                variant="secondary"
-                className="gap-2"
-              >
-                <PlayCircle className="h-4 w-4" />
-                Start Serving
-              </Button>
-            )}
+            </div>
+            <div className="flex gap-2">
+              {roomId && (
+                <>
+                  {isServing ? (
+                    <>
+                      <Button
+                        onClick={fetchNextTicket}
+                        disabled={
+                          !isServing ||
+                          currentTicket !== null ||
+                          isLoadingNextTicket
+                        }
+                        className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                        {isLoadingNextTicket ? "Loading..." : "Next Ticket"}
+                      </Button>
+                      <Button
+                        onClick={pauseServing}
+                        variant="outline"
+                        className="border-red-300 hover:bg-red-50 text-red-600 gap-2"
+                      >
+                        <PauseCircle className="h-4 w-4" />
+                        {isPausing
+                          ? "Complete Current Ticket to Pause"
+                          : "Pause Serving"}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={startServing}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                    >
+                      <PlayCircle className="h-4 w-4" />
+                      Start Serving
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        )}
-      </div>
 
-      <div className="grid lg:grid-cols-7 gap-6">
-        {/* Current Ticket Section */}
-        <Card className="lg:col-span-7">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Current Ticket
-            </CardTitle>
-            <CardDescription>
-              Serving ticket {currentTicket?.ticketNo || "No active ticket"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {currentTicket ? (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="secondary" className="text-lg px-4 py-1">
-                      #{currentTicket.ticketNo}
-                    </Badge>
-                    {currentTicket.call && (
-                      <Badge variant="secondary" className="px-2">
-                        Called
-                      </Badge>
-                    )}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={callTicket}
-                    disabled={currentTicket.call}
-                    className="gap-2"
-                  >
-                    <Volume2 className="h-4 w-4" />
-                    Call Ticket
-                  </Button>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">User Type</label>
-                      <Select value={userType} onValueChange={setUserType}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select user type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {USER_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+          {/* Main Content - Horizontal Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Current Ticket Section */}
+            <Card className="border-none shadow-md overflow-hidden h-full">
+              <CardHeader className="bg-[#0e4480] text-white py-4">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Clock className="h-5 w-5" />
+                  Current Ticket
+                </CardTitle>
+                <CardDescription className="text-blue-100">
+                  Serving ticket {currentTicket?.ticketNo || "No active ticket"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 bg-white">
+                {currentTicket ? (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <Badge className="bg-[#0e4480] text-white text-lg px-6 py-2 rounded-lg">
+                          #{currentTicket.ticketNo}
+                        </Badge>
+                        {currentTicket.call && (
+                          <Badge className="bg-emerald-100 text-emerald-700 px-4 py-1">
+                            Called
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="tooltip-container relative">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={callTicket}
+                          disabled={currentTicket.call}
+                          className="rounded-full w-10 h-10 border-[#0e4480] text-[#0e4480] hover:bg-blue-50 group relative"
+                        >
+                          <Volume2 className="h-5 w-5" />
+                          <span className="absolute invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs p-2 rounded -bottom-10 left-1/2 transform -translate-x-1/2 w-24 text-center">
+                            Call Ticket
+                          </span>
+                        </Button>
+                      </div>
                     </div>
 
+                    {/* User Type and Reason for Visit on same line */}
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          User Type
+                        </label>
+                        <Select value={userType} onValueChange={setUserType}>
+                          <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
+                            <SelectValue placeholder="Select user type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {USER_TYPES.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          Reason for Visit
+                        </label>
+                        <Select
+                          value={reasonForVisit}
+                          onValueChange={setReasonForVisit}
+                        >
+                          <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
+                            <SelectValue placeholder="Select reason for visit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {REASON_TYPES.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {reason}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Receptionist Note takes full width */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Reason for Visit
+                      <label className="text-sm font-medium text-slate-700">
+                        Receptionist Note
                       </label>
                       <Textarea
-                        placeholder="Enter reason for visit..."
-                        value={reasonForVisit}
-                        onChange={(e) => setReasonForVisit(e.target.value)}
-                        className="h-24"
+                        placeholder="Add any additional notes here..."
+                        value={receptionistNote}
+                        onChange={(e) => setReceptionistNote(e.target.value)}
+                        className="h-32 border-slate-300 focus:ring-[#0e4480]"
                       />
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      Receptionist Note
-                    </label>
-                    <Textarea
-                      placeholder="Add any additional notes here..."
-                      value={receptionistNote}
-                      onChange={(e) => setReceptionistNote(e.target.value)}
-                      className="h-32"
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {isServing
-                    ? "No ticket currently being served. Waiting for next ticket..."
-                    : "Click 'Start Serving' to begin serving tickets"}
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-          {currentTicket && (
-            <CardFooter className="flex justify-end gap-3 border-t pt-6">
-              <Button variant="outline" onClick={handleHoldTicket}>
-                Hold Ticket
-              </Button>
-              <Button variant="destructive" onClick={cancelTicket}>
-                Cancel Ticket
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setShowNextStepDialog(true)}
-                disabled={!userType || !reasonForVisit}
-                className="gap-2"
-              >
-                Next Step
-              </Button>
-              <Button
-                onClick={handleClearTicket}
-                disabled={!userType || !reasonForVisit}
-                className="gap-2"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Clear Ticket
-              </Button>
-            </CardFooter>
-          )}
-        </Card>
-
-        {/* Waiting Tickets Section */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Waiting List
-            </CardTitle>
-            <CardDescription>
-              {tickets.length} ticket{tickets.length !== 1 ? "s" : ""} in queue
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {tickets.length > 0 ? (
-              <div className="space-y-2">
-                {tickets.map((ticket, index) => (
-                  <div
-                    key={ticket._id}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50"
-                  >
-                    <Badge
+                ) : (
+                  <Alert className="bg-blue-50 border-blue-100 text-[#0e4480]">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {isServing
+                        ? "No ticket currently being served. Click 'Next Ticket' to get the next ticket in queue."
+                        : "Click 'Start Serving' to begin serving tickets"}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+              {currentTicket && (
+                <CardFooter className="flex justify-end gap-3 bg-slate-50 p-4">
+                  <div className="flex gap-2">
+                    {/* Hold Ticket Button - with text */}
+                    <Button
                       variant="outline"
-                      className="w-8 h-8 rounded-full flex items-center justify-center p-0"
+                      onClick={handleHoldTicket}
+                      className="border-amber-400 text-amber-600 hover:bg-amber-50"
                     >
-                      {index + 1}
-                    </Badge>
-                    <span className="font-medium">#{ticket.ticketNo}</span>
+                      <PauseCircle className="h-5 w-5 mr-2" />
+                      Hold Ticket
+                    </Button>
+
+                    {/* Cancel Ticket Button - with text */}
+                    <Button
+                      variant="outline"
+                      onClick={cancelTicket}
+                      className="border-red-400 text-red-600 hover:bg-red-50"
+                    >
+                      <AlertCircle className="h-5 w-5 mr-2" />
+                      Cancel Ticket
+                    </Button>
+
+                    {/* Next Step Button - with text */}
+                    <Button
+                      onClick={() => setShowNextStepDialog(true)}
+                      disabled={!userType || !reasonForVisit}
+                      className="bg-[#0e4480] hover:bg-blue-800 text-white disabled:bg-slate-300"
+                    >
+                      <Users className="h-5 w-5 mr-2" />
+                      Next Step
+                    </Button>
+
+                    {/* Clear Ticket Button - with text */}
+                    <Button
+                      onClick={handleClearTicket}
+                      disabled={!userType || !reasonForVisit}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300"
+                    >
+                      <CheckCircle2 className="h-5 w-5 mr-2" />
+                      Clear Ticket
+                    </Button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  No tickets in the waiting list
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+                </CardFooter>
+              )}
+            </Card>
 
-        {/* Held Tickets Section */}
-        <Card className="lg:col-span-5">
-          <CardHeader>
-            <CardTitle>Held Tickets</CardTitle>
-            <CardDescription>
-              {heldTickets.length} ticket{heldTickets.length !== 1 ? "s" : ""}{" "}
-              on hold
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {heldTickets.length > 0 ? (
-              <div className="space-y-4">
-                {heldTickets.map((ticket) => (
-                  <Card key={ticket._id}>
-                    <CardContent className="pt-6">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold mb-1">
-                            #{ticket.ticketNo}
-                          </h3>
-                          {ticket.reasonforVisit && (
-                            <p className="text-sm text-muted-foreground mb-2">
-                              {ticket.reasonforVisit}
-                            </p>
+            {/* Held Tickets Section - changed from amber to green */}
+            <Card className="border-none shadow-md overflow-hidden h-full">
+              <CardHeader className="bg-green-600 text-white py-4">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <PauseCircle className="h-5 w-5" />
+                  Held Tickets
+                </CardTitle>
+                <CardDescription className="text-green-100">
+                  {heldTickets.length} ticket
+                  {heldTickets.length !== 1 ? "s" : ""} on hold
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 bg-white overflow-auto max-h-[600px]">
+                {heldTickets.length > 0 ? (
+                  <div className="space-y-4">
+                    {heldTickets.map((ticket) => (
+                      <Card
+                        key={ticket._id}
+                        className="border-l-4 border-l-green-400 bg-green-50/30 shadow-sm"
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-semibold mb-1 text-[#0e4480]">
+                                #{ticket.ticketNo}
+                              </h3>
+                              {ticket.reasonforVisit && (
+                                <p className="text-sm text-slate-600 mb-2">
+                                  {ticket.reasonforVisit}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              variant="outline"
+                              onClick={() => handleUnholdTicket(ticket._id)}
+                              className="text-green-600 border-green-300 hover:bg-green-50"
+                            >
+                              <PlayCircle className="h-4 w-4 mr-2" />
+                              Return to Queue
+                            </Button>
+                          </div>
+                          {ticket.receptionistNote && (
+                            <div className="mt-3 p-3 bg-white rounded-md text-sm border border-green-100">
+                              <p className="font-medium mb-1 text-slate-700">
+                                Notes:
+                              </p>
+                              <p className="text-slate-600">
+                                {ticket.receptionistNote}
+                              </p>
+                            </div>
                           )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUnholdTicket(ticket._id)}
-                        >
-                          Return to Queue
-                        </Button>
-                      </div>
-                      {ticket.receptionistNote && (
-                        <div className="mt-3 p-3 bg-muted rounded-md text-sm">
-                          <p className="font-medium mb-1">Notes:</p>
-                          <p>{ticket.receptionistNote}</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  No tickets are currently on hold
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                    <PauseCircle className="h-12 w-12 mb-4 opacity-30" />
+                    <p>No tickets are currently on hold</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <DepartmentSelectionDialog
+            isOpen={showNextStepDialog}
+            onClose={() => setShowNextStepDialog(false)}
+            onSubmit={handleNextStep}
+            departments={departments}
+          />
+
+          <Toaster />
+        </div>
       </div>
-
-      <RoomSelectionDialog
-        isOpen={showRoomDialog}
-        onClose={() => setShowRoomDialog(false)}
-        onSubmit={handleRoomSelection}
-        staffId={session?.userId || ""}
-        department="Reception"
-      />
-
-      <DepartmentSelectionDialog
-        isOpen={showNextStepDialog}
-        onClose={() => setShowNextStepDialog(false)}
-        onSubmit={handleNextStep}
-        departments={departments}
-      />
-
-      <Toaster />
-    </div>
+    </>
   );
 };
 

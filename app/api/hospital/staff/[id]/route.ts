@@ -5,6 +5,30 @@ import connectDB from "@/lib/db";
 import { Staff } from "@/lib/models/hospital";
 import dbConnect from "@/lib/db";
 
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+
+  try {
+    await dbConnect();
+    const staff = await Staff.findById(id).select("username").lean();
+
+    if (!staff) {
+      return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(staff);
+  } catch (error) {
+    console.error("Error fetching staff:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(
   req: Request,
   context: { params: Promise<{ id: string }> }

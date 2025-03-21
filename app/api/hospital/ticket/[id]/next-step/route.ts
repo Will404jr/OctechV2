@@ -49,6 +49,14 @@ export async function POST(
 
     console.log(`Target department: ${department.title}`);
 
+    // Find current department to get its icon
+    const currentDepartmentData = await Department.findOne({
+      title: currentDepartment,
+    });
+    const currentDepartmentIcon = currentDepartmentData
+      ? currentDepartmentData.icon
+      : "";
+
     // Initialize departmentHistory if it doesn't exist
     if (!ticket.departmentHistory) {
       ticket.departmentHistory = [];
@@ -64,29 +72,36 @@ export async function POST(
       ticket.departmentHistory[currentDeptIndex].note = departmentNote || "";
       ticket.departmentHistory[currentDeptIndex].completed = true;
       ticket.departmentHistory[currentDeptIndex].timestamp = new Date();
+      // Add the roomId of the current user to the history
+      if (body.roomId) {
+        ticket.departmentHistory[currentDeptIndex].roomId = body.roomId;
+      }
       console.log(`Marked department ${currentDepartment} as completed`);
     } else {
       // Add current department to history with completed status
       ticket.departmentHistory.push({
         department: currentDepartment,
+        icon: currentDepartmentIcon, // Add icon to history
         timestamp: new Date(),
         note: departmentNote || "",
         completed: true,
+        roomId: body.roomId, // Add the roomId of the current user
       });
       console.log(
-        `Added department ${currentDepartment} to history as completed`
+        `Added department ${currentDepartment} to history as completed with icon ${currentDepartmentIcon}`
       );
     }
 
     // Add next department to history (not completed yet)
     ticket.departmentHistory.push({
       department: department.title,
+      icon: department.icon, // Add icon to history
       timestamp: new Date(),
       note: "",
       completed: false,
     });
     console.log(
-      `Added department ${department.title} to history as not completed`
+      `Added department ${department.title} to history as not completed with icon ${department.icon}`
     );
 
     console.log(`Updated departmentHistory:`, ticket.departmentHistory);
@@ -142,6 +157,16 @@ export async function POST(
       departmentToUpdate.rooms[roomIndex].available = false;
       await departmentToUpdate.save();
       console.log(`Updated room ${roomId} with ticket ${id}`);
+
+      // Add the roomId to the department history entry
+      const deptHistoryIndex = ticket.departmentHistory.length - 1;
+      if (deptHistoryIndex >= 0) {
+        ticket.departmentHistory[deptHistoryIndex].roomId = roomId;
+        await ticket.save();
+        console.log(
+          `Added roomId ${roomId} to department history for ticket ${id}`
+        );
+      }
     }
 
     console.log(`Completed next step processing for ticket ${id}`);
