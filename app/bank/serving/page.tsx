@@ -31,6 +31,7 @@ interface Ticket {
   queueId: string;
   subItemId: string;
   issueDescription: string;
+  justifyReason?: string | null;
   ticketStatus: "Not Served" | "Serving" | "Served" | "Hold";
   counterId: string | null;
   callAgain?: boolean;
@@ -93,10 +94,10 @@ export default function ServingPage() {
     Record<string, number>
   >({});
   const [isActionsDialogOpen, setIsActionsDialogOpen] = useState(false);
-  const router = useRouter();
   const [servingStartTime, setServingStartTime] = useState<
     Record<string, Date>
   >({});
+  const router = useRouter();
 
   const fetchSessionData = useCallback(async () => {
     try {
@@ -198,23 +199,16 @@ export default function ServingPage() {
 
       try {
         const today = new Date().toISOString().split("T")[0];
+        // Modified query - removed the queueId filter to include redirected tickets
         const response = await fetch(
-          `/api/bank/ticket?queueId=${counter.queueId._id}&status=Serving&branchId=${session.branchId}&counterId=${session.counterId}&date=${today}`
+          `/api/bank/ticket?status=Serving&branchId=${session.branchId}&counterId=${session.counterId}&date=${today}`
         );
         if (!response.ok) throw new Error("Failed to fetch current ticket");
 
         const data = await response.json();
         if (data.length > 0) {
           const ticket = data[0];
-          if (ticket.counterId !== session.counterId) {
-            const updatedTicket = await updateTicketCounterId(
-              ticket._id,
-              session.counterId
-            );
-            setCurrentTicket(updatedTicket);
-          } else {
-            setCurrentTicket(ticket);
-          }
+          setCurrentTicket(ticket);
         } else {
           setCurrentTicket(null);
         }
@@ -385,7 +379,11 @@ export default function ServingPage() {
     }
   };
 
-  const changeQueue = async (newQueueId: string, newSubItemId: string) => {
+  // Update the updateJustifyReason function to properly handle the response
+  const updateJustifyReason = async (
+    newQueueId: string,
+    newSubItemId: string
+  ) => {
     if (!currentTicket) return;
 
     try {
@@ -398,7 +396,8 @@ export default function ServingPage() {
         throw new Error("Invalid queue or subItem selected");
       }
 
-      const newIssueDescription = `${newQueue.menuItem.name} - ${newSubItem.name}`;
+      const justifyReason = `${newQueue.menuItem.name}-${newSubItem.name}`;
+      console.log("Updating justify reason to:", justifyReason);
 
       const response = await fetch(`/api/bank/ticket/${currentTicket._id}`, {
         method: "PUT",
@@ -406,25 +405,29 @@ export default function ServingPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          queueId: newQueueId,
-          subItemId: newSubItemId,
-          issueDescription: newIssueDescription,
-          counterId: null, // Explicitly set counterId to null
+          justifyReason,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to change queue");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update justify reason");
+      }
 
-      const updatedTicket = await response.json();
-      setCurrentTicket(updatedTicket.data);
+      const result = await response.json();
+      console.log("Justify reason update response:", result);
 
-      // Refresh the current ticket data
-      if (activeCounter && sessionData) {
-        await fetchCurrentTicket(activeCounter, sessionData);
+      if (result.success && result.data) {
+        setCurrentTicket(result.data);
+        // Show a temporary success message
+        setError("Reason updated successfully!");
+        setTimeout(() => setError(null), 3000);
+      } else {
+        throw new Error("Invalid response data");
       }
     } catch (error) {
-      console.error("Error changing queue:", error);
-      setError("Failed to change queue. Please try again.");
+      console.error("Error updating justify reason:", error);
+      setError("Failed to update justify reason. Please try again.");
     }
   };
 
@@ -562,22 +565,16 @@ export default function ServingPage() {
     }
   }, [sessionData?.isLoggedIn, fetchInitialData]);
 
-  // Setup polling for queue ticket counts
+  // Setup polling for queue ticket counts - Changed to 60 seconds (60000ms)
   useEffect(() => {
     if (!sessionData?.isLoggedIn || queueItems.length === 0) return;
 
     fetchQueueTicketCounts();
 
-    if (queueStatus > 0) {
-      const pollInterval = setInterval(fetchQueueTicketCounts, 5000);
-      return () => clearInterval(pollInterval);
-    }
-  }, [
-    sessionData?.isLoggedIn,
-    queueItems,
-    queueStatus,
-    fetchQueueTicketCounts,
-  ]);
+    // Set up polling interval for 60 seconds
+    const pollInterval = setInterval(fetchQueueTicketCounts, 60000);
+    return () => clearInterval(pollInterval);
+  }, [sessionData?.isLoggedIn, queueItems, fetchQueueTicketCounts]);
 
   // Refresh current ticket and held tickets
   useEffect(() => {
@@ -601,16 +598,6 @@ export default function ServingPage() {
       setIsActionsDialogOpen(true);
     }
   }, [activeCounter?.available, currentTicket]);
-
-  // Remove the useEffect hook that was added for automatic fetching
-  // Delete or comment out the following useEffect:
-  /*
-  useEffect(() => {
-    if (activeCounter?.available && !currentTicket) {
-      fetchNextTicket();
-    }
-  }, [activeCounter?.available, currentTicket]);
-  */
 
   const getQueueTicketCount = (queueId: string) => {
     return queueTicketCounts[queueId] || 0;
@@ -772,77 +759,69 @@ export default function ServingPage() {
                   </div>
                 </div>
 
-                {/* Advanced Actions - Expandable Drawer */}
-                <details className="group">
-                  <summary className="flex cursor-pointer items-center text-sm text-gray-500 hover:text-gray-700">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mr-1 group-open:rotate-90 transition-transform"
+                {/* Advanced Actions - Now always visible */}
+                <div className="mt-3 bg-gray-50 p-3 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex items-center">
+                    <span className="text-sm font-medium mr-3 text-gray-500 w-24">
+                      Justify reason:
+                    </span>
+                    <Select
+                      onValueChange={(value) => {
+                        const [queueId, subItemId] = value.split("|");
+                        updateJustifyReason(queueId, subItemId);
+                      }}
+                      defaultValue={
+                        currentTicket.justifyReason ? "custom" : undefined
+                      }
                     >
-                      <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                    Advanced Options
-                  </summary>
-
-                  <div className="mt-3 bg-gray-50 p-3 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="flex items-center">
-                      <span className="text-sm font-medium mr-3 text-gray-500 w-24">
-                        Change Queue:
-                      </span>
-                      <Select
-                        onValueChange={(value) => {
-                          const [queueId, subItemId] = value.split("|");
-                          changeQueue(queueId, subItemId);
-                        }}
-                      >
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select Queue" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {queueItems.map((item) => (
-                            <SelectGroup key={item._id}>
-                              <SelectLabel>{item.menuItem.name}</SelectLabel>
-                              {item.menuItem.subMenuItems.map((subItem) => (
-                                <SelectItem
-                                  key={subItem._id}
-                                  value={`${item._id}|${subItem._id}`}
-                                >
-                                  {subItem.name}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center">
-                      <span className="text-sm font-medium mr-3 text-gray-500 w-24">
-                        Redirect To:
-                      </span>
-                      <Select onValueChange={handleRedirect}>
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select Counter" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableCounters.map((counter) => (
-                            <SelectItem key={counter._id} value={counter._id}>
-                              Counter {counter.number} - {counter.queueName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue
+                          placeholder={
+                            currentTicket.justifyReason || "Select Reason"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {currentTicket.justifyReason && (
+                          <SelectItem value="custom" disabled>
+                            {currentTicket.justifyReason}
+                          </SelectItem>
+                        )}
+                        {queueItems.map((item) => (
+                          <SelectGroup key={item._id}>
+                            <SelectLabel>{item.menuItem.name}</SelectLabel>
+                            {item.menuItem.subMenuItems.map((subItem) => (
+                              <SelectItem
+                                key={subItem._id}
+                                value={`${item._id}|${subItem._id}`}
+                              >
+                                {subItem.name}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                </details>
+
+                  <div className="flex items-center">
+                    <span className="text-sm font-medium mr-3 text-gray-500 w-24">
+                      Transfer:
+                    </span>
+                    <Select onValueChange={handleRedirect}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Select Counter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCounters.map((counter) => (
+                          <SelectItem key={counter._id} value={counter._id}>
+                            Counter {counter.number} - {counter.queueName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex items-center justify-center">
@@ -919,6 +898,50 @@ export default function ServingPage() {
                             <ArrowRight className="mr-2 h-4 w-4" />
                             Call Next
                           </Button>
+
+                          {heldTickets.length > 0 && (
+                            <>
+                              <div className="relative my-2">
+                                <div className="absolute inset-0 flex items-center">
+                                  <span className="w-full border-t border-gray-300" />
+                                </div>
+                                <div className="relative flex justify-center">
+                                  <span className="bg-white px-2 text-sm text-gray-500">
+                                    Held Tickets
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="max-h-60 overflow-y-auto space-y-2">
+                                {heldTickets.map((ticket) => (
+                                  <div
+                                    key={ticket._id}
+                                    className="flex justify-between items-center p-2 bg-yellow-50 rounded"
+                                  >
+                                    <div>
+                                      <span className="font-semibold">
+                                        {ticket.ticketNo}
+                                      </span>
+                                      <p className="text-xs text-muted-foreground">
+                                        {ticket.issueDescription}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                      onClick={() => {
+                                        unholdTicket(ticket._id);
+                                        setIsActionsDialogOpen(false);
+                                      }}
+                                    >
+                                      Unhold
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </DialogContent>
                     </Dialog>
@@ -966,15 +989,13 @@ export default function ServingPage() {
                     <span className="text-muted-foreground">
                       {ticket.issueDescription}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => unholdTicket(ticket._id)}
-                    >
-                      Unhold
-                    </Button>
                   </div>
                 ))}
+                {heldTickets.length === 0 && (
+                  <p className="text-muted-foreground text-center py-2">
+                    No tickets on hold
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

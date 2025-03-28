@@ -198,7 +198,7 @@ const ticketSchema = new mongoose.Schema(
         roomId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Department.rooms",
-          required: true,
+          required: false,
           default: null,
         }, // Added roomId field
       },

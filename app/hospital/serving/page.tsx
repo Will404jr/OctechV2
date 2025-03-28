@@ -25,6 +25,7 @@ import {
   XCircle,
   ArrowRight,
   RefreshCw,
+  User,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,26 @@ interface Department {
   }[];
 }
 
+interface RoomDetails {
+  _id: string;
+  roomNumber: string;
+  staff: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+  available: boolean;
+  currentTicket: string | null;
+}
+
+interface RoomStaffCache {
+  [roomId: string]: {
+    roomNumber: string;
+    staffName: string;
+    timestamp: number;
+  };
+}
+
 const ServingPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [heldTickets, setHeldTickets] = useState<Ticket[]>([]);
@@ -82,10 +103,111 @@ const ServingPage: React.FC = () => {
   const [isServing, setIsServing] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const [isLoadingNextTicket, setIsLoadingNextTicket] = useState(false);
+  const [roomStaffCache, setRoomStaffCache] = useState<RoomStaffCache>({});
   const { toast } = useToast();
   const router = useRouter();
 
   const [roomNumber, setRoomNumber] = useState<string>("");
+
+  // Function to fetch room details from department collection
+  const fetchRoomDetailsFromDepartment = async (
+    departmentName: string,
+    roomIdPartial: string
+  ) => {
+    try {
+      // Check cache first (valid for 5 minutes)
+      const cacheKey = `${departmentName}-${roomIdPartial}`;
+      const cachedData = roomStaffCache[cacheKey];
+      const now = Date.now();
+      if (cachedData && now - cachedData.timestamp < 5 * 60 * 1000) {
+        return {
+          roomNumber: cachedData.roomNumber,
+          staffName: cachedData.staffName,
+        };
+      }
+
+      console.log(
+        `Fetching room details for department: ${departmentName}, roomId partial: ${roomIdPartial}`
+      );
+
+      // Fetch all departments
+      const response = await fetch("/api/hospital/department");
+      if (!response.ok) {
+        throw new Error("Failed to fetch departments");
+      }
+
+      const allDepartments = await response.json();
+
+      // Find the specific department
+      const department = allDepartments.find(
+        (dept: Department) => dept.title === departmentName
+      );
+      if (!department) {
+        throw new Error(`Department ${departmentName} not found`);
+      }
+
+      // Find the room that matches the partial ID
+      const room = department.rooms.find((r: any) =>
+        r._id.toString().includes(roomIdPartial)
+      );
+
+      if (!room) {
+        throw new Error(
+          `Room with ID containing ${roomIdPartial} not found in ${departmentName}`
+        );
+      }
+
+      // Extract staff information
+      let staffName = "Unknown Staff";
+      if (room.staff) {
+        if (
+          typeof room.staff === "object" &&
+          room.staff.firstName &&
+          room.staff.lastName
+        ) {
+          staffName = `${room.staff.firstName} ${room.staff.lastName}`;
+        } else if (typeof room.staff === "string") {
+          // Try to fetch staff details
+          try {
+            const staffResponse = await fetch(
+              `/api/hospital/staff?id=${room.staff}`
+            );
+            if (staffResponse.ok) {
+              const staffData = await staffResponse.json();
+              if (staffData.firstName && staffData.lastName) {
+                staffName = `${staffData.firstName} ${staffData.lastName}`;
+              } else if (staffData.username) {
+                staffName = staffData.username;
+              }
+            }
+          } catch (staffError) {
+            console.error("Error fetching staff details:", staffError);
+          }
+        }
+      }
+
+      // Update cache
+      setRoomStaffCache((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          roomNumber: room.roomNumber || "Unknown",
+          staffName: staffName,
+          timestamp: now,
+        },
+      }));
+
+      return {
+        roomNumber: room.roomNumber || "Unknown",
+        staffName: staffName,
+      };
+    } catch (error) {
+      console.error("Error fetching room details from department:", error);
+      return {
+        roomNumber: "Unknown",
+        staffName: "Staff not found",
+      };
+    }
+  };
 
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return;
@@ -315,7 +437,7 @@ const ServingPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const fetchRoomDetails = async () => {
+    const fetchRoomDetailsOnLoad = async () => {
       if (roomId) {
         try {
           const response = await fetch(`/api/hospital/room/${roomId}`);
@@ -342,7 +464,7 @@ const ServingPage: React.FC = () => {
         }
       }
     };
-    fetchRoomDetails();
+    fetchRoomDetailsOnLoad();
   }, [roomId]);
 
   useEffect(() => {
@@ -353,7 +475,14 @@ const ServingPage: React.FC = () => {
     };
     loadData();
 
-    // No polling interval
+    // Set up polling interval to refresh tickets every 60 seconds
+    const pollingInterval = setInterval(async () => {
+      console.log("Auto-refreshing tickets (60s interval)");
+      await fetchTickets();
+    }, 60000); // 60 seconds
+
+    // Clean up interval on component unmount
+    return () => clearInterval(pollingInterval);
   }, [fetchTickets, fetchDepartments]);
 
   useEffect(() => {
@@ -562,6 +691,7 @@ const ServingPage: React.FC = () => {
 
   const handleUnholdTicket = async (ticketId: string) => {
     try {
+      // First, update the ticket to remove the held status
       const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -573,9 +703,31 @@ const ServingPage: React.FC = () => {
 
       if (!response.ok) throw new Error("Failed to unhold ticket");
 
+      // Get the updated ticket data
+      const updatedTicket = await response.json();
+
+      // If there's already a current ticket, show a warning
+      if (currentTicket) {
+        toast({
+          title: "Warning",
+          description: "Please complete the current ticket first",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Assign the roomId to the ticket's department history
+      await assignRoomToTicket(ticketId);
+
+      // Set the unheld ticket as the current ticket
+      setCurrentTicket(updatedTicket);
+
+      // Update the room to show it's serving this ticket
+      updateRoomServingTicket(ticketId);
+
       toast({
         title: "Success",
-        description: "Ticket returned to queue",
+        description: "Ticket is now being served",
       });
 
       // Update tickets list
@@ -755,6 +907,75 @@ const ServingPage: React.FC = () => {
       title: "Refreshed",
       description: "Ticket list has been updated",
     });
+  };
+
+  // Component to render room and staff information
+  const DepartmentRoomBadge = ({
+    department,
+    roomIdPartial,
+  }: {
+    department: string;
+    roomIdPartial: string;
+  }) => {
+    const [roomInfo, setRoomInfo] = useState<{
+      roomNumber: string;
+      staffName: string;
+    } | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
+
+    useEffect(() => {
+      const loadRoomInfo = async () => {
+        setIsLoading(true);
+        setHasError(false);
+        try {
+          console.log(
+            `Loading room info for department: ${department}, roomId: ${roomIdPartial}`
+          );
+          const info = await fetchRoomDetailsFromDepartment(
+            department,
+            roomIdPartial
+          );
+          setRoomInfo(info);
+        } catch (error) {
+          console.error("Error loading room info:", error);
+          setHasError(true);
+          setRoomInfo({
+            roomNumber: "Unknown",
+            staffName: "Staff not found",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      loadRoomInfo();
+    }, [department, roomIdPartial]);
+
+    if (isLoading) {
+      return (
+        <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 animate-pulse">
+          Loading...
+        </Badge>
+      );
+    }
+
+    if (hasError) {
+      return (
+        <Badge className="ml-2 bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+          <User className="h-3 w-3" />
+          Room: Unknown Staff
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 flex items-center gap-1">
+        <User className="h-3 w-3" />
+        {roomInfo?.roomNumber ? `Room ${roomInfo.roomNumber}` : "Room"}:{" "}
+        {roomInfo?.staffName || "Unknown"}
+      </Badge>
+    );
   };
 
   if (isLoading) {
@@ -951,15 +1172,47 @@ const ServingPage: React.FC = () => {
                                       Pending
                                     </Badge>
                                   )}
-                                  {/* {history.roomId && (
-                                    <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200">
-                                      Room:{" "}
-                                      {history.roomId
-                                        .toString()
-                                        .substring(0, 6)}
-                                      ...
-                                    </Badge>
-                                  )} */}
+                                  {history.roomId && (
+                                    <DepartmentRoomBadge
+                                      department={history.department}
+                                      roomIdPartial={(() => {
+                                        // Handle different possible formats of roomId with proper type checking
+                                        if (!history.roomId) return "unknown";
+
+                                        if (
+                                          typeof history.roomId === "string"
+                                        ) {
+                                          return history.roomId.substring(0, 6);
+                                        }
+
+                                        // Handle MongoDB ObjectId format
+                                        if (
+                                          typeof history.roomId === "object"
+                                        ) {
+                                          // Check if it has $oid property (MongoDB format)
+                                          if (
+                                            history.roomId &&
+                                            "oid" in history.roomId
+                                          ) {
+                                            return (
+                                              history.roomId as any
+                                            ).$oid.substring(0, 6);
+                                          }
+
+                                          // Fallback to string representation
+                                          return JSON.stringify(
+                                            history.roomId
+                                          ).substring(0, 6);
+                                        }
+
+                                        // Final fallback
+                                        return String(history.roomId).substring(
+                                          0,
+                                          6
+                                        );
+                                      })()}
+                                    />
+                                  )}
                                 </span>
                                 <span className="text-sm text-blue-600">
                                   {new Date(history.timestamp).toLocaleString()}

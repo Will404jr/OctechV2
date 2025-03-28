@@ -75,7 +75,7 @@ export function Navbar({ userId }: NavbarProps) {
             href="/bank/serving"
             className="text-white text-xl font-semibold hover:text-blue-100 transition-colors"
           >
-            Serving Station
+            Serving Dashboard
           </Link>
 
           <div className="flex items-center gap-2">

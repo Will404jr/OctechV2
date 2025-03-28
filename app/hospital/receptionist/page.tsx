@@ -313,7 +313,14 @@ const ReceptionistPage: React.FC = () => {
     };
     loadData();
 
-    // No polling interval
+    // Set up polling interval to refresh tickets every 60 seconds
+    const pollingInterval = setInterval(async () => {
+      console.log("Auto-refreshing tickets (60s interval)");
+      await fetchTickets();
+    }, 60000); // 60 seconds
+
+    // Clean up interval on component unmount
+    return () => clearInterval(pollingInterval);
   }, [fetchTickets, fetchDepartments]);
 
   useEffect(() => {
@@ -607,6 +614,7 @@ const ReceptionistPage: React.FC = () => {
 
   const handleUnholdTicket = async (ticketId: string) => {
     try {
+      // First, update the ticket to remove the held status
       const response = await fetch(`/api/hospital/ticket/${ticketId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -618,9 +626,31 @@ const ReceptionistPage: React.FC = () => {
 
       if (!response.ok) throw new Error("Failed to unhold ticket");
 
+      // Get the updated ticket data
+      const updatedTicket = await response.json();
+
+      // If there's already a current ticket, show a warning
+      if (currentTicket) {
+        toast({
+          title: "Warning",
+          description: "Please complete the current ticket first",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Assign the roomId to the ticket's department history
+      await assignRoomToTicket(ticketId);
+
+      // Set the unheld ticket as the current ticket
+      setCurrentTicket(updatedTicket);
+
+      // Update the room to show it's serving this ticket
+      updateRoomServingTicket(ticketId);
+
       toast({
         title: "Success",
-        description: "Ticket returned to queue",
+        description: "Ticket is now being served",
       });
 
       // Update tickets list

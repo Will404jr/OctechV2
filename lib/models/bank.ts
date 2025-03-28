@@ -241,6 +241,7 @@ const bankTicketSchema = new mongoose.Schema(
       required: false,
     },
     issueDescription: { type: String, required: true },
+    justifyReason: { type: String, required: false, default: null },
     ticketStatus: {
       type: String,
       enum: ["Not Served", "Serving", "Served", "Hold"],

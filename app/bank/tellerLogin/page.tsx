@@ -234,7 +234,7 @@ export default function TellerLoginPage() {
               className="space-y-4"
             >
               <div className="space-y-2">
-                <Label htmlFor="queueId">Queue</Label>
+                <Label htmlFor="queueId">Category</Label>
                 <Controller
                   name="queueId"
                   control={counterControl}
@@ -242,7 +242,7 @@ export default function TellerLoginPage() {
                   render={({ field }) => (
                     <Select onValueChange={field.onChange} value={field.value}>
                       <SelectTrigger id="queueId">
-                        <SelectValue placeholder="Select a queue" />
+                        <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
                       <SelectContent>
                         {queueItems.map((item) => (

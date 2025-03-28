@@ -42,7 +42,7 @@ const routes = [
     permission: "Serving",
   },
   {
-    label: "Queues",
+    label: "Departments",
     icon: ListTodo,
     href: "/hospital/dashboard/queues",
     permission: "Queues",

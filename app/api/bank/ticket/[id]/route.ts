@@ -29,6 +29,7 @@ export async function PUT(
       issueDescription?: string;
       counterId?: string | null;
       callAgain?: boolean;
+      justifyReason?: string | null; // Add justifyReason to the updateData type
     } = {};
 
     if (body.ticketStatus) {
@@ -54,6 +55,10 @@ export async function PUT(
     if (body.issueDescription)
       updateData.issueDescription = body.issueDescription;
     if (body.callAgain !== undefined) updateData.callAgain = body.callAgain;
+
+    // Add this line to handle justifyReason field
+    if (body.justifyReason !== undefined)
+      updateData.justifyReason = body.justifyReason;
 
     // Handle redirect scenario
     if (body.counterId) {
