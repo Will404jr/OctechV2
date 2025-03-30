@@ -97,7 +97,71 @@ export default function ServingPage() {
   const [servingStartTime, setServingStartTime] = useState<
     Record<string, Date>
   >({});
+  const [totalDailyTickets, setTotalDailyTickets] = useState(0);
+  const [companyName, setCompanyName] = useState("Serving Dashboard");
   const router = useRouter();
+
+  // Replace the fetchTotalDailyTickets function with this improved version
+  const fetchTotalDailyTickets = useCallback(async () => {
+    if (!sessionData?.branchId) return;
+
+    try {
+      // Get today's date in the correct format for comparison with createdAt
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to beginning of day
+      const todayISO = today.toISOString().split("T")[0];
+
+      console.log("Fetching total tickets for date:", todayISO);
+
+      // Make sure we're explicitly requesting tickets created today
+      const response = await fetch(
+        `/api/bank/ticket?branchId=${sessionData.branchId}&createdAt=${todayISO}`
+      );
+
+      if (!response.ok) {
+        console.error(
+          "Failed to fetch total daily tickets, status:",
+          response.status
+        );
+        throw new Error("Failed to fetch total daily tickets");
+      }
+
+      const data = await response.json();
+      console.log(`Total tickets for today (${todayISO}):`, data.length);
+
+      // Filter tickets by createdAt date on the client side as a backup
+      const todayTickets = data.filter(
+        (ticket: { createdAt: string | number | Date }) => {
+          if (!ticket.createdAt) return false;
+          const ticketDate = new Date(ticket.createdAt)
+            .toISOString()
+            .split("T")[0];
+          return ticketDate === todayISO;
+        }
+      );
+
+      console.log(
+        `After client-side filtering: ${todayTickets.length} tickets`
+      );
+      setTotalDailyTickets(todayTickets.length);
+    } catch (error) {
+      console.error("Error fetching total daily tickets:", error);
+    }
+  }, [sessionData?.branchId]);
+
+  const fetchCompanySettings = useCallback(async () => {
+    try {
+      const response = await fetch("/api/bank/settings");
+      if (!response.ok) throw new Error("Failed to fetch company settings");
+
+      const data = await response.json();
+      if (data.companyName) {
+        setCompanyName(data.companyName);
+      }
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+    }
+  }, []);
 
   const fetchSessionData = useCallback(async () => {
     try {
@@ -158,6 +222,9 @@ export default function ServingPage() {
         ),
       ]);
 
+      await fetchTotalDailyTickets();
+      await fetchCompanySettings();
+
       if (
         !counterRes.ok ||
         !queueItemsRes.ok ||
@@ -191,7 +258,7 @@ export default function ServingPage() {
       setError("Failed to fetch initial data. Please try again.");
       setIsLoading(false);
     }
-  }, [sessionData]);
+  }, [sessionData, fetchTotalDailyTickets, fetchCompanySettings]);
 
   const fetchCurrentTicket = useCallback(
     async (counter: ActiveCounter, session: SessionData) => {
@@ -348,6 +415,7 @@ export default function ServingPage() {
       setCurrentTicket(null);
       fetchQueueTicketCounts();
       setTicketsServed((prev) => prev + 1);
+      // No need to update totalDailyTickets here as it includes all tickets
     } catch (error) {
       console.error("Error clearing ticket:", error);
       setError("Failed to clear ticket. Please try again.");
@@ -547,6 +615,7 @@ export default function ServingPage() {
       if (sessionData) {
         fetchHeldTickets(sessionData);
       }
+      setIsActionsDialogOpen(false); // Close the dialog when unholding a ticket
     } catch (error) {
       console.error("Error unholding ticket:", error);
       setError("Failed to unhold ticket. Please try again.");
@@ -599,6 +668,17 @@ export default function ServingPage() {
     }
   }, [activeCounter?.available, currentTicket]);
 
+  // Setup polling for total tickets - also 60 seconds
+  useEffect(() => {
+    if (!sessionData?.isLoggedIn) return;
+
+    fetchTotalDailyTickets();
+
+    // Set up polling interval for 60 seconds
+    const pollInterval = setInterval(fetchTotalDailyTickets, 60000);
+    return () => clearInterval(pollInterval);
+  }, [sessionData?.isLoggedIn, fetchTotalDailyTickets]);
+
   const getQueueTicketCount = (queueId: string) => {
     return queueTicketCounts[queueId] || 0;
   };
@@ -622,9 +702,10 @@ export default function ServingPage() {
   return (
     <>
       <Navbar userId={sessionData?.userId || ""} />
-      <div className="container mx-auto py-10 space-y-6">
+      <div className="container mx-auto py-5 space-y-6">
         <div className="flex justify-between items-center">
           <div>
+            {/* <h1 className="text-2xl font-bold text-gray-800">{companyName}</h1> */}
             <p className="text-muted-foreground">
               Managing{" "}
               {activeCounter &&
@@ -669,8 +750,15 @@ export default function ServingPage() {
               <CardTitle>Tickets Served</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{ticketsServed}</div>
-              <p className="text-sm text-muted-foreground">My total</p>
+              <div className="text-2xl font-bold">
+                {ticketsServed}{" "}
+                <span className="text-sm text-muted-foreground">
+                  of {totalDailyTickets}
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                My total / Daily total
+              </p>
             </CardContent>
           </Card>
 
@@ -722,7 +810,7 @@ export default function ServingPage() {
                       >
                         <path d="M5 12l5 5l10 -10"></path>
                       </svg>
-                      Clear
+                      End
                     </Button>
                     <Button
                       onClick={callAgain}
@@ -806,7 +894,7 @@ export default function ServingPage() {
 
                   <div className="flex items-center">
                     <span className="text-sm font-medium mr-3 text-gray-500 w-24">
-                      Transfer:
+                      Redirect To:
                     </span>
                     <Select onValueChange={handleRedirect}>
                       <SelectTrigger className="flex-1">
@@ -853,6 +941,7 @@ export default function ServingPage() {
                           <DialogTitle>Counter Actions</DialogTitle>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
+                          {/* Primary Actions - Always visible */}
                           <Button
                             onClick={() => {
                               toggleAvailability();
@@ -899,6 +988,7 @@ export default function ServingPage() {
                             Call Next
                           </Button>
 
+                          {/* Held Tickets Section - Separate from primary actions */}
                           {heldTickets.length > 0 && (
                             <>
                               <div className="relative my-2">
@@ -932,7 +1022,6 @@ export default function ServingPage() {
                                       className="border-amber-300 text-amber-700 hover:bg-amber-50"
                                       onClick={() => {
                                         unholdTicket(ticket._id);
-                                        setIsActionsDialogOpen(false);
                                       }}
                                     >
                                       Unhold

@@ -1086,7 +1086,7 @@ const ServingPage: React.FC = () => {
                       <div>
                         <div className="flex items-center gap-2">
                           <CardTitle className="text-3xl font-bold">
-                            #{currentTicket.ticketNo}
+                            {currentTicket.ticketNo}
                           </CardTitle>
                           <Badge
                             variant="outline"

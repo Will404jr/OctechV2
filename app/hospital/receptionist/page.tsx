@@ -876,7 +876,7 @@ const ReceptionistPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <Badge className="bg-[#0e4480] text-white text-lg px-6 py-2 rounded-lg">
-                          #{currentTicket.ticketNo}
+                          {currentTicket.ticketNo}
                         </Badge>
                         {currentTicket.call && (
                           <Badge className="bg-emerald-100 text-emerald-700 px-4 py-1">
@@ -1037,7 +1037,7 @@ const ReceptionistPage: React.FC = () => {
                           <div className="flex justify-between items-start">
                             <div>
                               <h3 className="font-semibold mb-1 text-[#0e4480]">
-                                #{ticket.ticketNo}
+                                {ticket.ticketNo}
                               </h3>
                               {ticket.reasonforVisit && (
                                 <p className="text-sm text-slate-600 mb-2">

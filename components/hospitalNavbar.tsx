@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { LogOut, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,6 +26,26 @@ export function Navbar({ staffId }: NavbarProps) {
   const router = useRouter();
   const [staffData, setStaffData] = useState<StaffData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState("Serving Dashboard");
+
+  const fetchCompanySettings = useCallback(async () => {
+    try {
+      const response = await fetch("/api/bank/settings");
+      if (!response.ok) throw new Error("Failed to fetch company settings");
+
+      const data = await response.json();
+      if (data.companyName) {
+        setCompanyName(data.companyName);
+      }
+    } catch (error) {
+      console.error("Error fetching company settings:", error);
+    }
+  }, []);
+
+  // Add this useEffect to call fetchCompanySettings when component mounts
+  useEffect(() => {
+    fetchCompanySettings();
+  }, [fetchCompanySettings]);
 
   useEffect(() => {
     const fetchStaffData = async () => {
@@ -75,7 +95,7 @@ export function Navbar({ staffId }: NavbarProps) {
             href="/bank/serving"
             className="text-white text-xl font-semibold hover:text-blue-100 transition-colors"
           >
-            Serving Dashboard
+            {companyName}
           </Link>
 
           <div className="flex items-center gap-2">
