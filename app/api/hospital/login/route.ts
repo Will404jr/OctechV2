@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     console.error("Login error:", error);
     return NextResponse.json(
       {
-        error: "Internal server error",
+        error: "No required permissions to access this portal",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

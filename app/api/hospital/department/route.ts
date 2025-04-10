@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Department } from "@/lib/models/hospital";
-import { Staff } from "@/lib/models/hospital";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,12 +9,7 @@ export async function GET(req: NextRequest) {
     const title = searchParams.get("title");
 
     if (title) {
-      const department = await Department.findOne({ title })
-        .populate({
-          path: "rooms.staff",
-          select: "firstName lastName username",
-        })
-        .lean();
+      const department = await Department.findOne({ title }).lean();
 
       if (!department) {
         return NextResponse.json(
@@ -25,12 +19,7 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json(department);
     } else {
-      const departments = await Department.find()
-        .populate({
-          path: "rooms.staff",
-          select: "firstName lastName username",
-        })
-        .lean();
+      const departments = await Department.find().lean();
       return NextResponse.json(departments);
     }
   } catch (error) {
@@ -46,20 +35,14 @@ export async function POST(req: NextRequest) {
   try {
     await dbConnect();
     const body = await req.json();
-    const { departmentTitle, roomNumber, staffId } = body;
+    const { departmentTitle } = body;
 
     // Validate input
-    if (!departmentTitle || !roomNumber || !staffId) {
+    if (!departmentTitle) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
-    }
-
-    // Verify staff exists
-    const staff = await Staff.findById(staffId);
-    if (!staff) {
-      return NextResponse.json({ error: "Staff not found" }, { status: 404 });
     }
 
     // Check if department already exists
@@ -84,28 +67,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create new department with initial room
+    // Create new department without initial room
     const newDepartment = await Department.create({
       title: departmentTitle,
       icon: deptData.icon,
-      rooms: [
-        {
-          roomNumber,
-          staff: staffId,
-        },
-      ],
+      rooms: [],
     });
 
-    // Populate staff details for response
-    const populatedDepartment = await Department.findById(newDepartment._id)
-      .populate({
-        path: "rooms.staff",
-        select: "firstName lastName username",
-      })
-      .lean();
-
     return NextResponse.json(
-      { success: true, data: populatedDepartment },
+      { success: true, data: newDepartment },
       { status: 201 }
     );
   } catch (error) {

@@ -273,16 +273,19 @@ const ServingPage: React.FC = () => {
         `Fetching tickets for department: ${session.department}, roomId: ${roomId}`
       );
 
-      // Fetch regular tickets for this department
-      const url = `/api/hospital/ticket?department=${session.department}`;
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split("T")[0];
+
+      // Fetch regular tickets for this department created today
+      const url = `/api/hospital/ticket?department=${session.department}&date=${today}`;
 
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
       console.log(`Found ${data.length} regular tickets`);
 
-      // Fetch held tickets for this department
-      const heldUrl = `/api/hospital/ticket?department=${session.department}&held=true`;
+      // Fetch held tickets for this department created today
+      const heldUrl = `/api/hospital/ticket?department=${session.department}&held=true&date=${today}`;
 
       const heldResponse = await fetch(heldUrl);
       if (!heldResponse.ok) throw new Error("Failed to fetch held tickets");

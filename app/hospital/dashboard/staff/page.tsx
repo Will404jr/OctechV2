@@ -304,11 +304,11 @@ export default function UsersPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="role">Role</Label>
+                    <Label htmlFor="role">Role(Optional)</Label>
                     <Controller
                       name="role"
                       control={control}
-                      rules={{ required: "Role is required" }}
+                      // rules={{ required: "Role is required" }}
                       render={({ field, fieldState: { error } }) => (
                         <>
                           <Select

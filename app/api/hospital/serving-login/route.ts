@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Staff, Department } from "@/lib/models/hospital";
+import { Staff } from "@/lib/models/hospital";
 import { getSession } from "@/lib/session";
 
 interface LoginRequestBody {
@@ -33,52 +33,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find staff's department by checking all departments and their rooms
-    const departments = await Department.find().populate({
-      path: "rooms.staff",
-      select: "_id",
-    });
-
-    let staffDepartment = null;
-    let staffRoomId = null;
-
-    for (const department of departments) {
-      for (const room of department.rooms) {
-        if (
-          room.staff &&
-          room.staff._id.toString() === staffMember._id.toString()
-        ) {
-          staffDepartment = department.title;
-          staffRoomId = room._id;
-          break;
-        }
-      }
-      if (staffDepartment) break;
-    }
-
-    if (!staffDepartment) {
-      return NextResponse.json(
-        { error: "Staff not assigned to any department" },
-        { status: 403 }
-      );
-    }
-
+    // Set basic session information
     session.userId = staffMember._id.toString();
     session.isLoggedIn = true;
     session.expiresAt = Date.now() + expirationTime;
 
-    // Set department and room information
-    session.department = staffDepartment;
-    if (staffRoomId) {
-      session.roomId = staffRoomId.toString();
-    }
+    // Note: We no longer set department and roomId here
+    // These will be set after the user selects a department and room
 
     await session.save();
 
+    // Return staff information for the next step
     return NextResponse.json(
       {
         success: true,
-        department: staffDepartment,
+        userId: staffMember._id.toString(),
+        firstName: staffMember.firstName,
+        lastName: staffMember.lastName,
+        // We don't return department here as it will be selected by the user
       },
       { status: 200 }
     );

@@ -92,12 +92,26 @@ export async function GET(request: Request) {
   const unassigned = searchParams.get("unassigned") === "true";
   const held = searchParams.get("held") === "true";
   const roomId = searchParams.get("roomId");
+  const date = searchParams.get("date"); // Get date parameter in YYYY-MM-DD format
 
   console.log(
-    `GET tickets for department: ${department}, unassigned: ${unassigned}, held: ${held}, roomId: ${roomId}`
+    `GET tickets for department: ${department}, unassigned: ${unassigned}, held: ${held}, roomId: ${roomId}, date: ${date}`
   );
 
   const query: any = { noShow: false, completed: false };
+
+  // Add date filter if provided, otherwise default to today
+  const filterDate = date || new Date().toISOString().split("T")[0];
+  const startOfDay = new Date(filterDate);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date(filterDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  query.createdAt = {
+    $gte: startOfDay,
+    $lte: endOfDay,
+  };
 
   if (held && department) {
     // For held tickets in a specific department
@@ -159,9 +173,9 @@ export async function GET(request: Request) {
 
   console.log("Query:", JSON.stringify(query, null, 2));
 
-  const tickets = await Ticket.find(query);
+  const tickets = await Ticket.find(query).sort({ createdAt: 1 });
   console.log(
-    `Found ${tickets.length} tickets for department: ${department}, held: ${held}`
+    `Found ${tickets.length} tickets for department: ${department}, held: ${held}, date: ${filterDate}`
   );
 
   // Log the ticket numbers for debugging

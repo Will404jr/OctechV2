@@ -1,51 +1,79 @@
 import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Department } from "@/lib/models/hospital";
+import { Staff } from "@/lib/models/hospital";
 
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
     const body = await req.json();
-    const { staffId, department, roomNumber, available = false } = body;
+    const {
+      staffId,
+      department: departmentId,
+      roomNumber,
+      available = false,
+      date,
+    } = body;
 
     // Validate input
-    if (!staffId || !department || !roomNumber) {
+    if (!staffId || !departmentId || !roomNumber) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Find or create department
-    let departmentDoc = await Department.findOne({ title: department });
-
-    if (!departmentDoc) {
-      // Get icon from the departments array
-      const { default: departmentsData } = await import("@/data/departments");
-      const deptData = departmentsData.find((d) => d.title === department);
-
-      if (!deptData) {
-        return NextResponse.json(
-          { error: "Department not found in reference data" },
-          { status: 404 }
-        );
-      }
-
-      departmentDoc = await Department.create({
-        title: department,
-        icon: deptData.icon,
-        rooms: [],
-      });
+    // Verify staff exists
+    const staff = await Staff.findById(staffId);
+    if (!staff) {
+      return NextResponse.json({ error: "Staff not found" }, { status: 404 });
     }
 
-    // Check if room number already exists in this department
-    const roomExists = departmentDoc.rooms.some(
-      (room: any) => room.roomNumber === roomNumber
-    );
+    // Find department
+    const department = await Department.findById(departmentId);
+    if (!department) {
+      return NextResponse.json(
+        { error: "Department not found" },
+        { status: 404 }
+      );
+    }
+
+    // Check if staff already has an active room for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Check across all departments if this staff has a room assigned today
+    const departmentsWithStaffToday = await Department.find({
+      "rooms.staff": staffId,
+      "rooms.createdAt": { $gte: today, $lt: tomorrow },
+    });
+
+    if (departmentsWithStaffToday.length > 0) {
+      return NextResponse.json(
+        { error: "Staff already has a room assigned for today" },
+        { status: 409 }
+      );
+    }
+
+    // Check if room number already exists in this department for today
+    const roomExists = department.rooms.some((room: any) => {
+      const roomDate = new Date(room.createdAt);
+      return (
+        room.roomNumber === roomNumber &&
+        roomDate >= today &&
+        roomDate < tomorrow
+      );
+    });
 
     if (roomExists) {
       return NextResponse.json(
-        { error: "A room with this number already exists in the department" },
+        {
+          error:
+            "A room with this number already exists in the department for today",
+        },
         { status: 409 }
       );
     }
@@ -56,21 +84,24 @@ export async function POST(req: NextRequest) {
       staff: staffId,
       available,
       currentTicket: null,
+      // createdAt will be automatically set to now
     };
 
-    departmentDoc.rooms.push(newRoom);
-    await departmentDoc.save();
+    department.rooms.push(newRoom);
+    await department.save();
 
     // Get the newly created room
-    const createdRoom = departmentDoc.rooms[departmentDoc.rooms.length - 1];
+    const createdRoom = department.rooms[department.rooms.length - 1];
 
     return NextResponse.json(
       {
-        _id: createdRoom._id,
+        success: true,
+        roomId: createdRoom._id,
         roomNumber: createdRoom.roomNumber,
         staff: createdRoom.staff,
         available: createdRoom.available,
-        currentTicket: createdRoom.currentTicket,
+        departmentId: department._id,
+        departmentTitle: department.title,
       },
       { status: 201 }
     );

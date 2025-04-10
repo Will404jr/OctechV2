@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, X, Building2, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, X, Building2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
@@ -31,22 +30,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Department } from "@/types/department";
 
-interface Staff {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  username: string;
-}
-
-interface Room {
-  _id: string;
-  roomNumber: string;
-  staff: Staff;
-}
-
 interface ActiveDepartment extends Department {
   _id: string;
-  rooms: Room[];
 }
 
 const DepartmentsComponent = () => {
@@ -62,15 +47,9 @@ const DepartmentsComponent = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] =
     useState<Department | null>(null);
-  const [roomNumber, setRoomNumber] = useState("");
-  const [staffList, setStaffList] = useState<Staff[]>([]);
-  const [selectedStaff, setSelectedStaff] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
   const { toast } = useToast();
-
-  const [editRoomNumber, setEditRoomNumber] = useState("");
-  const [editStaffId, setEditStaffId] = useState("");
 
   // Fetch all possible departments from the local data
   useEffect(() => {
@@ -116,27 +95,6 @@ const DepartmentsComponent = () => {
     fetchActiveDepartments();
   }, [toast]);
 
-  // Fetch staff list
-  useEffect(() => {
-    const fetchStaff = async () => {
-      try {
-        const response = await fetch("/api/hospital/staff");
-        if (!response.ok) throw new Error("Failed to fetch staff");
-        const data = await response.json();
-        setStaffList(data);
-      } catch (error) {
-        console.error("Error fetching staff:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load staff list",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchStaff();
-  }, [toast]);
-
   // Handle search for active departments
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -150,11 +108,10 @@ const DepartmentsComponent = () => {
   }, [searchQuery, activeDepartments]);
 
   const handleCreateDepartment = async () => {
-    if (!selectedDepartment || !roomNumber || !selectedStaff) {
+    if (!selectedDepartment) {
       toast({
         title: "Validation Error",
-        description:
-          "Please select a department, enter a room number, and assign a staff member",
+        description: "Please select a department",
         variant: "destructive",
       });
       return;
@@ -170,8 +127,6 @@ const DepartmentsComponent = () => {
         },
         body: JSON.stringify({
           departmentTitle: selectedDepartment.title,
-          roomNumber,
-          staffId: selectedStaff,
         }),
       });
 
@@ -184,7 +139,7 @@ const DepartmentsComponent = () => {
 
       toast({
         title: "Success",
-        description: `${selectedDepartment.title} department created with room ${roomNumber}`,
+        description: `${selectedDepartment.title} department created successfully`,
       });
 
       // Add the new department to the active departments list
@@ -192,8 +147,6 @@ const DepartmentsComponent = () => {
 
       // Reset form
       setSelectedDepartment(null);
-      setRoomNumber("");
-      setSelectedStaff("");
     } catch (error: any) {
       console.error("Error creating department:", error);
       toast({
@@ -203,68 +156,6 @@ const DepartmentsComponent = () => {
       });
     } finally {
       setIsCreatingDepartment(false);
-    }
-  };
-
-  const handleAddRoom = async (
-    departmentId: string,
-    departmentTitle: string
-  ) => {
-    if (!roomNumber || !selectedStaff) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter a room number and assign a staff member",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`/api/hospital/department/${departmentId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "addRoom",
-          roomData: {
-            roomNumber,
-            staff: selectedStaff,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to add room");
-      }
-
-      const data = await response.json();
-
-      toast({
-        title: "Success",
-        description: `Room ${roomNumber} added to ${departmentTitle} department`,
-      });
-
-      // Update the active departments list
-      setActiveDepartments((prev) =>
-        prev.map((dept) => (dept._id === departmentId ? data.data : dept))
-      );
-
-      // Reset form
-      setRoomNumber("");
-      setSelectedStaff("");
-    } catch (error: any) {
-      console.error("Error adding room:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add room",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -302,109 +193,6 @@ const DepartmentsComponent = () => {
     }
   };
 
-  const handleEditRoom = async (departmentId: string, roomId: string) => {
-    if (!editRoomNumber && !editStaffId) {
-      toast({
-        title: "No Changes",
-        description: "No changes were made",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const roomData: any = {};
-      if (editRoomNumber) roomData.roomNumber = editRoomNumber;
-      if (editStaffId) roomData.staff = editStaffId;
-
-      const response = await fetch(`/api/hospital/department/${departmentId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "updateRoom",
-          roomId,
-          roomData,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to update room");
-      }
-
-      const data = await response.json();
-
-      toast({
-        title: "Success",
-        description: "Room updated successfully",
-      });
-
-      // Update the department in the list
-      setActiveDepartments((prev) =>
-        prev.map((dept) => (dept._id === departmentId ? data.data : dept))
-      );
-
-      // Reset form
-      setEditRoomNumber("");
-      setEditStaffId("");
-    } catch (error: any) {
-      console.error("Error updating room:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update room",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDeleteRoom = async (departmentId: string, roomId: string) => {
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`/api/hospital/department/${departmentId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "deleteRoom",
-          roomId,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete room");
-      }
-
-      const data = await response.json();
-
-      toast({
-        title: "Success",
-        description: "Room deleted successfully",
-      });
-
-      // Update the department in the list
-      setActiveDepartments((prev) =>
-        prev.map((dept) => (dept._id === departmentId ? data.data : dept))
-      );
-    } catch (error: any) {
-      console.error("Error deleting room:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete room",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Filter out departments that are already active
   const availableDepartments = allDepartments.filter(
     (dept) =>
@@ -418,7 +206,7 @@ const DepartmentsComponent = () => {
 
         <Dialog>
           <DialogTrigger asChild>
-            <Button className="mt-4 md:mt-0">
+            <Button className="mt-4 md:mt-0 bg-[#0e4480]">
               <Plus size={16} className="mr-2" /> Create Department
             </Button>
           </DialogTrigger>
@@ -450,30 +238,6 @@ const DepartmentsComponent = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="roomNumber">Room Number</Label>
-                <Input
-                  id="roomNumber"
-                  placeholder="Enter room number"
-                  value={roomNumber}
-                  onChange={(e) => setRoomNumber(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="staff">Assign Staff</Label>
-                <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select staff member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffList.map((staff) => (
-                      <SelectItem key={staff._id} value={staff._id}>
-                        {staff.firstName} {staff.lastName} ({staff.username})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -481,12 +245,7 @@ const DepartmentsComponent = () => {
               </DialogClose>
               <Button
                 onClick={handleCreateDepartment}
-                disabled={
-                  isCreatingDepartment ||
-                  !selectedDepartment ||
-                  !roomNumber ||
-                  !selectedStaff
-                }
+                disabled={isCreatingDepartment || !selectedDepartment}
               >
                 {isCreatingDepartment ? "Creating..." : "Create Department"}
               </Button>
@@ -519,12 +278,11 @@ const DepartmentsComponent = () => {
           </p>
           <Dialog>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-[#0e4480]">
                 <Plus size={16} className="mr-2" /> Create Your First Department
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
-              {/* Same content as the Create Department dialog above */}
               <DialogHeader>
                 <DialogTitle>Create New Department</DialogTitle>
               </DialogHeader>
@@ -555,33 +313,6 @@ const DepartmentsComponent = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="roomNumber">Room Number</Label>
-                  <Input
-                    id="roomNumber"
-                    placeholder="Enter room number"
-                    value={roomNumber}
-                    onChange={(e) => setRoomNumber(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="staff">Assign Staff</Label>
-                  <Select
-                    value={selectedStaff}
-                    onValueChange={setSelectedStaff}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select staff member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {staffList.map((staff) => (
-                        <SelectItem key={staff._id} value={staff._id}>
-                          {staff.firstName} {staff.lastName} ({staff.username})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
               <DialogFooter>
                 <DialogClose asChild>
@@ -589,12 +320,7 @@ const DepartmentsComponent = () => {
                 </DialogClose>
                 <Button
                   onClick={handleCreateDepartment}
-                  disabled={
-                    isCreatingDepartment ||
-                    !selectedDepartment ||
-                    !roomNumber ||
-                    !selectedStaff
-                  }
+                  disabled={isCreatingDepartment || !selectedDepartment}
                 >
                   {isCreatingDepartment ? "Creating..." : "Create Department"}
                 </Button>
@@ -616,8 +342,7 @@ const DepartmentsComponent = () => {
                     {department.title}
                   </CardTitle>
                   <CardDescription>
-                    {department.rooms.length}{" "}
-                    {department.rooms.length === 1 ? "room" : "rooms"}
+                    {/* Department ID: {department._id} */}
                   </CardDescription>
                 </div>
                 <Dialog>
@@ -640,8 +365,7 @@ const DepartmentsComponent = () => {
                         <strong>{department.title}</strong> department?
                       </p>
                       <p className="text-muted-foreground mt-2">
-                        This will remove all rooms and assignments. This action
-                        cannot be undone.
+                        This action cannot be undone.
                       </p>
                     </div>
                     <DialogFooter>
@@ -659,209 +383,6 @@ const DepartmentsComponent = () => {
                   </DialogContent>
                 </Dialog>
               </CardHeader>
-              <CardContent className="pt-2 pb-4">
-                <div className="space-y-4">
-                  <div>
-                    {department.rooms.length > 0 ? (
-                      <ul className="space-y-2">
-                        {department.rooms.map((room) => (
-                          <li
-                            key={room._id}
-                            className="text-sm flex justify-between items-center p-3 bg-muted/50 rounded-md mb-2"
-                          >
-                            <span>Room {room.roomNumber}</span>
-                            <span className="text-muted-foreground">
-                              {room.staff.firstName} {room.staff.lastName}
-                            </span>
-                            <div className="flex space-x-1">
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                  >
-                                    <Pencil size={12} />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Edit Room</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editRoomNumber">
-                                        Room Number
-                                      </Label>
-                                      <Input
-                                        id="editRoomNumber"
-                                        placeholder="Enter room number"
-                                        defaultValue={room.roomNumber}
-                                        onChange={(e) =>
-                                          setEditRoomNumber(e.target.value)
-                                        }
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="editStaff">
-                                        Assign Staff
-                                      </Label>
-                                      <Select
-                                        defaultValue={room.staff._id}
-                                        onValueChange={setEditStaffId}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select staff member" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {staffList.map((staff) => (
-                                            <SelectItem
-                                              key={staff._id}
-                                              value={staff._id}
-                                            >
-                                              {staff.firstName} {staff.lastName}{" "}
-                                              ({staff.username})
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-                                  <DialogFooter>
-                                    <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
-                                    </DialogClose>
-                                    <Button
-                                      onClick={() =>
-                                        handleEditRoom(department._id, room._id)
-                                      }
-                                      disabled={isLoading}
-                                    >
-                                      {isLoading ? "Saving..." : "Save Changes"}
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-destructive"
-                                  >
-                                    <Trash2 size={12} />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Delete Room</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="py-4">
-                                    <p>
-                                      Are you sure you want to delete Room{" "}
-                                      <strong>{room.roomNumber}</strong>?
-                                    </p>
-                                    <p className="text-muted-foreground mt-2">
-                                      This action cannot be undone.
-                                    </p>
-                                  </div>
-                                  <DialogFooter>
-                                    <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
-                                    </DialogClose>
-                                    <Button
-                                      variant="destructive"
-                                      onClick={() =>
-                                        handleDeleteRoom(
-                                          department._id,
-                                          room._id
-                                        )
-                                      }
-                                      disabled={isLoading}
-                                    >
-                                      {isLoading
-                                        ? "Deleting..."
-                                        : "Delete Room"}
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No rooms added yet
-                      </p>
-                    )}
-                  </div>
-
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="w-full">
-                        <Plus size={16} className="mr-1" /> Add Room
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>
-                          <span className="flex items-center">
-                            <span className="text-2xl mr-2">
-                              {department.icon}
-                            </span>
-                            Add Room to {department.title}
-                          </span>
-                        </DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="roomNumber">Room Number</Label>
-                          <Input
-                            id="roomNumber"
-                            placeholder="Enter room number"
-                            value={roomNumber}
-                            onChange={(e) => setRoomNumber(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="staff">Assign Staff</Label>
-                          <Select
-                            value={selectedStaff}
-                            onValueChange={setSelectedStaff}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select staff member" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {staffList.map((staff) => (
-                                <SelectItem key={staff._id} value={staff._id}>
-                                  {staff.firstName} {staff.lastName} (
-                                  {staff.username})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <DialogClose asChild>
-                          <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button
-                          onClick={() =>
-                            handleAddRoom(department._id, department.title)
-                          }
-                          disabled={isLoading}
-                        >
-                          {isLoading ? "Adding..." : "Add Room"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardContent>
             </Card>
           ))}
         </div>

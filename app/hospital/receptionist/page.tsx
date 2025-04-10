@@ -151,14 +151,19 @@ const ReceptionistPage: React.FC = () => {
 
   const fetchTickets = useCallback(async () => {
     try {
-      // Fetch unassigned tickets
-      const response = await fetch("/api/hospital/ticket?unassigned=true");
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split("T")[0];
+
+      // Fetch unassigned tickets created today
+      const response = await fetch(
+        `/api/hospital/ticket?unassigned=true&date=${today}`
+      );
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
 
-      // Fetch held tickets
+      // Fetch held tickets created today
       const heldResponse = await fetch(
-        "/api/hospital/ticket?unassigned=true&held=true"
+        `/api/hospital/ticket?unassigned=true&held=true&date=${today}`
       );
       if (!heldResponse.ok) throw new Error("Failed to fetch held tickets");
       const heldData = await heldResponse.json();

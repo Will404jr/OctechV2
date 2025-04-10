@@ -773,8 +773,8 @@ export default function HallDisplay() {
           </div>
         </header>
 
-        <main className="flex-grow flex space-x-4 overflow-hidden">
-          <Card className="w-1/5 overflow-auto rounded-none">
+        <main className="flex-grow flex space-x-4 overflow-hidden p-3">
+          <Card className="w-1/5 overflow-auto rounded-lg">
             <CardContent>
               <h2 className="text-xl font-bold mb-2 pt-2">Active Tickets</h2>
               <Table>
@@ -863,7 +863,7 @@ export default function HallDisplay() {
             </Carousel>
           </div>
 
-          <Card className="w-1/5 overflow-auto rounded-none">
+          <Card className="w-1/5 overflow-auto rounded-lg pb-3">
             <CardContent>
               <h2 className="text-xl font-bold mb-4 pt-2">Announcements</h2>
               <div className="space-y-4">

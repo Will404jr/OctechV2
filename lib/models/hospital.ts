@@ -82,7 +82,7 @@ const staffSchema = new mongoose.Schema(
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "HospitalRole",
-      required: true,
+      required: false,
     },
     // department: { type: String, required: true },
   },
@@ -224,52 +224,52 @@ const ticketSchema = new mongoose.Schema(
 export const Ticket =
   mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
 
-//  journey schema
-const StepSchema = new mongoose.Schema({
-  id: {
-    type: Number,
-    required: true,
-  },
-  title: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  icon: {
-    type: String,
-    required: true,
-  },
-});
+// //  journey schema
+// const StepSchema = new mongoose.Schema({
+//   id: {
+//     type: Number,
+//     required: true,
+//   },
+//   title: {
+//     type: String,
+//     required: true,
+//     trim: true,
+//   },
+//   icon: {
+//     type: String,
+//     required: true,
+//   },
+// });
 
-// Main Journey Schema
-const JourneySchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    steps: [StepSchema],
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
+// // Main Journey Schema
+// const JourneySchema = new mongoose.Schema(
+//   {
+//     name: {
+//       type: String,
+//       required: true,
+//       trim: true,
+//     },
+//     steps: [StepSchema],
+//     createdAt: {
+//       type: Date,
+//       default: Date.now,
+//     },
+//     updatedAt: {
+//       type: Date,
+//       default: Date.now,
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
 
-// Create indexes for better query performance
-JourneySchema.index({ name: 1 });
-JourneySchema.index({ createdAt: -1 });
+// // Create indexes for better query performance
+// JourneySchema.index({ name: 1 });
+// JourneySchema.index({ createdAt: -1 });
 
-export const Journey =
-  mongoose.models.Journey || mongoose.model("Journey", JourneySchema);
+// export const Journey =
+//   mongoose.models.Journey || mongoose.model("Journey", JourneySchema);
 
 //department and room schema
 const roomSchema = new mongoose.Schema(
