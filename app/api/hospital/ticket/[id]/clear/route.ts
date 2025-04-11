@@ -1,6 +1,7 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ticket, Department } from "@/lib/models/hospital";
+import { calculateDurationInSeconds } from "@/lib/utils/time-tracking";
 
 export async function POST(
   req: Request,
@@ -48,6 +49,8 @@ export async function POST(
       ticket.departmentHistory = [];
     }
 
+    const now = new Date();
+
     // Find if this department is already in history but not completed
     const existingDeptIndex = ticket.departmentHistory.findIndex(
       (hist: any) => hist.department === currentDepartment && !hist.completed
@@ -57,22 +60,47 @@ export async function POST(
       // Update the existing entry
       ticket.departmentHistory[existingDeptIndex].note = departmentNote || "";
       ticket.departmentHistory[existingDeptIndex].completed = true;
-      ticket.departmentHistory[existingDeptIndex].timestamp = new Date();
-      // Add the roomId of the current user to the history
-      if (roomId) {
+      ticket.departmentHistory[existingDeptIndex].completedAt = now;
+
+      // Calculate processing duration if startedAt exists
+      if (ticket.departmentHistory[existingDeptIndex].startedAt) {
+        const processingDuration = calculateDurationInSeconds(
+          ticket.departmentHistory[existingDeptIndex].startedAt,
+          now
+        );
+
+        // Subtract hold duration if any
+        const holdDuration =
+          ticket.departmentHistory[existingDeptIndex].holdDuration || 0;
+        ticket.departmentHistory[existingDeptIndex].processingDuration =
+          processingDuration - holdDuration;
+
+        console.log(
+          `Department ${currentDepartment} processing time: ${processingDuration} seconds (minus ${holdDuration} seconds on hold)`
+        );
+      }
+
+      // Add the roomId of the current user to the history if not already set
+      if (roomId && !ticket.departmentHistory[existingDeptIndex].roomId) {
         ticket.departmentHistory[existingDeptIndex].roomId = roomId;
       }
+
       console.log(`Marked department ${currentDepartment} as completed`);
     } else {
       // Add current department to history with completed status
       ticket.departmentHistory.push({
         department: currentDepartment,
-        icon: currentDepartmentIcon, // Add icon to history
-        timestamp: new Date(),
+        icon: currentDepartmentIcon,
+        timestamp: now,
+        startedAt: now, // Assume started now
+        completedAt: now,
+        processingDuration: 0, // Instant completion
         note: departmentNote || "",
         completed: true,
-        roomId: roomId, // Add the roomId of the current user
+        roomId: roomId,
+        holdDuration: 0,
       });
+
       console.log(
         `Added department ${currentDepartment} to history as completed with icon ${currentDepartmentIcon}`
       );
@@ -101,7 +129,15 @@ export async function POST(
     // Mark ticket as completed if all departments are completed
     if (allDepartmentsCompleted) {
       ticket.completed = true;
-      console.log(`All departments completed, marking ticket as completed`);
+      ticket.completedAt = now;
+
+      // Calculate total duration from creation to completion
+      const totalDuration = calculateDurationInSeconds(ticket.createdAt, now);
+      ticket.totalDuration = totalDuration;
+
+      console.log(
+        `All departments completed, marking ticket as completed. Total duration: ${totalDuration} seconds`
+      );
     }
 
     await ticket.save();

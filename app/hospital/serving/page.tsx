@@ -700,6 +700,7 @@ const ServingPage: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           held: false,
+          currentDepartment: session?.department,
           roomId: roomId, // Include roomId when unholding a ticket
         }),
       });

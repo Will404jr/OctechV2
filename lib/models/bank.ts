@@ -264,14 +264,27 @@ const bankTicketSchema = new mongoose.Schema(
       enum: ["English", "Luganda"],
       default: "English",
     },
+    // Status timestamp fields
+    notServedAt: { type: Date, default: Date.now },
+    servingAt: { type: Date, default: null },
+    holdAt: { type: Date, default: null },
+    servedAt: { type: Date, default: null },
+    // Duration tracking fields (in seconds)
+    notServedDuration: { type: Number, default: 0 },
+    servingDuration: { type: Number, default: 0 },
+    holdDuration: { type: Number, default: 0 },
+    totalDuration: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
 
-// Add a pre-save middleware to ensure ticketStatus is set
+// Add a pre-save middleware to ensure ticketStatus is set and notServedAt is initialized
 bankTicketSchema.pre("save", function (next) {
   if (!this.ticketStatus) {
     this.ticketStatus = "Not Served";
+  }
+  if (!this.notServedAt) {
+    this.notServedAt = new Date();
   }
   next();
 });

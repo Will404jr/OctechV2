@@ -1,17 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Ticket, Journey } from "@/lib/models/hospital";
+import { Ticket } from "@/lib/models/hospital";
+import { calculateDurationInSeconds } from "@/lib/utils/time-tracking";
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
   try {
     await dbConnect();
     const ticket = await Ticket.findById(id);
+
     if (!ticket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    }
+
+    // Check if the ticket was created today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to beginning of today
+
+    const ticketCreatedAt = new Date(ticket.createdAt);
+
+    // If the ticket was not created today, return 404
+    if (ticketCreatedAt < today) {
+      return NextResponse.json(
+        { error: "Ticket not created today" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(ticket);
@@ -34,14 +50,10 @@ export async function PUT(
 
     const body = await req.json();
     const {
-      journeyId,
-      currentStep,
       call,
-      note,
       reasonforVisit,
       receptionistNote,
       noShow,
-      journeySteps,
       held,
       departmentNote,
       currentDepartment,
@@ -56,73 +68,42 @@ export async function PUT(
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    let updateData: any = {};
+    const now = new Date();
+    const updateData: any = {};
 
-    // Handle journey assignment
-    if (journeyId) {
-      const journey = await Journey.findById(journeyId);
-      if (!journey) {
-        return NextResponse.json(
-          { error: "Journey not found" },
-          { status: 404 }
-        );
-      }
+    // Handle hold/unhold status
+    if (held !== undefined && currentDepartment) {
+      updateData.held = held;
+      console.log(`Setting ticket ${id} held status to ${held}`);
 
-      // Create journey steps map if not provided
-      if (!journeySteps) {
-        const newJourneySteps = new Map();
-        journey.steps.forEach((step: { title: string }) => {
-          newJourneySteps.set(step.title, { completed: false, note: "" });
-        });
-        updateData.journeySteps = newJourneySteps;
-      } else {
-        updateData.journeySteps = journeySteps;
-      }
+      // Find the current department in history
+      const deptIndex = ticket.departmentHistory.findIndex(
+        (hist: any) => hist.department === currentDepartment && !hist.completed
+      );
 
-      updateData = {
-        ...updateData,
-        journeyId,
-        currentStep: currentStep || 0,
-        completed: false,
-      };
-    }
+      if (deptIndex >= 0) {
+        if (held) {
+          // Start hold time tracking
+          ticket.departmentHistory[deptIndex].holdStartedAt = now;
+          console.log(
+            `Started hold time tracking for department ${currentDepartment}`
+          );
+        } else if (ticket.departmentHistory[deptIndex].holdStartedAt) {
+          // Calculate and add hold duration
+          const holdDuration = calculateDurationInSeconds(
+            ticket.departmentHistory[deptIndex].holdStartedAt,
+            now
+          );
 
-    // Handle step completion
-    if (currentStep !== undefined && ticket.journeyId) {
-      const journey = await Journey.findById(ticket.journeyId);
-      if (!journey) {
-        return NextResponse.json(
-          { error: "Journey not found" },
-          { status: 404 }
-        );
-      }
+          const previousHoldDuration =
+            ticket.departmentHistory[deptIndex].holdDuration || 0;
+          ticket.departmentHistory[deptIndex].holdDuration =
+            previousHoldDuration + holdDuration;
+          ticket.departmentHistory[deptIndex].holdStartedAt = null;
 
-      if (currentStep >= 0 && currentStep < journey.steps.length) {
-        // Clear the current step
-        const currentStepTitle = journey.steps[currentStep].title;
-        updateData = {
-          ...updateData,
-          [`journeySteps.${currentStepTitle}.completed`]: true,
-          [`journeySteps.${currentStepTitle}.note`]: note || "",
-        };
-
-        // Move to the next step if it exists
-        if (currentStep + 1 < journey.steps.length) {
-          updateData.currentStep = currentStep + 1;
-        } else {
-          // If this was the last step, mark the ticket as completed
-          updateData.completed = true;
-        }
-
-        // Check if all steps are now completed
-        const allStepsCompleted = journey.steps.every(
-          (step: { title: string }) =>
-            ticket.journeySteps.get(step.title)?.completed ||
-            step.title === currentStepTitle
-        );
-
-        if (allStepsCompleted) {
-          updateData.completed = true;
+          console.log(
+            `Added ${holdDuration} seconds to hold duration for department ${currentDepartment}`
+          );
         }
       }
     }
@@ -132,7 +113,6 @@ export async function PUT(
       // Initialize departmentHistory if it doesn't exist
       if (!ticket.departmentHistory) {
         ticket.departmentHistory = [];
-        updateData.departmentHistory = [];
       }
 
       // Find if this department is already in history but not completed
@@ -142,7 +122,7 @@ export async function PUT(
 
       if (deptIndex >= 0) {
         // Update existing entry
-        updateData[`departmentHistory.${deptIndex}.note`] = departmentNote;
+        ticket.departmentHistory[deptIndex].note = departmentNote;
       }
     }
 
@@ -154,15 +134,16 @@ export async function PUT(
       );
 
       if (deptIndex >= 0) {
-        // Update existing entry with roomId
-        updateData[`departmentHistory.${deptIndex}.roomId`] = roomId;
-      }
-    }
+        // Update existing entry with roomId and start processing time if not already started
+        ticket.departmentHistory[deptIndex].roomId = roomId;
 
-    // Handle hold/unhold status
-    if (held !== undefined) {
-      updateData.held = held;
-      console.log(`Setting ticket ${id} held status to ${held}`);
+        if (!ticket.departmentHistory[deptIndex].startedAt) {
+          ticket.departmentHistory[deptIndex].startedAt = now;
+          console.log(
+            `Started processing time for department ${currentDepartment}`
+          );
+        }
+      }
     }
 
     // Handle other updates
@@ -180,21 +161,24 @@ export async function PUT(
 
     if (noShow !== undefined) {
       updateData.noShow = noShow;
+
+      // If marking as no-show, calculate durations for reporting
+      if (noShow) {
+        // Calculate total duration from creation to now
+        const totalDuration = calculateDurationInSeconds(ticket.createdAt, now);
+        updateData.totalDuration = totalDuration;
+        console.log(
+          `Marking ticket as no-show. Total duration: ${totalDuration} seconds`
+        );
+      }
     }
 
     // Update the ticket
-    const updatedTicket = await Ticket.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true }
-    );
-
-    if (!updatedTicket) {
-      return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
-    }
+    Object.assign(ticket, updateData);
+    await ticket.save();
 
     console.log(`Ticket ${id} updated successfully`);
-    return NextResponse.json(updatedTicket);
+    return NextResponse.json(ticket);
   } catch (error) {
     console.error("Error updating ticket:", error);
     return NextResponse.json(

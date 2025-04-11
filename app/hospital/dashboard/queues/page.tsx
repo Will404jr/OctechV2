@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, X, Building2 } from "lucide-react";
+import { Search, Plus, X, Building2, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,12 +20,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Department } from "@/types/department";
@@ -49,6 +50,8 @@ const DepartmentsComponent = () => {
     useState<Department | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [departmentSearchQuery, setDepartmentSearchQuery] = useState("");
   const { toast } = useToast();
 
   // Fetch all possible departments from the local data
@@ -147,6 +150,8 @@ const DepartmentsComponent = () => {
 
       // Reset form
       setSelectedDepartment(null);
+      setOpen(false);
+      setDepartmentSearchQuery("");
     } catch (error: any) {
       console.error("Error creating department:", error);
       toast({
@@ -199,6 +204,94 @@ const DepartmentsComponent = () => {
       !activeDepartments.some((activeDept) => activeDept.title === dept.title)
   );
 
+  // Filter available departments based on search query
+  const filteredAvailableDepartments = departmentSearchQuery
+    ? availableDepartments.filter((dept) =>
+        dept.title.toLowerCase().includes(departmentSearchQuery.toLowerCase())
+      )
+    : availableDepartments;
+
+  const renderDepartmentCombobox = (dialogClose?: boolean) => (
+    <div className="space-y-2">
+      <Label htmlFor="department-combobox">Select Department</Label>
+      <div className="relative">
+        <Command className="rounded-lg border shadow-md">
+          <CommandInput
+            id="department-combobox"
+            placeholder="Search departments..."
+            value={departmentSearchQuery}
+            onValueChange={setDepartmentSearchQuery}
+          />
+          <CommandList className="max-h-[200px] overflow-y-auto">
+            <CommandEmpty>No departments found.</CommandEmpty>
+            <CommandGroup>
+              {filteredAvailableDepartments.length > 0 ? (
+                filteredAvailableDepartments.map((dept) => (
+                  <CommandItem
+                    key={dept.title}
+                    value={dept.title}
+                    onSelect={(value) => {
+                      const selectedDept = allDepartments.find(
+                        (d) => d.title.toLowerCase() === value.toLowerCase()
+                      );
+                      setSelectedDepartment(selectedDept || null);
+                      setDepartmentSearchQuery("");
+                    }}
+                    className="flex items-center cursor-pointer"
+                  >
+                    <span className="mr-2">{dept.icon}</span>
+                    <span>{dept.title}</span>
+                    {selectedDepartment?.title === dept.title && (
+                      <Check className="ml-auto h-4 w-4 text-green-600" />
+                    )}
+                  </CommandItem>
+                ))
+              ) : (
+                <div className="py-6 text-center text-sm text-gray-500">
+                  {departmentSearchQuery
+                    ? "No departments match your search"
+                    : "All departments have been created"}
+                </div>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </div>
+
+      {selectedDepartment && (
+        <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
+          <div className="flex items-center">
+            <span className="mr-2 text-lg">{selectedDepartment.icon}</span>
+            <span className="font-medium">{selectedDepartment.title}</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedDepartment(null)}
+            className="h-8 w-8 p-0 rounded-full"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      <DialogFooter className={dialogClose ? "" : "mt-4"}>
+        {dialogClose && (
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+        )}
+        <Button
+          onClick={handleCreateDepartment}
+          disabled={isCreatingDepartment || !selectedDepartment}
+          className={dialogClose ? "" : "w-full"}
+        >
+          {isCreatingDepartment ? "Creating..." : "Create Department"}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+
   return (
     <div className="container mx-auto py-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
@@ -215,41 +308,8 @@ const DepartmentsComponent = () => {
               <DialogTitle>Create New Department</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="department">Select Department</Label>
-                <Select
-                  value={selectedDepartment ? selectedDepartment.title : ""}
-                  onValueChange={(value) => {
-                    const dept = allDepartments.find((d) => d.title === value);
-                    setSelectedDepartment(dept || null);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableDepartments.map((dept) => (
-                      <SelectItem key={dept.title} value={dept.title}>
-                        <span className="flex items-center">
-                          <span className="mr-2">{dept.icon}</span> {dept.title}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {renderDepartmentCombobox(true)}
             </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button
-                onClick={handleCreateDepartment}
-                disabled={isCreatingDepartment || !selectedDepartment}
-              >
-                {isCreatingDepartment ? "Creating..." : "Create Department"}
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -287,44 +347,8 @@ const DepartmentsComponent = () => {
                 <DialogTitle>Create New Department</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="department">Select Department</Label>
-                  <Select
-                    value={selectedDepartment ? selectedDepartment.title : ""}
-                    onValueChange={(value) => {
-                      const dept = allDepartments.find(
-                        (d) => d.title === value
-                      );
-                      setSelectedDepartment(dept || null);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableDepartments.map((dept) => (
-                        <SelectItem key={dept.title} value={dept.title}>
-                          <span className="flex items-center">
-                            <span className="mr-2">{dept.icon}</span>{" "}
-                            {dept.title}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {renderDepartmentCombobox(true)}
               </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button
-                  onClick={handleCreateDepartment}
-                  disabled={isCreatingDepartment || !selectedDepartment}
-                >
-                  {isCreatingDepartment ? "Creating..." : "Create Department"}
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>

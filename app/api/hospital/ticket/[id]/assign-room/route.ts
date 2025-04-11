@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ticket } from "@/lib/models/hospital";
 
@@ -39,6 +39,15 @@ export async function POST(
     if (deptIndex >= 0) {
       // Update the existing entry with roomId
       ticket.departmentHistory[deptIndex].roomId = roomId;
+
+      // Set startedAt timestamp if not already set
+      if (!ticket.departmentHistory[deptIndex].startedAt) {
+        ticket.departmentHistory[deptIndex].startedAt = new Date();
+        console.log(
+          `Started processing time for department ${department} in ticket ${id}`
+        );
+      }
+
       console.log(
         `Updated roomId ${roomId} for department ${department} in ticket ${id}`
       );

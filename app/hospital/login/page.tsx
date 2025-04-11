@@ -215,9 +215,12 @@ export default function LoginPage() {
           </Tabs>
         </CardContent>
         <CardFooter className="flex justify-center">
-          <p className="text-sm text-gray-500">
-            Don't have an account? Contact your administrator.
-          </p>
+          <a
+            href="/hospital/serving-login"
+            className="text-lg text-[#0e4480] hover:underline"
+          >
+            Serving Dashboard
+          </a>
         </CardFooter>
       </Card>
     </div>

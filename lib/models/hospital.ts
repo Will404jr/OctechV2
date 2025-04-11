@@ -187,12 +187,15 @@ const ticketSchema = new mongoose.Schema(
     ticketNo: { type: String, required: true },
     reasonforVisit: { type: String, default: "", required: false },
     receptionistNote: { type: String, default: "", required: false },
-    // Updated departmentHistory field to track the ticket's journey
+    // Updated departmentHistory field to track the ticket's journey with time tracking
     departmentHistory: [
       {
         department: { type: String, required: true },
         icon: { type: String, default: "" },
-        timestamp: { type: Date, default: Date.now },
+        timestamp: { type: Date, default: Date.now }, // When added to department
+        startedAt: { type: Date, default: null }, // When roomId is assigned
+        completedAt: { type: Date, default: null }, // When completed = true
+        processingDuration: { type: Number, default: 0 }, // Time in seconds from startedAt to completedAt
         note: { type: String, default: "" },
         completed: { type: Boolean, default: false },
         roomId: {
@@ -200,7 +203,10 @@ const ticketSchema = new mongoose.Schema(
           ref: "Department.rooms",
           required: false,
           default: null,
-        }, // Added roomId field
+        },
+        // Hold tracking
+        holdStartedAt: { type: Date, default: null }, // When put on hold
+        holdDuration: { type: Number, default: 0 }, // Total hold time in seconds
       },
     ],
     userType: {
@@ -217,6 +223,9 @@ const ticketSchema = new mongoose.Schema(
       enum: ["English", "Luganda"],
       default: "English",
     },
+    // Time tracking fields
+    completedAt: { type: Date, default: null }, // When ticket is fully completed
+    totalDuration: { type: Number, default: 0 }, // Total time in seconds from creation to completion
   },
   { timestamps: true }
 );
@@ -224,52 +233,52 @@ const ticketSchema = new mongoose.Schema(
 export const Ticket =
   mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
 
-// //  journey schema
-// const StepSchema = new mongoose.Schema({
-//   id: {
-//     type: Number,
-//     required: true,
-//   },
-//   title: {
-//     type: String,
-//     required: true,
-//     trim: true,
-//   },
-//   icon: {
-//     type: String,
-//     required: true,
-//   },
-// });
+//  journey schema
+const StepSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    required: true,
+  },
+  title: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  icon: {
+    type: String,
+    required: true,
+  },
+});
 
-// // Main Journey Schema
-// const JourneySchema = new mongoose.Schema(
-//   {
-//     name: {
-//       type: String,
-//       required: true,
-//       trim: true,
-//     },
-//     steps: [StepSchema],
-//     createdAt: {
-//       type: Date,
-//       default: Date.now,
-//     },
-//     updatedAt: {
-//       type: Date,
-//       default: Date.now,
-//     },
-//   },
-//   {
-//     timestamps: true,
-//   }
-// );
+// Main Journey Schema
+const JourneySchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    steps: [StepSchema],
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 
-// // Create indexes for better query performance
-// JourneySchema.index({ name: 1 });
-// JourneySchema.index({ createdAt: -1 });
+// Create indexes for better query performance
+JourneySchema.index({ name: 1 });
+JourneySchema.index({ createdAt: -1 });
 
-// export const Journey =
-//   mongoose.models.Journey || mongoose.model("Journey", JourneySchema);
+export const Journey =
+  mongoose.models.Journey || mongoose.model("Journey", JourneySchema);
 
 //department and room schema
 const roomSchema = new mongoose.Schema(

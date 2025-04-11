@@ -1,15 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  User,
-  Calendar,
-  Volume2,
-  VolumeX,
-  Play,
-  RefreshCw,
-  Bell,
-} from "lucide-react";
+import { User, Calendar, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -57,6 +49,8 @@ interface Ticket {
     completed?: boolean;
     roomId?: string;
   }[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Room {

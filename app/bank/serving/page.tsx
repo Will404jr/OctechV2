@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface Ticket {
   _id: string;
@@ -100,6 +101,7 @@ export default function ServingPage() {
   const [totalDailyTickets, setTotalDailyTickets] = useState(0);
   const [companyName, setCompanyName] = useState("Serving Dashboard");
   const router = useRouter();
+  const { toast } = useToast();
 
   // Replace the fetchTotalDailyTickets function with this improved version
   const fetchTotalDailyTickets = useCallback(async () => {
@@ -488,8 +490,12 @@ export default function ServingPage() {
       if (result.success && result.data) {
         setCurrentTicket(result.data);
         // Show a temporary success message
-        setError("Reason updated successfully!");
-        setTimeout(() => setError(null), 3000);
+        // setError("Reason updated successfully!");
+        // setTimeout(() => setError(null), 3000);
+        toast({
+          title: "Success",
+          description: `Confirmation successfull`,
+        });
       } else {
         throw new Error("Invalid response data");
       }
@@ -851,7 +857,7 @@ export default function ServingPage() {
                 <div className="mt-3 bg-gray-50 p-3 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="flex items-center">
                     <span className="text-sm font-medium mr-3 text-gray-500 w-24">
-                      Justify reason:
+                      Confirm:
                     </span>
                     <Select
                       onValueChange={(value) => {

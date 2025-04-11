@@ -625,6 +625,7 @@ const ReceptionistPage: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           held: false,
+          currentDepartment: "Reception",
           roomId: roomId, // Include roomId when unholding a ticket
         }),
       });
