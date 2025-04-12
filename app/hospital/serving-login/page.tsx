@@ -48,6 +48,23 @@ interface Staff {
   email: string;
 }
 
+interface ActiveRoom {
+  _id: string;
+  roomNumber: string;
+  available: boolean;
+  createdAt: string;
+}
+
+interface ActiveRoomResponse {
+  hasActiveRoom: boolean;
+  room?: ActiveRoom;
+  department?: {
+    _id: string;
+    title: string;
+    icon: string;
+  };
+}
+
 const defaultValues: LoginFormData = {
   email: "",
   password: "",
@@ -63,6 +80,8 @@ export default function ServingLoginPage() {
   const [existingRooms, setExistingRooms] = useState<string[]>([]);
   const [staffInfo, setStaffInfo] = useState<Staff | null>(null);
   const [hasActiveRoom, setHasActiveRoom] = useState(false);
+  const [activeRoomInfo, setActiveRoomInfo] =
+    useState<ActiveRoomResponse | null>(null);
 
   const { control, handleSubmit } = useForm<LoginFormData>({
     defaultValues,
@@ -85,20 +104,7 @@ export default function ServingLoginPage() {
           });
 
           // Check if user already has an active room for today
-          const roomResponse = await fetch(
-            `/api/hospital/staff/${session.userId}/active-room`
-          );
-          const roomData = await roomResponse.json();
-
-          if (roomData.hasActiveRoom) {
-            setHasActiveRoom(true);
-            // Redirect based on department
-            if (session.department === "Reception") {
-              router.push("/hospital/receptionist");
-            } else {
-              router.push("/hospital/serving");
-            }
-          }
+          await checkActiveRoom(session.userId);
         }
       } catch (error) {
         console.error("Error checking session:", error);
@@ -109,6 +115,57 @@ export default function ServingLoginPage() {
 
     checkSession();
   }, [router]);
+
+  const checkActiveRoom = async (userId: string) => {
+    try {
+      console.log(`Checking active room for user ${userId}`);
+      const roomResponse = await fetch(
+        `/api/hospital/staff/${userId}/active-room`
+      );
+
+      if (!roomResponse.ok) {
+        throw new Error("Failed to check active room");
+      }
+
+      const roomData: ActiveRoomResponse = await roomResponse.json();
+      console.log("Active room response:", roomData);
+
+      setActiveRoomInfo(roomData);
+      setHasActiveRoom(roomData.hasActiveRoom);
+
+      if (roomData.hasActiveRoom && roomData.department) {
+        console.log(
+          `User has active room in department: ${roomData.department.title}`
+        );
+
+        // Update session with department info
+        await fetch("/api/session/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            department: roomData.department.title,
+            roomId: roomData.room?._id,
+          }),
+        });
+
+        // Redirect based on department
+        if (roomData.department.title === "Reception") {
+          router.push("/hospital/receptionist");
+        } else {
+          router.push("/hospital/serving");
+        }
+      }
+    } catch (error) {
+      console.error("Error checking active room:", error);
+      toast({
+        title: "Error",
+        description: "Failed to check if you have an active room",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Fetch departments when logged in
   useEffect(() => {
@@ -181,20 +238,7 @@ export default function ServingLoginPage() {
         });
 
         // Check if user already has an active room for today
-        const roomResponse = await fetch(
-          `/api/hospital/staff/${result.userId}/active-room`
-        );
-        const roomData = await roomResponse.json();
-
-        if (roomData.hasActiveRoom) {
-          setHasActiveRoom(true);
-          // Redirect based on department
-          if (result.department === "Reception") {
-            router.push("/hospital/receptionist");
-          } else {
-            router.push("/hospital/serving");
-          }
-        }
+        await checkActiveRoom(result.userId);
       } else {
         const errorData = await response.json();
         toast({
@@ -257,6 +301,9 @@ export default function ServingLoginPage() {
         throw new Error(errorData.error || "Failed to create room");
       }
 
+      const roomData = await response.json();
+      console.log("Room created:", roomData);
+
       toast({
         title: "Success",
         description: `Room ${roomNumber} assigned successfully for today`,
@@ -276,7 +323,7 @@ export default function ServingLoginPage() {
         },
         body: JSON.stringify({
           department: deptData.title,
-          roomId: (await response.json()).roomId,
+          roomId: roomData.roomId,
         }),
       });
 

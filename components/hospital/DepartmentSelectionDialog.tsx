@@ -33,6 +33,7 @@ interface Department {
       lastName: string;
     };
     available: boolean;
+    createdAt?: string; // Added createdAt field
   }[];
 }
 
@@ -49,6 +50,7 @@ export const DepartmentSelectionDialog: React.FC<
   const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const [selectedRoom, setSelectedRoom] = useState<string>("");
   const [assignToAnyRoom, setAssignToAnyRoom] = useState<boolean>(true);
+  const [availableRooms, setAvailableRooms] = useState<Department["rooms"]>([]);
 
   const handleSubmit = () => {
     if (!selectedDepartment) return;
@@ -60,28 +62,47 @@ export const DepartmentSelectionDialog: React.FC<
     }
   };
 
-  // Fix the available rooms filtering logic
-  const selectedDepartmentData = departments.find(
-    (dept) => dept._id === selectedDepartment
-  );
-
-  // Debug the available rooms
+  // Fetch rooms for the selected department that were created today
   useEffect(() => {
-    if (selectedDepartmentData) {
-      console.log(
-        "All rooms in selected department:",
-        selectedDepartmentData.rooms
-      );
-      console.log(
-        "Available rooms:",
-        selectedDepartmentData.rooms.filter((room) => room.available)
-      );
-    }
-  }, [selectedDepartmentData]);
+    const fetchRoomsForDepartment = async () => {
+      if (!selectedDepartment) {
+        setAvailableRooms([]);
+        return;
+      }
 
-  const availableRooms =
-    selectedDepartmentData?.rooms.filter((room) => room.available === true) ||
-    [];
+      try {
+        // Get today's date in YYYY-MM-DD format
+        const today = new Date().toISOString().split("T")[0];
+
+        // Fetch rooms for the selected department created today
+        const response = await fetch(
+          `/api/hospital/department/${selectedDepartment}/rooms?date=${today}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch rooms");
+
+        const data = await response.json();
+        console.log("Fetched rooms for today:", data.rooms);
+
+        // Filter for available rooms
+        const availableRoomsData = data.rooms.filter(
+          (room: any) => room.available === true
+        );
+        console.log("Available rooms:", availableRoomsData);
+
+        setAvailableRooms(availableRoomsData);
+      } catch (error) {
+        console.error("Error fetching rooms:", error);
+        setAvailableRooms([]);
+      }
+    };
+
+    fetchRoomsForDepartment();
+  }, [selectedDepartment]);
+
+  // Reset selected room when department changes
+  useEffect(() => {
+    setSelectedRoom("");
+  }, [selectedDepartment]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -114,7 +135,7 @@ export const DepartmentSelectionDialog: React.FC<
             </Select>
           </div>
 
-          {selectedDepartmentData && (
+          {selectedDepartment && (
             <div className="space-y-4">
               <RadioGroup
                 defaultValue="any"

@@ -3,12 +3,12 @@ import dbConnect from "@/lib/db";
 import { Department } from "@/lib/models/hospital";
 
 export async function GET(
-  req: NextRequest,
-  context: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const { id } = context.params;
     const staffId = id;
 
     // Get today's date range
@@ -17,6 +17,10 @@ export async function GET(
 
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+
+    console.log(
+      `Checking active room for staff ${staffId} between ${today.toISOString()} and ${tomorrow.toISOString()}`
+    );
 
     // Find any department with a room assigned to this staff today
     const departmentsWithStaff = await Department.find({
@@ -28,18 +32,32 @@ export async function GET(
       match: { _id: staffId },
     });
 
+    console.log(
+      `Found ${departmentsWithStaff.length} departments with rooms for staff ${staffId} today`
+    );
+
     let activeRoom = null;
     let departmentInfo = null;
 
     // Find the active room for this staff
     for (const dept of departmentsWithStaff) {
+      console.log(`Checking department: ${dept.title} for staff rooms`);
+
       const staffRoom = dept.rooms.find((room: any) => {
-        return (
-          room.staff &&
-          room.staff._id.toString() === staffId &&
-          new Date(room.createdAt) >= today &&
-          new Date(room.createdAt) < tomorrow
-        );
+        const roomCreatedAt = new Date(room.createdAt);
+        const isToday = roomCreatedAt >= today && roomCreatedAt < tomorrow;
+        const isStaffRoom =
+          room.staff && room.staff._id && room.staff._id.toString() === staffId;
+
+        if (isStaffRoom && isToday) {
+          console.log(
+            `Found room ${
+              room.roomNumber
+            } created at ${roomCreatedAt.toISOString()}`
+          );
+        }
+
+        return isStaffRoom && isToday;
       });
 
       if (staffRoom) {
@@ -49,6 +67,9 @@ export async function GET(
           title: dept.title,
           icon: dept.icon,
         };
+        console.log(
+          `Active room found in department: ${dept.title}, room number: ${staffRoom.roomNumber}`
+        );
         break;
       }
     }
@@ -65,6 +86,7 @@ export async function GET(
         department: departmentInfo,
       });
     } else {
+      console.log(`No active room found for staff ${staffId} today`);
       return NextResponse.json({
         hasActiveRoom: false,
       });

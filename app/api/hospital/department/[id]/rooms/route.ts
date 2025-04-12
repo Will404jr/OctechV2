@@ -3,17 +3,23 @@ import dbConnect from "@/lib/db";
 import { Department } from "@/lib/models/hospital";
 
 export async function GET(
-  req: NextRequest,
-  context: { params: { id: string } }
+  req: Request,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   try {
     await dbConnect();
-    const { id } = context.params;
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
 
+    console.log(`Fetching rooms for department ${id}, date filter: ${date}`);
+
     // Find department
-    const department = await Department.findById(id);
+    const department = await Department.findById(id).populate({
+      path: "rooms.staff",
+      select: "firstName lastName",
+    });
+
     if (!department) {
       return NextResponse.json(
         { error: "Department not found" },
@@ -31,10 +37,16 @@ export async function GET(
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
 
+      console.log(
+        `Filtering rooms between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`
+      );
+
       rooms = department.rooms.filter((room: any) => {
         const roomDate = new Date(room.createdAt);
         return roomDate >= startOfDay && roomDate <= endOfDay;
       });
+
+      console.log(`Found ${rooms.length} rooms created today`);
     }
 
     return NextResponse.json({

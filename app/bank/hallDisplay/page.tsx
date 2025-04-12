@@ -64,12 +64,17 @@ interface SessionData {
   hallDisplayUsername?: string;
 }
 
-// Let's define a new interface for our announcement queue
 interface AnnouncementQueue {
   tickets: Ticket[];
   currentTicketIndex: number;
   currentAnnouncementCount: number;
   isProcessing: boolean;
+}
+
+interface TicketAnnouncementState {
+  announcementCount: number;
+  lastStatus: string;
+  lastCallAgain: boolean;
 }
 
 export default function HallDisplay() {
@@ -91,16 +96,16 @@ export default function HallDisplay() {
   const currentAudio = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
-  // Replace the existing announcementQueue ref with our new structure
+  const ticketAnnouncementState = useRef<Map<string, TicketAnnouncementState>>(
+    new Map()
+  );
+
   const announcementQueue = useRef<AnnouncementQueue>({
     tickets: [],
     currentTicketIndex: 0,
     currentAnnouncementCount: 0,
     isProcessing: false,
   });
-
-  // Add a new ref to track fully announced tickets (those that have been announced twice)
-  const fullyAnnouncedTickets = useRef<Set<string>>(new Set());
 
   const initializeAudioContext = () => {
     if (!audioContext.current) {
@@ -120,10 +125,9 @@ export default function HallDisplay() {
     async (src: string) => {
       if (isMuted) return Promise.resolve();
 
-      return new Promise<void>((resolve) => {
+      return new Promise<void>((resolve, reject) => {
         console.log(`Playing audio: ${src}`);
 
-        // Cancel any currently playing audio
         if (currentAudio.current) {
           currentAudio.current.pause();
           currentAudio.current.onended = null;
@@ -142,27 +146,22 @@ export default function HallDisplay() {
         audio.onerror = (e) => {
           console.error(`Error playing audio ${src}:`, e);
           currentAudio.current = null;
-          resolve();
+          reject(new Error(`Failed to play ${src}`));
         };
 
-        const playPromise = audio.play();
-        if (playPromise) {
-          playPromise.catch((e) => {
-            console.error(`Failed to play audio ${src}:`, e);
-            currentAudio.current = null;
-            resolve();
-          });
-        }
+        audio.play().catch((e) => {
+          console.error(`Failed to play audio ${src}:`, e);
+          currentAudio.current = null;
+          reject(e);
+        });
       });
     },
     [isMuted]
   );
 
-  // Replace the existing queueTicketAnnouncement function
   const queueTicketAnnouncement = useCallback((ticket: Ticket) => {
     if (!ticket.counterId) return;
 
-    // Check if this ticket is already in the queue
     const isAlreadyQueued = announcementQueue.current.tickets.some(
       (t) => t._id === ticket._id
     );
@@ -174,17 +173,21 @@ export default function HallDisplay() {
       return;
     }
 
-    // Add to queue
-    announcementQueue.current.tickets.push(ticket);
-    console.log(`Added ticket ${ticket.ticketNo} to announcement queue`);
+    if (ticket.callAgain) {
+      announcementQueue.current.tickets.unshift(ticket);
+      if (announcementQueue.current.currentTicketIndex > 0) {
+        announcementQueue.current.currentTicketIndex++;
+      }
+    } else {
+      announcementQueue.current.tickets.push(ticket);
+    }
+    console.log(`Queued ticket ${ticket.ticketNo} for announcement`);
   }, []);
 
-  // Modify the fetchData function to properly check for already announced tickets
   const fetchData = useCallback(async () => {
     if (!isLoggedIn || !branchId) return;
 
     try {
-      // Get today's date in YYYY-MM-DD format
       const today = new Date().toISOString().split("T")[0];
 
       const [ticketsRes, exchangeRatesRes, adsRes, settingsRes] =
@@ -197,37 +200,57 @@ export default function HallDisplay() {
           fetch(`/api/settings?branchId=${branchId}`),
         ]);
 
-      const ticketsData: Ticket[] = await ticketsRes.json();
-      console.log("Fetched tickets:", ticketsData);
+      const newTickets: Ticket[] = await ticketsRes.json();
+      console.log("Fetched tickets:", newTickets);
 
-      // Get the list of ticket IDs that are currently in the queue
-      const queuedTicketIds = new Set(
-        announcementQueue.current.tickets.map((ticket) => ticket._id)
-      );
+      newTickets.forEach((ticket) => {
+        const currentState = ticketAnnouncementState.current.get(
+          ticket._id
+        ) || {
+          announcementCount: 0,
+          lastStatus: "",
+          lastCallAgain: false,
+        };
 
-      // Find new tickets that need to be announced:
-      // 1. Not already in the queue
-      // 2. Not already fully announced (unless callAgain is true)
-      // 3. Have Serving status
-      const newTicketsToAnnounce = ticketsData.filter(
-        (ticket) =>
-          !queuedTicketIds.has(ticket._id) &&
+        // Reset announcement count for callAgain tickets
+        if (ticket.callAgain && !currentState.lastCallAgain) {
+          currentState.announcementCount = 0;
+        }
+
+        // Reset announcement count for tickets coming back from Hold
+        if (
           ticket.ticketStatus === "Serving" &&
-          (ticket.callAgain || !fullyAnnouncedTickets.current.has(ticket._id))
-      );
+          currentState.lastStatus === "Hold"
+        ) {
+          currentState.announcementCount = 0;
+        }
 
-      // Sort tickets - callAgain tickets first
-      newTicketsToAnnounce.sort(
-        (a, b) => (b.callAgain ? 1 : 0) - (a.callAgain ? 1 : 0)
-      );
+        // Update state
+        currentState.lastStatus = ticket.ticketStatus;
+        currentState.lastCallAgain = ticket.callAgain;
 
-      // Queue new tickets for announcement
-      for (const ticket of newTicketsToAnnounce) {
-        queueTicketAnnouncement(ticket);
+        // Queue for announcement if:
+        // 1. It's Serving
+        // 2. Hasn't been announced twice in this cycle
+        if (
+          ticket.ticketStatus === "Serving" &&
+          currentState.announcementCount < 2
+        ) {
+          queueTicketAnnouncement(ticket);
+        }
+
+        ticketAnnouncementState.current.set(ticket._id, currentState);
+      });
+
+      const newTicketIds = new Set(newTickets.map((t) => t._id));
+      const ticketIds = Array.from(ticketAnnouncementState.current.keys());
+      for (const ticketId of ticketIds) {
+        if (!newTicketIds.has(ticketId)) {
+          ticketAnnouncementState.current.delete(ticketId);
+        }
       }
 
-      // Update state with fetched data
-      setTickets(ticketsData);
+      setTickets(newTickets);
       setExchangeRates(await exchangeRatesRes.json());
       setAds(await adsRes.json());
       setSettings(await settingsRes.json());
@@ -236,16 +259,13 @@ export default function HallDisplay() {
     }
   }, [isLoggedIn, branchId, queueTicketAnnouncement]);
 
-  // Replace the existing processAnnouncementQueue function
   const processAnnouncementQueue = useCallback(async () => {
     const queue = announcementQueue.current;
 
-    // If we're already processing, or the queue is empty, or audio is muted, do nothing
     if (queue.isProcessing || queue.tickets.length === 0 || isMuted) {
       return;
     }
 
-    // If we've processed all tickets, reset the queue
     if (queue.currentTicketIndex >= queue.tickets.length) {
       queue.tickets = [];
       queue.currentTicketIndex = 0;
@@ -253,35 +273,36 @@ export default function HallDisplay() {
       return;
     }
 
-    // Get the current ticket
     const ticket = queue.tickets[queue.currentTicketIndex];
-
-    // If the ticket doesn't have a counter, skip it
     if (!ticket.counterId) {
       queue.currentTicketIndex++;
       return;
     }
 
-    // Mark that we're processing
     queue.isProcessing = true;
 
-    // Increment the announcement count
+    const ticketState = ticketAnnouncementState.current.get(ticket._id) || {
+      announcementCount: 0,
+      lastStatus: ticket.ticketStatus,
+      lastCallAgain: ticket.callAgain,
+    };
+
+    ticketState.announcementCount++;
     queue.currentAnnouncementCount++;
+    ticketAnnouncementState.current.set(ticket._id, ticketState);
 
     console.log(
-      `Announcing ticket: ${ticket.ticketNo} for counter ${ticket.counterId.counterNumber} (Announcement #${queue.currentAnnouncementCount})`
+      `Announcing ticket: ${ticket.ticketNo} for counter ${ticket.counterId.counterNumber} (Announcement #${ticketState.announcementCount})`
     );
 
     const ticketNumber = ticket.ticketNo;
     const counterNumber = ticket.counterId.counterNumber.toString();
 
-    // Show alert
     setAlert({
       message: `Ticket ${ticketNumber} - Please proceed to Counter ${counterNumber}`,
       isVisible: true,
     });
 
-    // Hide alert after 5 seconds
     setTimeout(() => setAlert({ message: "", isVisible: false }), 5000);
 
     const audioFiles = [
@@ -292,16 +313,15 @@ export default function HallDisplay() {
       ...counterNumber.split("").map((char) => `/audio/${char}.wav`),
     ];
 
-    for (const audioSrc of audioFiles) {
-      await playAudio(audioSrc);
+    try {
+      for (const audioSrc of audioFiles) {
+        await playAudio(audioSrc);
+      }
+    } catch (error) {
+      console.error("Audio playback failed:", error);
     }
 
-    // If we've announced this ticket twice, move to the next ticket
-    if (queue.currentAnnouncementCount >= 2) {
-      // Mark the ticket as fully announced
-      fullyAnnouncedTickets.current.add(ticket._id);
-
-      // If this was a callAgain ticket, reset the flag
+    if (ticketState.announcementCount >= 2) {
       if (ticket.callAgain) {
         try {
           const response = await fetch(`/api/bank/ticket/${ticket._id}`, {
@@ -314,19 +334,8 @@ export default function HallDisplay() {
           });
 
           if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(
-              `Failed to update ticket callAgain status: ${
-                errorData.error || response.statusText
-              }`
-            );
+            throw new Error("Failed to update ticket callAgain status");
           }
-
-          const updatedTicket = await response.json();
-          console.log(
-            "Successfully updated ticket callAgain status:",
-            updatedTicket
-          );
 
           setTickets((prevTickets) =>
             prevTickets.map((t) =>
@@ -334,21 +343,19 @@ export default function HallDisplay() {
             )
           );
         } catch (error) {
-          console.error("Error updating ticket callAgain status:", error);
+          console.error("Error updating ticket:", error);
           toast({
             title: "Error",
-            description: "Failed to update ticket status. Please try again.",
+            description: "Failed to update ticket status.",
             duration: 5000,
           });
         }
       }
 
-      // Move to the next ticket
       queue.currentTicketIndex++;
       queue.currentAnnouncementCount = 0;
     }
 
-    // Mark that we're done processing
     queue.isProcessing = false;
   }, [playAudio, isMuted, toast]);
 
@@ -356,9 +363,7 @@ export default function HallDisplay() {
     if (isLoggedIn && branchId) {
       fetchData();
       const intervalId = setInterval(fetchData, 5000);
-      return () => {
-        clearInterval(intervalId);
-      };
+      return () => clearInterval(intervalId);
     }
   }, [fetchData, isLoggedIn, branchId]);
 
@@ -372,24 +377,22 @@ export default function HallDisplay() {
     return () => clearInterval(timer);
   }, [ads.length]);
 
-  // Replace the existing useEffect for processing the queue
   useEffect(() => {
-    const processQueue = () => {
-      processAnnouncementQueue();
+    const processQueue = async () => {
+      await processAnnouncementQueue();
     };
 
     const intervalId = setInterval(processQueue, 1000);
 
     return () => {
       clearInterval(intervalId);
-      // Reset the queue when the component unmounts
       announcementQueue.current = {
         tickets: [],
         currentTicketIndex: 0,
         currentAnnouncementCount: 0,
         isProcessing: false,
       };
-      fullyAnnouncedTickets.current.clear();
+      ticketAnnouncementState.current.clear();
     };
   }, [processAnnouncementQueue]);
 
@@ -437,7 +440,7 @@ export default function HallDisplay() {
 
   useEffect(() => {
     fetchSession();
-    const intervalId = setInterval(fetchSession, 5 * 60 * 1000); // Check every 5 minutes
+    const intervalId = setInterval(fetchSession, 5 * 60 * 1000);
     return () => clearInterval(intervalId);
   }, [fetchSession]);
 
