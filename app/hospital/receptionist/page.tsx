@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -31,6 +31,7 @@ import {
   PauseCircle,
   PlayCircle,
   ArrowRight,
+  User,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { QueueSpinner } from "@/components/queue-spinner";
@@ -38,6 +39,12 @@ import { Badge } from "@/components/ui/badge";
 import type { SessionData } from "@/lib/session";
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog";
 import { Navbar } from "@/components/hospitalNavbar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Ticket {
   _id: string;
@@ -47,6 +54,15 @@ interface Ticket {
   reasonforVisit?: string;
   receptionistNote?: string;
   held?: boolean;
+  departmentHistory?: {
+    department: string;
+    icon?: string;
+    timestamp: string;
+    note?: string;
+    completed?: boolean;
+    roomId?: string;
+  }[];
+  userType?: string;
 }
 
 interface Department {
@@ -64,6 +80,120 @@ interface Department {
     available: boolean;
   }[];
 }
+
+// Component to render room and staff information
+const DepartmentRoomBadge = ({
+  department,
+  roomIdPartial,
+}: {
+  department: string;
+  roomIdPartial: string;
+}) => {
+  const [roomInfo, setRoomInfo] = useState<{
+    roomNumber: string;
+    staffName: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const loadRoomInfo = async () => {
+      setIsLoading(true);
+      setHasError(false);
+      try {
+        const response = await fetch("/api/hospital/department");
+        if (!response.ok) {
+          throw new Error("Failed to fetch departments");
+        }
+
+        const allDepartments = await response.json();
+        const dept = allDepartments.find(
+          (d: Department) => d.title === department
+        );
+
+        if (!dept) {
+          throw new Error(`Department ${department} not found`);
+        }
+
+        const room = dept.rooms.find((r: any) =>
+          r._id.toString().includes(roomIdPartial)
+        );
+
+        if (!room) {
+          throw new Error(`Room not found in ${department}`);
+        }
+
+        let staffName = "Unknown Staff";
+        if (room.staff) {
+          if (
+            typeof room.staff === "object" &&
+            room.staff.firstName &&
+            room.staff.lastName
+          ) {
+            staffName = `${room.staff.firstName} ${room.staff.lastName}`;
+          } else if (typeof room.staff === "string") {
+            try {
+              const staffResponse = await fetch(
+                `/api/hospital/staff?id=${room.staff}`
+              );
+              if (staffResponse.ok) {
+                const staffData = await staffResponse.json();
+                if (staffData.firstName && staffData.lastName) {
+                  staffName = `${staffData.firstName} ${staffData.lastName}`;
+                } else if (staffData.username) {
+                  staffName = staffData.username;
+                }
+              }
+            } catch (staffError) {
+              console.error("Error fetching staff details:", staffError);
+            }
+          }
+        }
+
+        setRoomInfo({
+          roomNumber: room.roomNumber || "Unknown",
+          staffName: staffName,
+        });
+      } catch (error) {
+        console.error("Error loading room info:", error);
+        setHasError(true);
+        setRoomInfo({
+          roomNumber: "Unknown",
+          staffName: "Staff not found",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadRoomInfo();
+  }, [department, roomIdPartial]);
+
+  if (isLoading) {
+    return (
+      <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 animate-pulse">
+        Loading...
+      </Badge>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <Badge className="ml-2 bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+        <User className="h-3 w-3" />
+        Room: Unknown Staff
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 flex items-center gap-1">
+      <User className="h-3 w-3" />
+      {roomInfo?.roomNumber ? `Room ${roomInfo.roomNumber}` : "Room"}:{" "}
+      {roomInfo?.staffName || "Unknown"}
+    </Badge>
+  );
+};
 
 const USER_TYPES = ["Cash", "Insurance", "Staff"];
 const REASON_TYPES = [
@@ -85,6 +215,7 @@ const ReceptionistPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<SessionData | null>(null);
   const [showNextStepDialog, setShowNextStepDialog] = useState(false);
+  const [showActionsDialog, setShowActionsDialog] = useState(false);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [isServing, setIsServing] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
@@ -92,6 +223,7 @@ const ReceptionistPage: React.FC = () => {
   const router = useRouter();
   const [roomNumber, setRoomNumber] = useState<string>("");
   const [isLoadingNextTicket, setIsLoadingNextTicket] = useState(false);
+  const autoFetchIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return;
@@ -310,6 +442,45 @@ const ReceptionistPage: React.FC = () => {
     fetchRoomDetails();
   }, [roomId]);
 
+  // Auto-fetch next ticket when room is available and no current ticket
+  useEffect(() => {
+    // Clear any existing interval
+    if (autoFetchIntervalRef.current) {
+      clearInterval(autoFetchIntervalRef.current);
+      autoFetchIntervalRef.current = null;
+    }
+
+    // Only set up the interval if we're serving (room is available)
+    if (isServing) {
+      autoFetchIntervalRef.current = setInterval(async () => {
+        // Only proceed if we're serving, have no current ticket, and not already loading
+        if (isServing && !currentTicket && !isLoadingNextTicket) {
+          console.log("Auto-checking for next ticket...");
+
+          try {
+            // Check if there are tickets waiting
+            const { regular } = await fetchTickets();
+
+            if (regular.length > 0) {
+              console.log("Auto-fetching next ticket...");
+              await fetchNextTicket();
+            }
+          } catch (error) {
+            console.error("Error in auto-fetch:", error);
+          }
+        }
+      }, 5000); // Check every 5 seconds
+    }
+
+    // Clean up on unmount or when dependencies change
+    return () => {
+      if (autoFetchIntervalRef.current) {
+        clearInterval(autoFetchIntervalRef.current);
+        autoFetchIntervalRef.current = null;
+      }
+    };
+  }, [isServing, currentTicket, isLoadingNextTicket, fetchTickets]);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -426,7 +597,12 @@ const ReceptionistPage: React.FC = () => {
   const handleNextStep = async (departmentId: string, roomId?: string) => {
     if (!currentTicket) return;
 
-    if (!userType || !reasonForVisit) {
+    // For returned tickets, we don't need to validate user type and reason
+    const isReturnedTicket =
+      currentTicket.departmentHistory &&
+      currentTicket.departmentHistory.length > 1;
+
+    if (!isReturnedTicket && (!userType || !reasonForVisit)) {
       toast({
         title: "Error",
         description: "Please select a user type and reason for visit",
@@ -444,9 +620,13 @@ const ReceptionistPage: React.FC = () => {
           body: JSON.stringify({
             departmentId,
             roomId,
-            userType,
-            reasonForVisit,
-            receptionistNote,
+            userType: isReturnedTicket ? currentTicket.userType : userType,
+            reasonForVisit: isReturnedTicket
+              ? currentTicket.reasonforVisit
+              : reasonForVisit,
+            receptionistNote: receptionistNote, // Always send the current note
+            note: receptionistNote, // Add this line - the API might be looking for this field name
+            departmentNote: receptionistNote, // Add this line - try another possible field name
             currentDepartment: "Reception",
           }),
         }
@@ -462,6 +642,7 @@ const ReceptionistPage: React.FC = () => {
       // Clear current ticket
       setCurrentTicket(null);
       updateRoomServingTicket(null);
+      setShowActionsDialog(true);
 
       // Check if we were in the process of pausing
       if (isPausing) {
@@ -495,7 +676,12 @@ const ReceptionistPage: React.FC = () => {
   const handleClearTicket = async () => {
     if (!currentTicket) return;
 
-    if (!userType || !reasonForVisit) {
+    // For returned tickets, we don't need to validate user type and reason
+    const isReturnedTicket =
+      currentTicket.departmentHistory &&
+      currentTicket.departmentHistory.length > 1;
+
+    if (!isReturnedTicket && (!userType || !reasonForVisit)) {
       toast({
         title: "Error",
         description: "Please select a user type and reason for visit",
@@ -511,9 +697,13 @@ const ReceptionistPage: React.FC = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userType,
-            reasonForVisit,
-            receptionistNote,
+            userType: isReturnedTicket ? currentTicket.userType : userType,
+            reasonForVisit: isReturnedTicket
+              ? currentTicket.reasonforVisit
+              : reasonForVisit,
+            receptionistNote: receptionistNote, // Always send the current note
+            note: receptionistNote, // Add this line - the API might be looking for this field name
+            departmentNote: receptionistNote, // Add this line - try another possible field name
             currentDepartment: "Reception",
             roomId, // More consistent syntax
           }),
@@ -530,6 +720,7 @@ const ReceptionistPage: React.FC = () => {
       // Clear current ticket
       setCurrentTicket(null);
       updateRoomServingTicket(null);
+      setShowActionsDialog(true);
 
       // Check if we were in the process of pausing
       if (isPausing) {
@@ -563,6 +754,11 @@ const ReceptionistPage: React.FC = () => {
     if (!currentTicket) return;
 
     try {
+      // For returned tickets, use existing values
+      const isReturnedTicket =
+        currentTicket.departmentHistory &&
+        currentTicket.departmentHistory.length > 1;
+
       const response = await fetch(
         `/api/hospital/ticket/${currentTicket._id}`,
         {
@@ -570,8 +766,12 @@ const ReceptionistPage: React.FC = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             held: true,
-            reasonForVisit,
-            receptionistNote,
+            reasonForVisit: isReturnedTicket
+              ? currentTicket.reasonforVisit
+              : reasonForVisit,
+            receptionistNote: receptionistNote, // Always send the current note
+            note: receptionistNote, // Add this line
+            departmentNote: receptionistNote, // Add this line
             currentDepartment: "Reception",
             roomId,
           }),
@@ -588,6 +788,7 @@ const ReceptionistPage: React.FC = () => {
       // Clear current ticket
       setCurrentTicket(null);
       updateRoomServingTicket(null);
+      setShowActionsDialog(true);
 
       // Check if we were in the process of pausing
       if (isPausing) {
@@ -680,7 +881,12 @@ const ReceptionistPage: React.FC = () => {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ noShow: true }),
+          body: JSON.stringify({
+            noShow: true,
+            receptionistNote: receptionistNote,
+            note: receptionistNote, // Add this line
+            departmentNote: receptionistNote, // Add this line
+          }),
         }
       );
 
@@ -694,6 +900,7 @@ const ReceptionistPage: React.FC = () => {
       // Clear current ticket
       setCurrentTicket(null);
       updateRoomServingTicket(null);
+      setShowActionsDialog(true);
 
       // Check if we were in the process of pausing
       if (isPausing) {
@@ -765,6 +972,13 @@ const ReceptionistPage: React.FC = () => {
       description: "Ticket list has been updated",
     });
   };
+
+  // Remove this useEffect that's causing the dialog to appear when starting to serve
+  // useEffect(() => {
+  //   if (isServing && !currentTicket) {
+  //     setShowActionsDialog(true);
+  //   }
+  // }, [isServing, currentTicket]);
 
   if (isLoading) {
     return (
@@ -889,6 +1103,11 @@ const ReceptionistPage: React.FC = () => {
                             Called
                           </Badge>
                         )}
+                        {currentTicket.userType && (
+                          <Badge className="bg-blue-100 text-blue-800 px-4 py-1">
+                            {currentTicket.userType}
+                          </Badge>
+                        )}
                       </div>
                       <div className="tooltip-container relative">
                         <Button
@@ -906,47 +1125,142 @@ const ReceptionistPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* User Type and Reason for Visit on same line */}
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">
-                          User Type
-                        </label>
-                        <Select value={userType} onValueChange={setUserType}>
-                          <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
-                            <SelectValue placeholder="Select user type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {USER_TYPES.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {type}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    {/* Check if this is a returned ticket (has department history with more than one entry) */}
+                    {currentTicket.departmentHistory &&
+                    currentTicket.departmentHistory.length > 1 ? (
+                      <>
+                        {/* Department History for returned tickets */}
+                        <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                          <h3 className="font-semibold text-lg mb-4 text-blue-800">
+                            Ticket Journey
+                          </h3>
+                          <div className="space-y-3">
+                            {currentTicket.departmentHistory.map(
+                              (history, index) => (
+                                <div
+                                  key={index}
+                                  className="p-4 rounded-lg border bg-gradient-to-r from-blue-50/50 to-green-50/50"
+                                >
+                                  <div className="flex justify-between mb-2">
+                                    <span className="font-medium flex items-center">
+                                      {history.icon && (
+                                        <span className="mr-2 text-lg">
+                                          {history.icon}
+                                        </span>
+                                      )}
+                                      {history.department}
+                                      {history.completed && (
+                                        <Badge className="ml-2 bg-green-100 text-green-800 border-green-200">
+                                          Completed
+                                        </Badge>
+                                      )}
+                                      {!history.completed && (
+                                        <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200">
+                                          Pending
+                                        </Badge>
+                                      )}
+                                      {history.roomId && (
+                                        <DepartmentRoomBadge
+                                          department={history.department}
+                                          roomIdPartial={(() => {
+                                            if (!history.roomId)
+                                              return "unknown";
+                                            if (
+                                              typeof history.roomId === "string"
+                                            ) {
+                                              return history.roomId.substring(
+                                                0,
+                                                6
+                                              );
+                                            }
+                                            if (
+                                              typeof history.roomId === "object"
+                                            ) {
+                                              if (
+                                                history.roomId &&
+                                                "oid" in history.roomId
+                                              ) {
+                                                return (
+                                                  history.roomId as any
+                                                ).$oid.substring(0, 6);
+                                              }
+                                              return JSON.stringify(
+                                                history.roomId
+                                              ).substring(0, 6);
+                                            }
+                                            return String(
+                                              history.roomId
+                                            ).substring(0, 6);
+                                          })()}
+                                        />
+                                      )}
+                                    </span>
+                                    <span className="text-sm text-blue-600">
+                                      {new Date(
+                                        history.timestamp
+                                      ).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  {history.note && (
+                                    <p className="text-sm mt-2 bg-white p-2 rounded-md shadow-sm">
+                                      {history.note}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      /* Original form for new tickets */
+                      <>
+                        {/* User Type and Reason for Visit on same line */}
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">
+                              User Type
+                            </label>
+                            <Select
+                              value={userType}
+                              onValueChange={setUserType}
+                            >
+                              <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
+                                <SelectValue placeholder="Select user type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {USER_TYPES.map((type) => (
+                                  <SelectItem key={type} value={type}>
+                                    {type}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">
-                          Reason for Visit
-                        </label>
-                        <Select
-                          value={reasonForVisit}
-                          onValueChange={setReasonForVisit}
-                        >
-                          <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
-                            <SelectValue placeholder="Select reason for visit" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {REASON_TYPES.map((reason) => (
-                              <SelectItem key={reason} value={reason}>
-                                {reason}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">
+                              Reason for Visit
+                            </label>
+                            <Select
+                              value={reasonForVisit}
+                              onValueChange={setReasonForVisit}
+                            >
+                              <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
+                                <SelectValue placeholder="Select reason for visit" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {REASON_TYPES.map((reason) => (
+                                  <SelectItem key={reason} value={reason}>
+                                    {reason}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </>
+                    )}
 
                     {/* Receptionist Note takes full width */}
                     <div className="space-y-2">
@@ -998,7 +1312,13 @@ const ReceptionistPage: React.FC = () => {
                     {/* Next Step Button - with text */}
                     <Button
                       onClick={() => setShowNextStepDialog(true)}
-                      disabled={!userType || !reasonForVisit}
+                      disabled={
+                        !(
+                          currentTicket.departmentHistory &&
+                          currentTicket.departmentHistory.length > 1
+                        ) &&
+                        (!userType || !reasonForVisit)
+                      }
                       className="bg-[#0e4480] hover:bg-blue-800 text-white disabled:bg-slate-300"
                     >
                       <Users className="h-5 w-5 mr-2" />
@@ -1008,7 +1328,13 @@ const ReceptionistPage: React.FC = () => {
                     {/* Clear Ticket Button - with text */}
                     <Button
                       onClick={handleClearTicket}
-                      disabled={!userType || !reasonForVisit}
+                      disabled={
+                        !(
+                          currentTicket.departmentHistory &&
+                          currentTicket.departmentHistory.length > 1
+                        ) &&
+                        (!userType || !reasonForVisit)
+                      }
                       className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300"
                     >
                       <CheckCircle2 className="h-5 w-5 mr-2" />
@@ -1040,25 +1366,15 @@ const ReceptionistPage: React.FC = () => {
                         className="border-l-4 border-l-green-400 bg-green-50/30 shadow-sm"
                       >
                         <CardContent className="p-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-semibold mb-1 text-[#0e4480]">
-                                {ticket.ticketNo}
-                              </h3>
-                              {ticket.reasonforVisit && (
-                                <p className="text-sm text-slate-600 mb-2">
-                                  {ticket.reasonforVisit}
-                                </p>
-                              )}
-                            </div>
-                            <Button
-                              variant="outline"
-                              onClick={() => handleUnholdTicket(ticket._id)}
-                              className="text-green-600 border-green-300 hover:bg-green-50"
-                            >
-                              <PlayCircle className="h-4 w-4 mr-2" />
-                              Return to Queue
-                            </Button>
+                          <div>
+                            <h3 className="font-semibold mb-1 text-[#0e4480]">
+                              {ticket.ticketNo}
+                            </h3>
+                            {ticket.reasonforVisit && (
+                              <p className="text-sm text-slate-600 mb-2">
+                                {ticket.reasonforVisit}
+                              </p>
+                            )}
                           </div>
                           {ticket.receptionistNote && (
                             <div className="mt-3 p-3 bg-white rounded-md text-sm border border-green-100">
@@ -1090,6 +1406,102 @@ const ReceptionistPage: React.FC = () => {
             onSubmit={handleNextStep}
             departments={departments}
           />
+
+          <Dialog open={showActionsDialog} onOpenChange={setShowActionsDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Reception Actions</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                {/* Primary Actions */}
+                <div className="flex flex-col gap-3">
+                  {isServing ? (
+                    <>
+                      <Button
+                        onClick={pauseServing}
+                        variant="outline"
+                        className="border-red-300 hover:bg-red-50 text-red-600 gap-2 w-full"
+                      >
+                        <PauseCircle className="h-4 w-4" />
+                        {isPausing
+                          ? "Complete Current Ticket to Pause"
+                          : "Pause Serving"}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          fetchNextTicket();
+                          setShowActionsDialog(false);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white gap-2 w-full"
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                        Next Ticket
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        startServing();
+                        setShowActionsDialog(false);
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 w-full"
+                    >
+                      <PlayCircle className="h-4 w-4" />
+                      Start Serving
+                    </Button>
+                  )}
+                </div>
+
+                {/* Held Tickets Section */}
+                {heldTickets.length > 0 && (
+                  <>
+                    <div className="relative my-2">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-gray-300" />
+                      </div>
+                      <div className="relative flex justify-center">
+                        <span className="bg-white px-2 text-sm text-gray-500">
+                          Held Tickets
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {heldTickets.map((ticket) => (
+                        <div
+                          key={ticket._id}
+                          className="flex justify-between items-center p-2 bg-green-50 rounded"
+                        >
+                          <div>
+                            <span className="font-semibold">
+                              {ticket.ticketNo}
+                            </span>
+                            {ticket.reasonforVisit && (
+                              <p className="text-xs text-muted-foreground">
+                                {ticket.reasonforVisit}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              handleUnholdTicket(ticket._id);
+                              setShowActionsDialog(false);
+                            }}
+                            className="text-green-600 border-green-300 hover:bg-green-50"
+                          >
+                            <PlayCircle className="h-4 w-4 mr-2" />
+                            Return to Queue
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Toaster />
         </div>
