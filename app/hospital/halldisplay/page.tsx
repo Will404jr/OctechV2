@@ -417,7 +417,7 @@ export default function HallDisplay() {
         }
 
         // Play "room" audio
-        await playAudio("/hospitalAudio/room.wav");
+        // await playAudio("/hospitalAudio/room.wav");
 
         // Play room number audio
         console.log("Playing room number...");

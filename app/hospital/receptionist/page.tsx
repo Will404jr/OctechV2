@@ -224,6 +224,7 @@ const ReceptionistPage: React.FC = () => {
   const [roomNumber, setRoomNumber] = useState<string>("");
   const [isLoadingNextTicket, setIsLoadingNextTicket] = useState(false);
   const autoFetchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [autoFetchEnabled, setAutoFetchEnabled] = useState(true);
 
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return;
@@ -442,7 +443,17 @@ const ReceptionistPage: React.FC = () => {
     fetchRoomDetails();
   }, [roomId]);
 
-  // Auto-fetch next ticket when room is available and no current ticket
+  // Update the useEffect that handles auto-fetching
+  useEffect(() => {
+    // Disable auto-fetch when dialog is open
+    if (showActionsDialog) {
+      setAutoFetchEnabled(false);
+    } else {
+      setAutoFetchEnabled(true);
+    }
+  }, [showActionsDialog]);
+
+  // Separate useEffect for the actual auto-fetch functionality
   useEffect(() => {
     // Clear any existing interval
     if (autoFetchIntervalRef.current) {
@@ -450,11 +461,22 @@ const ReceptionistPage: React.FC = () => {
       autoFetchIntervalRef.current = null;
     }
 
-    // Only set up the interval if we're serving (room is available)
-    if (isServing) {
+    // Only set up the interval if we're serving and auto-fetch is enabled
+    if (isServing && autoFetchEnabled) {
+      console.log(
+        "Setting up auto-fetch interval. Auto-fetch enabled:",
+        autoFetchEnabled
+      );
+
       autoFetchIntervalRef.current = setInterval(async () => {
-        // Only proceed if we're serving, have no current ticket, and not already loading
-        if (isServing && !currentTicket && !isLoadingNextTicket) {
+        // Double-check all conditions before proceeding
+        if (
+          isServing &&
+          !currentTicket &&
+          !isLoadingNextTicket &&
+          autoFetchEnabled &&
+          !showActionsDialog
+        ) {
           console.log("Auto-checking for next ticket...");
 
           try {
@@ -468,6 +490,14 @@ const ReceptionistPage: React.FC = () => {
           } catch (error) {
             console.error("Error in auto-fetch:", error);
           }
+        } else {
+          console.log("Auto-fetch conditions not met:", {
+            isServing,
+            hasCurrentTicket: !!currentTicket,
+            isLoading: isLoadingNextTicket,
+            autoFetchEnabled,
+            dialogOpen: showActionsDialog,
+          });
         }
       }, 5000); // Check every 5 seconds
     }
@@ -479,7 +509,13 @@ const ReceptionistPage: React.FC = () => {
         autoFetchIntervalRef.current = null;
       }
     };
-  }, [isServing, currentTicket, isLoadingNextTicket, fetchTickets]);
+  }, [
+    isServing,
+    currentTicket,
+    isLoadingNextTicket,
+    autoFetchEnabled,
+    fetchTickets,
+  ]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -976,7 +1012,7 @@ const ReceptionistPage: React.FC = () => {
   // Remove this useEffect that's causing the dialog to appear when starting to serve
   // useEffect(() => {
   //   if (isServing && !currentTicket) {
-  //     setShowActionsDialog(true);
+  //   setShowActionsDialog(true);
   //   }
   // }, [isServing, currentTicket]);
 
@@ -1407,7 +1443,13 @@ const ReceptionistPage: React.FC = () => {
             departments={departments}
           />
 
-          <Dialog open={showActionsDialog} onOpenChange={setShowActionsDialog}>
+          <Dialog
+            open={showActionsDialog}
+            onOpenChange={(open) => {
+              setShowActionsDialog(open);
+              setAutoFetchEnabled(!open); // Explicitly disable auto-fetch when dialog opens
+            }}
+          >
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Reception Actions</DialogTitle>

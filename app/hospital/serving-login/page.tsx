@@ -230,6 +230,20 @@ export default function ServingLoginPage() {
       if (response.ok) {
         const result = await response.json();
         setIsLoggedIn(true);
+
+        // Log successful login
+        await fetch("/api/hospital/log", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            staffId: result.userId,
+            action: "Login",
+            details: "Login successful",
+          }),
+        });
+
         setStaffInfo({
           _id: result.userId,
           firstName: result.firstName || "",
@@ -304,16 +318,35 @@ export default function ServingLoginPage() {
       const roomData = await response.json();
       console.log("Room created:", roomData);
 
+      // Get department title for the session
+      const deptResponse = await fetch(
+        `/api/hospital/department/${selectedDepartment}`
+      );
+      const deptData = await deptResponse.json();
+
+      // Create log entry for room selection
+      await fetch("/api/hospital/log", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          staffId: staffInfo._id,
+          action: "Room selection",
+          details: `Room ${roomNumber} assigned in ${deptData.title} department`,
+        }),
+      });
+
       toast({
         title: "Success",
         description: `Room ${roomNumber} assigned successfully for today`,
       });
 
       // Get department title for the session
-      const deptResponse = await fetch(
+      const deptResponse2 = await fetch(
         `/api/hospital/department/${selectedDepartment}`
       );
-      const deptData = await deptResponse.json();
+      const deptData2 = await deptResponse2.json();
 
       // Update session with department and room info
       await fetch("/api/session/update", {
@@ -322,13 +355,13 @@ export default function ServingLoginPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          department: deptData.title,
+          department: deptData2.title,
           roomId: roomData.roomId,
         }),
       });
 
       // Redirect based on department
-      if (deptData.title === "Reception") {
+      if (deptData2.title === "Reception") {
         router.push("/hospital/receptionist");
       } else {
         router.push("/hospital/serving");

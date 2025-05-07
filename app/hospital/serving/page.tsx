@@ -24,13 +24,13 @@ import {
   PauseCircle,
   PlayCircle,
   ArrowRight,
-  ArrowLeft,
   User,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { QueueSpinner } from "@/components/queue-spinner";
 import { Badge } from "@/components/ui/badge";
 import type { SessionData } from "@/lib/session";
+import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog";
 import { Navbar } from "@/components/hospitalNavbar";
 import {
   Dialog,
@@ -191,10 +191,12 @@ const DepartmentRoomBadge = ({
 const ServingPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [heldTickets, setHeldTickets] = useState<Ticket[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [currentTicket, setCurrentTicket] = useState<Ticket | null>(null);
   const [departmentNote, setDepartmentNote] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<SessionData | null>(null);
+  const [showNextStepDialog, setShowNextStepDialog] = useState(false);
   const [showActionsDialog, setShowActionsDialog] = useState(false);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [isServing, setIsServing] = useState(false);
@@ -205,6 +207,7 @@ const ServingPage: React.FC = () => {
   const [departmentName, setDepartmentName] = useState<string>("");
   const [isLoadingNextTicket, setIsLoadingNextTicket] = useState(false);
   const autoFetchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [autoFetchEnabled, setAutoFetchEnabled] = useState(true);
 
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return;
@@ -269,16 +272,16 @@ const ServingPage: React.FC = () => {
       // Get today's date in YYYY-MM-DD format
       const today = new Date().toISOString().split("T")[0];
 
-      // Fetch unassigned tickets created today for this department
+      // Fetch tickets for this department that are not yet completed
       const response = await fetch(
-        `/api/hospital/ticket?unassigned=true&date=${today}&department=${session.department}`
+        `/api/hospital/ticket?date=${today}&department=${session.department}&completed=false`
       );
       if (!response.ok) throw new Error("Failed to fetch tickets");
       const data = await response.json();
 
-      // Fetch held tickets created today for this department
+      // Fetch held tickets for this department
       const heldResponse = await fetch(
-        `/api/hospital/ticket?unassigned=true&held=true&date=${today}&department=${session.department}`
+        `/api/hospital/ticket?held=true&date=${today}&department=${session.department}&completed=false`
       );
       if (!heldResponse.ok) throw new Error("Failed to fetch held tickets");
       const heldData = await heldResponse.json();
@@ -309,6 +312,22 @@ const ServingPage: React.FC = () => {
     }
   }, [toast, currentTicket, session?.department]);
 
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const response = await fetch("/api/hospital/department");
+      if (!response.ok) throw new Error("Failed to fetch departments");
+      const data = await response.json();
+      setDepartments(data);
+    } catch (error) {
+      console.error("Error fetching departments:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch departments",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
   const fetchNextTicket = async () => {
     if (currentTicket) {
       toast({
@@ -324,8 +343,18 @@ const ServingPage: React.FC = () => {
     try {
       const { regular } = await fetchTickets();
 
-      if (regular.length > 0) {
-        const nextTicket = regular[0];
+      // Filter tickets to only include those that are ready for this department
+      const readyTickets = regular.filter((ticket: Ticket) => {
+        // Check if the ticket's current department matches this department
+        const currentDeptHistory = ticket.departmentHistory?.find(
+          (history) =>
+            !history.completed && history.department === session?.department
+        );
+        return !!currentDeptHistory;
+      });
+
+      if (readyTickets.length > 0) {
+        const nextTicket = readyTickets[0];
 
         // First, assign the roomId to the ticket's department history
         await assignRoomToTicket(nextTicket._id);
@@ -421,7 +450,17 @@ const ServingPage: React.FC = () => {
     fetchRoomDetails();
   }, [roomId]);
 
-  // Auto-fetch next ticket when room is available and no current ticket
+  // Update the useEffect that handles auto-fetching
+  useEffect(() => {
+    // Disable auto-fetch when dialog is open
+    if (showActionsDialog || showNextStepDialog) {
+      setAutoFetchEnabled(false);
+    } else {
+      setAutoFetchEnabled(true);
+    }
+  }, [showActionsDialog, showNextStepDialog]);
+
+  // Separate useEffect for the actual auto-fetch functionality
   useEffect(() => {
     // Clear any existing interval
     if (autoFetchIntervalRef.current) {
@@ -429,18 +468,41 @@ const ServingPage: React.FC = () => {
       autoFetchIntervalRef.current = null;
     }
 
-    // Only set up the interval if we're serving (room is available)
-    if (isServing) {
+    // Only set up the interval if we're serving and auto-fetch is enabled
+    if (isServing && autoFetchEnabled) {
+      console.log(
+        "Setting up auto-fetch interval. Auto-fetch enabled:",
+        autoFetchEnabled
+      );
+
       autoFetchIntervalRef.current = setInterval(async () => {
-        // Only proceed if we're serving, have no current ticket, and not already loading
-        if (isServing && !currentTicket && !isLoadingNextTicket) {
+        // Double-check all conditions before proceeding
+        if (
+          isServing &&
+          !currentTicket &&
+          !isLoadingNextTicket &&
+          autoFetchEnabled &&
+          !showActionsDialog &&
+          !showNextStepDialog
+        ) {
           console.log("Auto-checking for next ticket...");
 
           try {
             // Check if there are tickets waiting
             const { regular } = await fetchTickets();
 
-            if (regular.length > 0) {
+            // Only fetch tickets that are actually ready to be served in this department
+            const readyTickets = regular.filter((ticket: Ticket) => {
+              // Check if the ticket's current department matches this department
+              const currentDeptHistory = ticket.departmentHistory?.find(
+                (history) =>
+                  !history.completed &&
+                  history.department === session?.department
+              );
+              return !!currentDeptHistory;
+            });
+
+            if (readyTickets.length > 0) {
               console.log("Auto-fetching next ticket...");
               await fetchNextTicket();
             }
@@ -458,12 +520,21 @@ const ServingPage: React.FC = () => {
         autoFetchIntervalRef.current = null;
       }
     };
-  }, [isServing, currentTicket, isLoadingNextTicket, fetchTickets]);
+  }, [
+    isServing,
+    currentTicket,
+    isLoadingNextTicket,
+    autoFetchEnabled,
+    fetchTickets,
+    showActionsDialog,
+    showNextStepDialog,
+    session?.department,
+  ]);
 
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      await fetchTickets();
+      await Promise.all([fetchTickets(), fetchDepartments()]);
       setIsLoading(false);
     };
     loadData();
@@ -476,7 +547,7 @@ const ServingPage: React.FC = () => {
 
     // Clean up interval on component unmount
     return () => clearInterval(pollingInterval);
-  }, [fetchTickets]);
+  }, [fetchTickets, fetchDepartments]);
 
   useEffect(() => {
     if (session && session.department === "Reception") {
@@ -573,29 +644,30 @@ const ServingPage: React.FC = () => {
     }
   };
 
-  const handleReturnToReception = async () => {
+  const handleNextStep = async (departmentId: string, roomId?: string) => {
     if (!currentTicket || !session?.department) return;
 
     try {
       const response = await fetch(
-        `/api/hospital/ticket/${currentTicket._id}/return-to-reception`,
+        `/api/hospital/ticket/${currentTicket._id}/next-step`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            departmentId,
+            roomId,
             departmentNote: departmentNote,
             note: departmentNote, // Add this line
             currentDepartment: session.department,
-            roomId,
           }),
         }
       );
 
-      if (!response.ok) throw new Error("Failed to return ticket to reception");
+      if (!response.ok) throw new Error("Failed to assign next step");
 
       toast({
         title: "Success",
-        description: "Ticket returned to reception",
+        description: "Ticket forwarded to next department",
       });
 
       // Clear current ticket
@@ -616,14 +688,15 @@ const ServingPage: React.FC = () => {
 
       // Reset form
       setDepartmentNote("");
+      setShowNextStepDialog(false);
 
       // Update tickets list
       await fetchTickets();
     } catch (error) {
-      console.error("Error returning ticket to reception:", error);
+      console.error("Error assigning next step:", error);
       toast({
         title: "Error",
-        description: "Failed to return ticket to reception",
+        description: "Failed to assign next step",
         variant: "destructive",
       });
     }
@@ -1048,6 +1121,18 @@ const ServingPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Reason for Visit */}
+                    {currentTicket.reasonforVisit && (
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <h3 className="font-semibold text-lg mb-2 text-blue-800">
+                          Reason for Visit
+                        </h3>
+                        <p className="text-slate-700">
+                          {currentTicket.reasonforVisit}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Ticket Journey */}
                     <div className="bg-blue-50 p-4 rounded-lg mb-4">
                       <h3 className="font-semibold text-lg mb-4 text-blue-800">
@@ -1126,18 +1211,6 @@ const ServingPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Reason for Visit */}
-                    {currentTicket.reasonforVisit && (
-                      <div className="bg-blue-50 p-4 rounded-lg">
-                        <h3 className="font-semibold text-lg mb-2 text-blue-800">
-                          Reason for Visit
-                        </h3>
-                        <p className="text-slate-700">
-                          {currentTicket.reasonforVisit}
-                        </p>
-                      </div>
-                    )}
-
                     {/* Department Note takes full width */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700">
@@ -1185,13 +1258,13 @@ const ServingPage: React.FC = () => {
                       Cancel Ticket
                     </Button>
 
-                    {/* Return to Reception Button - with text */}
+                    {/* Next Step Button - with text */}
                     <Button
-                      onClick={handleReturnToReception}
+                      onClick={() => setShowNextStepDialog(true)}
                       className="bg-[#0e4480] hover:bg-blue-800 text-white"
                     >
-                      <ArrowLeft className="h-5 w-5 mr-2" />
-                      Return to Reception
+                      <Users className="h-5 w-5 mr-2" />
+                      Next Step
                     </Button>
 
                     {/* Clear Ticket Button - with text */}
@@ -1262,7 +1335,20 @@ const ServingPage: React.FC = () => {
             </Card>
           </div>
 
-          <Dialog open={showActionsDialog} onOpenChange={setShowActionsDialog}>
+          <DepartmentSelectionDialog
+            isOpen={showNextStepDialog}
+            onClose={() => setShowNextStepDialog(false)}
+            onSubmit={handleNextStep}
+            departments={departments}
+          />
+
+          <Dialog
+            open={showActionsDialog}
+            onOpenChange={(open) => {
+              setShowActionsDialog(open);
+              setAutoFetchEnabled(!open); // Explicitly disable auto-fetch when dialog opens
+            }}
+          >
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>{departmentName} Actions</DialogTitle>

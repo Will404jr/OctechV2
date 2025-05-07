@@ -19,11 +19,11 @@ import { Ad } from "./Ad";
 import { QueueSpinner } from "@/components/queue-spinner";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
-const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
 
 const validateFileSize = (file: File) => {
   if (file.size > MAX_FILE_SIZE) {
-    return "File size should not exceed 4MB";
+    return "File size should not exceed 30MB";
   }
   return true;
 };

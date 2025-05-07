@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import { string } from "zod";
 
 //ad schema
 const hospitalAdSchema = new mongoose.Schema(
@@ -25,28 +24,6 @@ const eventSchema = new mongoose.Schema(
 
 export const Event =
   mongoose.models.Event || mongoose.model("Event", eventSchema);
-
-//queue schema
-const TreeNodeSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true },
-    type: {
-      type: String,
-      enum: ["default", "primary", "secondary", "warning", "success"],
-      default: "default",
-    },
-    parentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "TreeNode",
-      default: null,
-    },
-    order: { type: Number, default: 0 },
-  },
-  { timestamps: true, collection: "hospitalQueues" }
-);
-
-export const TreeNode =
-  mongoose.models.TreeNode || mongoose.model("TreeNode", TreeNodeSchema);
 
 //role schema
 const hospitalRoleSchema = new mongoose.Schema(
@@ -161,26 +138,6 @@ export const HospitalSettings =
   mongoose.models.HospitalSettings ||
   mongoose.model("HospitalSettings", hospitalSettingsSchema);
 
-// room schema
-// const roomSchema = new mongoose.Schema(
-//   {
-//     staffId: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: "Staff",
-//       required: true,
-//     },
-//     department: { type: String, required: true },
-//     roomNumber: { type: Number, required: true },
-//     servingTicket: { type: String, default: "", required: false },
-//   },
-//   { timestamps: true }
-// );
-
-// // Add a compound unique index for department and roomNumber
-// roomSchema.index({ department: 1, roomNumber: 1 }, { unique: true });
-
-// export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
-
 //ticket schema
 const ticketSchema = new mongoose.Schema(
   {
@@ -196,6 +153,7 @@ const ticketSchema = new mongoose.Schema(
         startedAt: { type: Date, default: null }, // When roomId is assigned
         completedAt: { type: Date, default: null }, // When completed = true
         processingDuration: { type: Number, default: 0 }, // Time in seconds from startedAt to completedAt
+        waitingDuration: { type: Number, default: 0 }, // Time in seconds from timestamp to startedAt
         note: { type: String, default: "" },
         completed: { type: Boolean, default: false },
         roomId: {
@@ -233,53 +191,6 @@ const ticketSchema = new mongoose.Schema(
 export const Ticket =
   mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
 
-//  journey schema
-const StepSchema = new mongoose.Schema({
-  id: {
-    type: Number,
-    required: true,
-  },
-  title: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  icon: {
-    type: String,
-    required: true,
-  },
-});
-
-// Main Journey Schema
-const JourneySchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    steps: [StepSchema],
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
-// Create indexes for better query performance
-JourneySchema.index({ name: 1 });
-JourneySchema.index({ createdAt: -1 });
-
-export const Journey =
-  mongoose.models.Journey || mongoose.model("Journey", JourneySchema);
-
 //department and room schema
 const roomSchema = new mongoose.Schema(
   {
@@ -316,3 +227,19 @@ export const Department =
   mongoose.models.Department || mongoose.model("Department", departmentSchema);
 
 export const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
+
+// Log schema
+const logSchema = new mongoose.Schema(
+  {
+    staffId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Staff",
+      required: true,
+    },
+    action: { type: String, required: true },
+    details: { type: String, required: true },
+  },
+  { timestamps: true }
+);
+
+export const Log = mongoose.models.Log || mongoose.model("Log", logSchema);
