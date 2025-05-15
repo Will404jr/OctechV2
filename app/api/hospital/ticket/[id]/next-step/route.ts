@@ -15,6 +15,7 @@ export async function POST(
       departmentId,
       roomId,
       userType,
+      patientName,
       reasonForVisit,
       receptionistNote,
       departmentNote,
@@ -142,6 +143,10 @@ export async function POST(
     // Update ticket with user type and reason for visit if provided (from reception)
     if (userType) {
       ticket.userType = userType;
+    }
+
+       if (patientName) {
+      ticket.patientName = patientName;
     }
 
     if (reasonForVisit) {

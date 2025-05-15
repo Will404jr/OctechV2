@@ -36,10 +36,10 @@ const routes = [
     permission: "Roles",
   },
   {
-    label: "Serving",
+    label: "Tickets",
     icon: MonitorPlay,
-    href: "/hospital/dashboard/serving",
-    permission: "Serving",
+    href: "/hospital/dashboard/tickets",
+    permission: "Tickets",
   },
   {
     label: "Departments",

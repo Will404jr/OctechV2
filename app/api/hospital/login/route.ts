@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       session.permissions = {
         Staff: true,
         Roles: true,
-        // Receptionist: true,
+        Tickets: true,
         // Serving: true,
         Queues: true,
         UpcomingEvents: true,

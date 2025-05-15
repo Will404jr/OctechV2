@@ -51,6 +51,8 @@ export async function PUT(
     const body = await req.json();
     const {
       call,
+      patientName,
+      userType,
       reasonforVisit,
       receptionistNote,
       noShow,
@@ -149,6 +151,14 @@ export async function PUT(
     // Handle other updates
     if (call !== undefined) {
       updateData.call = call;
+    }
+
+     if (patientName !== undefined) {
+      updateData.patientName  = patientName;
+    }
+
+       if (userType !== undefined) {
+      updateData.userType = userType;
     }
 
     if (reasonforVisit !== undefined) {

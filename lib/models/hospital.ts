@@ -33,7 +33,7 @@ const hospitalRoleSchema = new mongoose.Schema(
       Staff: { type: Boolean, default: false },
       Roles: { type: Boolean, default: false },
       Receptionist: { type: Boolean, default: false },
-      Serving: { type: Boolean, default: false },
+      Tickets: { type: Boolean, default: false },
       Queues: { type: Boolean, default: false },
       UpcomingEvents: { type: Boolean, default: false },
       Ads: { type: Boolean, default: false },
@@ -142,6 +142,7 @@ export const HospitalSettings =
 const ticketSchema = new mongoose.Schema(
   {
     ticketNo: { type: String, required: true },
+    patientName: { type: String, default: "", required: false },
     reasonforVisit: { type: String, default: "", required: false },
     receptionistNote: { type: String, default: "", required: false },
     // Updated departmentHistory field to track the ticket's journey with time tracking

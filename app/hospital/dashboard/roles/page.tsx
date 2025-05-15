@@ -36,6 +36,7 @@ interface RoleFormData {
 const menuItems = [
   "Staff",
   "Roles",
+  "Tickets",
   "Queues",
   "UpcomingEvents",
   "Ads",
