@@ -1,109 +1,103 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Plus, ImageIcon, Trash2, Loader } from "lucide-react";
-import { useForm } from "react-hook-form";
-import AdCarousel from "./AdCarousel";
-import { Ad } from "./Ad";
-import { QueueSpinner } from "@/components/queue-spinner";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Plus, ImageIcon, Trash2 } from "lucide-react"
+import { useForm } from "react-hook-form"
+import AdCarousel from "./AdCarousel"
+import type { Ad } from "./Ad"
+import { QueueSpinner } from "@/components/queue-spinner"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024 // 30MB
 
 const validateFileSize = (file: File) => {
   if (file.size > MAX_FILE_SIZE) {
-    return "File size should not exceed 30MB";
+    return "File size should not exceed 30MB"
   }
-  return true;
-};
+  return true
+}
 
 export default function DisplayAdsPage() {
-  const [ads, setAds] = useState<Ad[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [ads, setAds] = useState<Ad[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm();
+  } = useForm()
 
   useEffect(() => {
-    fetchAds();
-  }, []);
+    fetchAds()
+  }, [])
 
   const fetchAds = async () => {
-    setIsLoading(true);
+    setIsLoading(true)
     try {
-      const response = await fetch("/api/hospital/ads");
+      const response = await fetch("/api/hospital/ads")
       if (response.ok) {
-        const data: Ad[] = await response.json();
-        setAds(data);
+        const data: Ad[] = await response.json()
+        setAds(data)
       }
     } catch (error) {
-      console.error("Error fetching ads:", error);
+      console.error("Error fetching ads:", error)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const onSubmit = async (data: any) => {
     try {
-      const formData = new FormData();
-      formData.append("name", data.name);
+      const formData = new FormData()
+      formData.append("name", data.name)
       if (data.image && data.image.length > 0) {
-        formData.append("image", data.image[0]);
+        formData.append("image", data.image[0])
       }
 
       const response = await fetch("/api/hospital/ads", {
         method: "POST",
         body: formData,
-      });
+      })
 
       if (response.ok) {
-        const updatedAd: Ad = await response.json();
-        setAds((prevAds) => [updatedAd, ...prevAds]);
-        reset();
-        setIsDialogOpen(false);
+        const updatedAd: Ad = await response.json()
+        setAds((prevAds) => [updatedAd, ...prevAds])
+        reset()
+        setIsDialogOpen(false)
       } else {
-        const errorData = await response.json();
-        console.error("Error creating ad:", errorData.error);
+        const errorData = await response.json()
+        console.error("Error creating ad:", errorData.error)
         // You might want to show this error to the user
       }
     } catch (error) {
-      console.error("Error creating ad:", error);
+      console.error("Error creating ad:", error)
       // You might want to show this error to the user
     }
-  };
+  }
 
   const deleteAd = async (id: string) => {
     try {
       const response = await fetch(`/api/hospital/ads/${id}`, {
         method: "DELETE",
-      });
+      })
 
       if (response.ok) {
-        setAds((prevAds) => prevAds.filter((ad) => ad._id !== id));
+        setAds((prevAds) => prevAds.filter((ad) => ad._id !== id))
       } else {
-        console.error("Failed to delete ad");
+        console.error("Failed to delete ad")
         // You might want to show this error to the user
       }
     } catch (error) {
-      console.error("Error deleting ad:", error);
+      console.error("Error deleting ad:", error)
       // You might want to show this error to the user
     }
-  };
+  }
 
   return (
     <ProtectedRoute requiredPermission="Ads">
@@ -121,11 +115,7 @@ export default function DisplayAdsPage() {
               <DialogHeader>
                 <DialogTitle>Add New Advertisement</DialogTitle>
               </DialogHeader>
-              <form
-                onSubmit={handleSubmit(onSubmit)}
-                className="space-y-4"
-                encType="multipart/form-data"
-              >
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" encType="multipart/form-data">
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Ad Name</Label>
@@ -146,9 +136,7 @@ export default function DisplayAdsPage() {
                     />
                     {errors.image && (
                       <p className="text-red-500 text-sm mt-1">
-                        {errors.image.type === "fileSize"
-                          ? "File size should not exceed 4MB"
-                          : "Image is required"}
+                        {errors.image.type === "fileSize" ? "File size should not exceed 4MB" : "Image is required"}
                       </p>
                     )}
                   </div>
@@ -173,9 +161,7 @@ export default function DisplayAdsPage() {
               {ads.map((ad: Ad) => (
                 <Card key={ad._id}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      {ad.name}
-                    </CardTitle>
+                    <CardTitle className="text-sm font-medium">{ad.name}</CardTitle>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -190,7 +176,7 @@ export default function DisplayAdsPage() {
                       {ad.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={ad.image}
+                          src={ad.image || "/placeholder.svg"}
                           alt={ad.name}
                           className="object-cover w-full h-full"
                         />
@@ -202,8 +188,7 @@ export default function DisplayAdsPage() {
                     </div>
                     <div className="mt-4 text-sm text-muted-foreground">
                       <p>
-                        <strong>Added:</strong>{" "}
-                        {new Date(ad.createdAt).toLocaleDateString()}
+                        <strong>Added:</strong> {new Date(ad.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </CardContent>
@@ -214,5 +199,5 @@ export default function DisplayAdsPage() {
         )}
       </div>
     </ProtectedRoute>
-  );
+  )
 }
