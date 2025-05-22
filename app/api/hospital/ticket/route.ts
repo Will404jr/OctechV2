@@ -83,7 +83,6 @@ export async function POST() {
   }
 }
 
-// Update the GET function to properly handle tickets without specific room assignments
 export async function GET(request: Request) {
   await dbConnect();
 
