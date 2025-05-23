@@ -771,7 +771,7 @@ export default function HallDisplay() {
           <Card className="w-1/5 overflow-auto rounded-lg">
             <CardContent>
               <h2 className="text-xl font-bold mb-2 pt-2">Active Tickets</h2>
-              <Table>
+              <Table className="font-bold">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Ticket</TableHead>
@@ -786,16 +786,16 @@ export default function HallDisplay() {
                       key={ticket.ticketId}
                       className={ticket.call ? "bg-blue-50 animate-pulse" : ""}
                     >
-                      <TableCell className="font-medium">
+                      <TableCell className="font-extrabold">
                         {ticket.ticketNo}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center">
+                        <div className="flex items-center font-extrabold">
                           {/* <span className="mr-2">{ticket.departmentIcon}</span> */}
                           {ticket.department}
                         </div>
                       </TableCell>
-                      <TableCell>{ticket.roomNumber}</TableCell>
+                      <TableCell className="font-extrabold">{ticket.roomNumber}</TableCell>
                       {/* <TableCell>
                         <Button
                           variant="ghost"

@@ -8,6 +8,7 @@ const departments: Department[] = [
   { title: "Registration", icon: "📋" },
   { title: "Triage", icon: "🔍" },
   { title: "Emergency", icon: "🚨" },
+  { title: "Consultation", icon: "🪑" },
   { title: "Laboratory", icon: "🧪" },
   { title: "Radiology", icon: "📸" },
   { title: "MRI", icon: "🔬" },
