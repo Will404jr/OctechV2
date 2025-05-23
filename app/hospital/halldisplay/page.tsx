@@ -786,16 +786,16 @@ export default function HallDisplay() {
                       key={ticket.ticketId}
                       className={ticket.call ? "bg-blue-50 animate-pulse" : ""}
                     >
-                      <TableCell className="font-extrabold">
+                      <TableCell className="text-2xl font-extrabold">
                         {ticket.ticketNo}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center font-extrabold">
+                        <div className="flex items-center text-2xl font-extrabold">
                           {/* <span className="mr-2">{ticket.departmentIcon}</span> */}
                           {ticket.department}
                         </div>
                       </TableCell>
-                      <TableCell className="font-extrabold">{ticket.roomNumber}</TableCell>
+                      <TableCell className="text-2xl font-extrabold">{ticket.roomNumber}</TableCell>
                       {/* <TableCell>
                         <Button
                           variant="ghost"
