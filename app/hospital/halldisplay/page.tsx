@@ -870,10 +870,10 @@ export default function HallDisplay() {
                       <div className="flex items-start space-x-3">
                         <Calendar className="w-5 h-5 text-blue-500 mt-1" />
                         <div>
-                          <h3 className="font-semibold text-lg leading-tight">
+                          <h3 className="font-semibold text-2xl leading-tight">
                             {event.title}
                           </h3>
-                          <p className="text-sm text-gray-600 mt-1">
+                          <p className="text-xl text-gray-600 mt-1">
                             {formatDate(event.date)}
                           </p>
                         </div>
