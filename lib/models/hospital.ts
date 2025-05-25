@@ -185,6 +185,7 @@ const ticketSchema = new mongoose.Schema(
     // Time tracking fields
     completedAt: { type: Date, default: null }, // When ticket is fully completed
     totalDuration: { type: Number, default: 0 }, // Total time in seconds from creation to completion
+    emergency: { type: Boolean, default: false},
   },
   { timestamps: true }
 );

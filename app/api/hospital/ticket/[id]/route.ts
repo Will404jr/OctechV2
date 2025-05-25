@@ -58,6 +58,7 @@ export async function PUT(
       noShow,
       held,
       departmentNote,
+      emergency,
       currentDepartment,
       roomId,
     } = body;
@@ -168,6 +169,11 @@ export async function PUT(
     if (receptionistNote !== undefined) {
       updateData.receptionistNote = receptionistNote;
     }
+
+      if (emergency !== undefined) {
+      updateData.emergency = emergency;
+    }
+
 
     if (noShow !== undefined) {
       updateData.noShow = noShow;

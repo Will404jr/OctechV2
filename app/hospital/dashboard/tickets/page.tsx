@@ -35,7 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { SessionData } from "@/lib/session"
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog"
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 interface Room {
   _id: string
@@ -80,6 +80,7 @@ interface Ticket {
   receptionistNote?: string
   departmentNote?: string
   held?: boolean
+  emergency?: boolean // Add this line
   departmentHistory?: DepartmentHistoryEntry[]
   userType?: string
   language?: string
@@ -251,6 +252,10 @@ const RealTimeDuration = ({
 
 // Component to display ticket status
 const TicketStatusBadge = ({ ticket }: { ticket: Ticket }) => {
+  if (ticket.emergency && !ticket.completed && !ticket.noShow) {
+    return <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">🚨 EMERGENCY</Badge>
+  }
+
   if (ticket.completed) {
     return <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>
   }
@@ -1073,6 +1078,86 @@ const TicketsPage: React.FC = () => {
                     </CardContent>
                   </Card>
 
+                  {/* Emergency Status */}
+                  <Card className="border-slate-200">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        Emergency Status
+                        {selectedTicket.emergency && (
+                          <Badge className="bg-red-100 text-red-800 border-red-200">🚨 EMERGENCY</Badge>
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!selectedTicket.completed && !selectedTicket.noShow ? (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-700">Mark as Emergency</p>
+                            <p className="text-xs text-slate-500">Emergency tickets will be prioritized in the queue</p>
+                          </div>
+                          <Button
+                            variant={selectedTicket.emergency ? "destructive" : "outline"}
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}`, {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    emergency: !selectedTicket.emergency,
+                                    currentDepartment:
+                                      selectedTicket.departmentHistory?.find((h) => !h.completed)?.department ||
+                                      "Unknown",
+                                  }),
+                                })
+
+                                if (!response.ok) throw new Error("Failed to update emergency status")
+
+                                toast({
+                                  title: "Success",
+                                  description: `Ticket ${selectedTicket.emergency ? "removed from" : "marked as"} emergency`,
+                                })
+
+                                // Update the selected ticket
+                                setSelectedTicket({
+                                  ...selectedTicket,
+                                  emergency: !selectedTicket.emergency,
+                                })
+
+                                // Refresh tickets
+                                await fetchTickets()
+                              } catch (error) {
+                                console.error("Error updating emergency status:", error)
+                                toast({
+                                  title: "Error",
+                                  description: "Failed to update emergency status",
+                                  variant: "destructive",
+                                })
+                              }
+                            }}
+                            className={
+                              selectedTicket.emergency
+                                ? "bg-red-600 hover:bg-red-700"
+                                : "border-red-300 text-red-600 hover:bg-red-50"
+                            }
+                          >
+                            {selectedTicket.emergency ? "🚨 Remove Emergency" : "🚨 Mark Emergency"}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-slate-500">
+                          {selectedTicket.emergency ? (
+                            <Badge className="bg-red-100 text-red-800 border-red-200">
+                              🚨 This was an emergency ticket
+                            </Badge>
+                          ) : (
+                            "This ticket was not marked as emergency"
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
                   {/* Current Status */}
                   <Card className="border-slate-200">
                     <CardHeader className="pb-2">
@@ -1385,6 +1470,9 @@ const TicketCard = ({
           <div className="flex flex-col md:flex-row justify-between">
             <div className="flex items-center gap-3 mb-2 md:mb-0 flex-wrap">
               <Badge className="bg-[#0e4480] text-white px-3 py-1 text-base">{ticket.ticketNo}</Badge>
+              {ticket.emergency && !ticket.completed && !ticket.noShow && (
+                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">🚨 EMERGENCY</Badge>
+              )}
               <TicketStatusBadge ticket={ticket} />
               <CurrentDepartmentBadge ticket={ticket} />
             </div>

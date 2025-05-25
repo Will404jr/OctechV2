@@ -30,6 +30,7 @@ import { Navbar } from "@/components/hospitalNavbar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Ticket {
+  createdAt: string | number | Date
   _id: string
   ticketNo: string
   call: boolean
@@ -38,6 +39,7 @@ interface Ticket {
   reasonforVisit?: string
   receptionistNote?: string
   held?: boolean
+  emergency?: boolean // Add this line
   departmentHistory?: {
     department: string
     icon?: string
@@ -297,7 +299,17 @@ const ReceptionistPage: React.FC = () => {
       const { regular } = await fetchTickets()
 
       if (regular.length > 0) {
-        const nextTicket = regular[0]
+        // Sort tickets: emergency tickets first, then by creation time
+        const sortedTickets = regular.sort((a: Ticket, b: Ticket) => {
+          // Emergency tickets get priority
+          if (a.emergency && !b.emergency) return -1
+          if (!a.emergency && b.emergency) return 1
+
+          // If both are emergency or both are not emergency, sort by creation time
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        })
+
+        const nextTicket = sortedTickets[0]
 
         // First, assign the roomId to the ticket's department history
         await assignRoomToTicket(nextTicket._id)
@@ -311,7 +323,7 @@ const ReceptionistPage: React.FC = () => {
 
         toast({
           title: "Success",
-          description: `Ticket ${nextTicket.ticketNo} is now being served`,
+          description: `Ticket ${nextTicket.ticketNo}${nextTicket.emergency ? " (EMERGENCY)" : ""} is now being served`,
         })
       } else {
         toast({
@@ -423,8 +435,17 @@ const ReceptionistPage: React.FC = () => {
             const { regular } = await fetchTickets()
 
             if (regular.length > 0) {
-              console.log("Auto-fetching next ticket...")
-              await fetchNextTicket()
+              // Sort tickets: emergency tickets first
+              const sortedTickets = regular.sort((a: Ticket, b: Ticket) => {
+                if (a.emergency && !b.emergency) return -1
+                if (!a.emergency && b.emergency) return 1
+                return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              })
+
+              if (sortedTickets.length > 0) {
+                console.log("Auto-fetching next ticket...")
+                await fetchNextTicket()
+              }
             }
           } catch (error) {
             console.error("Error in auto-fetch:", error)
@@ -966,33 +987,13 @@ const ReceptionistPage: React.FC = () => {
             </div>
             <div className="flex gap-2">
               {roomId && (
-                <>
-                  {isServing ? (
-                    <>
-                      <Button
-                        onClick={fetchNextTicket}
-                        disabled={!isServing || currentTicket !== null || isLoadingNextTicket}
-                        className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-                      >
-                        <ArrowRight className="h-4 w-4" />
-                        {isLoadingNextTicket ? "Loading..." : "Next Ticket"}
-                      </Button>
-                      <Button
-                        onClick={pauseServing}
-                        variant="outline"
-                        className="border-red-300 hover:bg-red-50 text-red-600 gap-2"
-                      >
-                        <PauseCircle className="h-4 w-4" />
-                        {isPausing ? "Complete Current Ticket to Pause" : "Pause Serving"}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button onClick={startServing} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-                      <PlayCircle className="h-4 w-4" />
-                      Start Serving
-                    </Button>
-                  )}
-                </>
+                <Button
+                  onClick={() => setShowActionsDialog(true)}
+                  className="bg-[#0e4480] hover:bg-blue-800 text-white gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  Control Panel
+                </Button>
               )}
             </div>
           </div>
@@ -1018,6 +1019,9 @@ const ReceptionistPage: React.FC = () => {
                         <Badge className="bg-[#0e4480] text-white text-lg px-6 py-2 rounded-lg">
                           {currentTicket.ticketNo}
                         </Badge>
+                        {currentTicket.emergency && (
+                          <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">🚨 EMERGENCY</Badge>
+                        )}
                         {currentTicket.call && (
                           <Badge className="bg-emerald-100 text-emerald-700 px-4 py-1">Called</Badge>
                         )}
@@ -1025,19 +1029,64 @@ const ReceptionistPage: React.FC = () => {
                           <Badge className="bg-blue-100 text-blue-800 px-4 py-1">{currentTicket.userType}</Badge>
                         )}
                       </div>
-                      <div className="tooltip-container relative">
+                      <div className="flex items-center gap-2">
                         <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={callTicket}
-                          disabled={currentTicket.call}
-                          className="rounded-full w-10 h-10 border-[#0e4480] text-[#0e4480] hover:bg-blue-50 group relative"
+                          variant={currentTicket.emergency ? "destructive" : "outline"}
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(`/api/hospital/ticket/${currentTicket._id}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  emergency: !currentTicket.emergency,
+                                  currentDepartment: "Reception",
+                                }),
+                              })
+
+                              if (!response.ok) throw new Error("Failed to update emergency status")
+
+                              setCurrentTicket({
+                                ...currentTicket,
+                                emergency: !currentTicket.emergency,
+                              })
+
+                              toast({
+                                title: "Success",
+                                description: `Ticket ${currentTicket.emergency ? "removed from" : "marked as"} emergency`,
+                              })
+                            } catch (error) {
+                              console.error("Error updating emergency status:", error)
+                              toast({
+                                title: "Error",
+                                description: "Failed to update emergency status",
+                                variant: "destructive",
+                              })
+                            }
+                          }}
+                          className={
+                            currentTicket.emergency
+                              ? "bg-red-600 hover:bg-red-700"
+                              : "border-red-300 text-red-600 hover:bg-red-50"
+                          }
                         >
-                          <Volume2 className="h-5 w-5" />
-                          <span className="absolute invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs p-2 rounded -bottom-10 left-1/2 transform -translate-x-1/2 w-24 text-center">
-                            Call Ticket
-                          </span>
+                          {currentTicket.emergency ? "🚨 Remove Emergency" : "🚨 Mark Emergency"}
                         </Button>
+
+                        <div className="tooltip-container relative">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={callTicket}
+                            disabled={currentTicket.call}
+                            className="rounded-full w-10 h-10 border-[#0e4480] text-[#0e4480] hover:bg-blue-50 group relative"
+                          >
+                            <Volume2 className="h-5 w-5" />
+                            <span className="absolute invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs p-2 rounded -bottom-10 left-1/2 transform -translate-x-1/2 w-24 text-center">
+                              Call Ticket
+                            </span>
+                          </Button>
+                        </div>
                       </div>
                     </div>
 
