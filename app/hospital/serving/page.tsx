@@ -239,7 +239,7 @@ const ServingPage: React.FC = () => {
   }
 
   const fetchTickets = useCallback(async () => {
-    if (!session?.department) return { regular: [], heldData: [] }
+    if (!session?.department || !roomId) return { regular: [], heldData: [] }
 
     try {
       // Get today's date in YYYY-MM-DD format
@@ -252,26 +252,46 @@ const ServingPage: React.FC = () => {
       if (!response.ok) throw new Error("Failed to fetch tickets")
       const data = await response.json()
 
-      // Fetch held tickets for this department
+      // Fetch held tickets for this department and room
       const heldResponse = await fetch(
         `/api/hospital/ticket?held=true&date=${today}&department=${session.department}&completed=false`,
       )
       if (!heldResponse.ok) throw new Error("Failed to fetch held tickets")
       const heldData = await heldResponse.json()
 
-      setHeldTickets(heldData)
+      // Filter held tickets to only show those assigned to this room
+      const filteredHeldTickets = heldData.filter((ticket: Ticket) => {
+        const currentDeptHistory = ticket.departmentHistory?.find(
+          (history) => !history.completed && history.department === session.department,
+        )
+        // If no roomId in history, show in all rooms (for backward compatibility)
+        // If roomId exists, only show in matching room
+        return !currentDeptHistory?.roomId || currentDeptHistory.roomId === roomId
+      })
 
-      // Only set regular tickets (not held)
-      const regular = data.filter((ticket: Ticket) => !ticket.held)
+      setHeldTickets(filteredHeldTickets)
+
+      // Filter regular tickets to only show those assigned to this room
+      const filteredRegularTickets = data.filter((ticket: Ticket) => {
+        if (ticket.held) return false // Exclude held tickets from regular list
+
+        const currentDeptHistory = ticket.departmentHistory?.find(
+          (history) => !history.completed && history.department === session.department,
+        )
+
+        // If no roomId in history, show in all rooms (for backward compatibility)
+        // If roomId exists, only show in matching room
+        return !currentDeptHistory?.roomId || currentDeptHistory.roomId === roomId
+      })
 
       // Filter out current ticket if it exists
-      const filteredTickets = currentTicket
-        ? regular.filter((ticket: { _id: string }) => ticket._id !== currentTicket._id)
-        : regular
+      const finalFilteredTickets = currentTicket
+        ? filteredRegularTickets.filter((ticket: { _id: string }) => ticket._id !== currentTicket._id)
+        : filteredRegularTickets
 
-      setTickets(filteredTickets)
+      setTickets(finalFilteredTickets)
 
-      return { regular, heldData }
+      return { regular: filteredRegularTickets, heldData: filteredHeldTickets }
     } catch (error) {
       console.error("Error fetching tickets:", error)
       toast({
@@ -281,7 +301,7 @@ const ServingPage: React.FC = () => {
       })
       return { regular: [], heldData: [] }
     }
-  }, [toast, currentTicket, session?.department])
+  }, [toast, currentTicket, session?.department, roomId])
 
   const fetchDepartments = useCallback(async () => {
     try {
@@ -313,13 +333,18 @@ const ServingPage: React.FC = () => {
     try {
       const { regular } = await fetchTickets()
 
-      // Filter tickets to only include those that are ready for this department
+      // Filter tickets to only include those that are ready for this department and room
       const readyTickets = regular.filter((ticket: Ticket) => {
         // Check if the ticket's current department matches this department
         const currentDeptHistory = ticket.departmentHistory?.find(
           (history) => !history.completed && history.department === session?.department,
         )
-        return !!currentDeptHistory
+
+        if (!currentDeptHistory) return false
+
+        // If no roomId in history, show in all rooms (for backward compatibility)
+        // If roomId exists, only show in matching room
+        return !currentDeptHistory.roomId || currentDeptHistory.roomId === roomId
       })
 
       if (readyTickets.length > 0) {
@@ -461,13 +486,18 @@ const ServingPage: React.FC = () => {
             // Check if there are tickets waiting
             const { regular } = await fetchTickets()
 
-            // Only fetch tickets that are actually ready to be served in this department
+            // Only fetch tickets that are actually ready to be served in this department and room
             const readyTickets = regular.filter((ticket: Ticket) => {
               // Check if the ticket's current department matches this department
               const currentDeptHistory = ticket.departmentHistory?.find(
                 (history) => !history.completed && history.department === session?.department,
               )
-              return !!currentDeptHistory
+
+              if (!currentDeptHistory) return false
+
+              // If no roomId in history, show in all rooms (for backward compatibility)
+              // If roomId exists, only show in matching room
+              return !currentDeptHistory.roomId || currentDeptHistory.roomId === roomId
             })
 
             // Sort tickets: emergency tickets first
@@ -504,6 +534,7 @@ const ServingPage: React.FC = () => {
     showActionsDialog,
     showNextStepDialog,
     session?.department,
+    roomId,
   ])
 
   useEffect(() => {

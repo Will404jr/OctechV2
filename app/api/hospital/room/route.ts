@@ -38,27 +38,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if staff already has an active room for today
+    // Check if room number already exists in this department for today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Check across all departments if this staff has a room assigned today
-    const departmentsWithStaffToday = await Department.find({
-      "rooms.staff": staffId,
-      "rooms.createdAt": { $gte: today, $lt: tomorrow },
-    });
-
-    if (departmentsWithStaffToday.length > 0) {
-      return NextResponse.json(
-        { error: "Staff already has a room assigned for today" },
-        { status: 409 }
-      );
-    }
-
-    // Check if room number already exists in this department for today
     const roomExists = department.rooms.some((room: any) => {
       const roomDate = new Date(room.createdAt);
       return (
@@ -77,6 +63,9 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
     }
+
+    // REMOVED: The check that prevents staff from having multiple rooms per day
+    // This allows staff to have multiple rooms as long as room numbers are unique
 
     // Add room to department
     const newRoom = {

@@ -83,13 +83,10 @@ export const DepartmentSelectionDialog: React.FC<
         const data = await response.json();
         console.log("Fetched rooms for today:", data.rooms);
 
-        // Filter for available rooms
-        const availableRoomsData = data.rooms.filter(
-          (room: any) => room.available === true
-        );
-        console.log("Available rooms:", availableRoomsData);
+        // Show all rooms created today
+        console.log("All rooms created today:", data.rooms);
 
-        setAvailableRooms(availableRoomsData);
+        setAvailableRooms(data.rooms);
       } catch (error) {
         console.error("Error fetching rooms:", error);
         setAvailableRooms([]);
@@ -164,7 +161,7 @@ export const DepartmentSelectionDialog: React.FC<
                       <SelectValue
                         placeholder={
                           availableRooms.length === 0
-                            ? "No available rooms"
+                            ? "No rooms created today"
                             : "Select room"
                         }
                       />
@@ -173,16 +170,15 @@ export const DepartmentSelectionDialog: React.FC<
                       {availableRooms.map((room) => (
                         <SelectItem key={room._id} value={room._id}>
                           Room {room.roomNumber} - {room.staff.firstName}{" "}
-                          {room.staff.lastName}
+                          {room.staff.lastName} {room.available ? "(Available)" : "(Occupied)"}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {availableRooms.length === 0 && (
                     <p className="text-sm text-muted-foreground mt-1">
-                      No available rooms in this department. Please select
-                      another department or choose "Assign to any available
-                      room".
+                      No rooms were created today in this department. Please select
+                      another department or choose "Assign to any available room".
                     </p>
                   )}
                 </div>

@@ -660,12 +660,7 @@ export default function HallDisplay() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Loading Audio...</span>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 bg-green-600 px-3 py-1 rounded-full">
-                  <span>🔊</span>
-                  <span>{audioCacheStatus.loadedCount} files ready</span>
-                </div>
-              )}
+              ) : null}
             </div>
           </div>
 
