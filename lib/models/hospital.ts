@@ -61,7 +61,6 @@ const staffSchema = new mongoose.Schema(
       ref: "HospitalRole",
       required: false,
     },
-    // department: { type: String, required: true },
   },
   { timestamps: true }
 );

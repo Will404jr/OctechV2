@@ -10,21 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import {
-  Users,
-  AlertCircle,
-  Clock,
-  CheckCircle2,
-  PauseCircle,
-  User,
-  Search,
-  Filter,
-  RefreshCw,
-  ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
-  X,
-} from "lucide-react"
+import { Users, AlertCircle, Clock, CheckCircle2, PauseCircle, User, Search, Filter, RefreshCw, ChevronDown, ChevronUp, MoreHorizontal, X } from 'lucide-react'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
 import { Badge } from "@/components/ui/badge"
@@ -338,6 +324,11 @@ const TicketsPage: React.FC = () => {
   const [editPatientName, setEditPatientName] = useState("")
   const [editUserType, setEditUserType] = useState("")
   const [editReasonForVisit, setEditReasonForVisit] = useState("")
+
+  const [showServeDialog, setShowServeDialog] = useState(false)
+  const [selectedRoomId, setSelectedRoomId] = useState("")
+  const [availableRooms, setAvailableRooms] = useState<Room[]>([])
+  const [isServingTicket, setIsServingTicket] = useState(false)
 
   // Fetch tickets
   const fetchTickets = useCallback(async () => {
@@ -754,6 +745,134 @@ const TicketsPage: React.FC = () => {
     }
   }
 
+  const handleServeTicket = async (ticket: Ticket) => {
+    // Find the current department for this ticket (one that's not completed and has no roomId)
+    const currentDept = ticket.departmentHistory?.find((history) => !history.completed && !history.roomId)
+    
+    if (!currentDept) {
+      toast({
+        title: "Error",
+        description: "No department waiting for room assignment found for this ticket",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Find the department
+    const department = departments.find(d => d.title === currentDept.department)
+    
+    if (!department) {
+      toast({
+        title: "Error",
+        description: "Department not found",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split("T")[0]
+      
+      // Fetch today's rooms for this specific department
+      const response = await fetch(`/api/hospital/department/${department._id}/rooms?date=${today}`)
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch today's rooms")
+      }
+      
+      const data = await response.json()
+      const todaysRooms = data.rooms || []
+      
+      if (todaysRooms.length === 0) {
+        toast({
+          title: "No Rooms Available",
+          description: `No rooms created today in ${currentDept.department} department`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      setSelectedTicket(ticket)
+      setAvailableRooms(todaysRooms) // Show all rooms, not just available ones
+      setShowServeDialog(true)
+      
+    } catch (error) {
+      console.error("Error fetching today's rooms:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch available rooms for today",
+        variant: "destructive",
+      })
+    }
+  }
+  
+  const handleConfirmServe = async () => {
+    if (!selectedTicket || !selectedRoomId) {
+      toast({
+        title: "Error",
+        description: "Please select a room",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsServingTicket(true)
+
+    try {
+      // First, assign the room to the ticket
+      const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}/assign-room`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: selectedRoomId,
+          department: selectedTicket.departmentHistory?.find((h) => !h.completed)?.department || "Unknown",
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to assign room to ticket")
+      }
+
+      // Update the room to show it's serving this ticket
+      const roomResponse = await fetch(`/api/hospital/room/${selectedRoomId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentTicket: selectedTicket._id,
+          available: true, // Mark room as actively serving
+        }),
+      })
+
+      if (!roomResponse.ok) {
+        throw new Error("Failed to update room status")
+      }
+
+      toast({
+        title: "Success",
+        description: `Ticket ${selectedTicket.ticketNo} is now being served`,
+      })
+
+      // Close dialog and refresh tickets
+      setShowServeDialog(false)
+      setSelectedTicket(null)
+      setSelectedRoomId("")
+      setAvailableRooms([])
+      await fetchTickets()
+
+    } catch (error: any) {
+      console.error("Error serving ticket:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to serve ticket",
+        variant: "destructive",
+      })
+    } finally {
+      setIsServingTicket(false)
+    }
+  }
+
   const refreshTickets = async () => {
     setIsLoading(true)
     await fetchTickets()
@@ -887,6 +1006,7 @@ const TicketsPage: React.FC = () => {
                       onToggleExpand={() => toggleTicketExpansion(ticket._id)}
                       onViewDetails={() => handleViewTicketDetails(ticket)}
                       onUnhold={() => handleUnholdTicket(ticket._id)}
+                      onServe={() => handleServeTicket(ticket)}
                     />
                   ))
               ) : (
@@ -911,6 +1031,7 @@ const TicketsPage: React.FC = () => {
                       onToggleExpand={() => toggleTicketExpansion(ticket._id)}
                       onViewDetails={() => handleViewTicketDetails(ticket)}
                       onUnhold={() => handleUnholdTicket(ticket._id)}
+                      onServe={() => handleServeTicket(ticket)}
                     />
                   ))
               ) : (
@@ -935,6 +1056,7 @@ const TicketsPage: React.FC = () => {
                       onToggleExpand={() => toggleTicketExpansion(ticket._id)}
                       onViewDetails={() => handleViewTicketDetails(ticket)}
                       onUnhold={() => handleUnholdTicket(ticket._id)}
+                      onServe={() => handleServeTicket(ticket)}
                     />
                   ))
               ) : (
@@ -957,6 +1079,7 @@ const TicketsPage: React.FC = () => {
                     onToggleExpand={() => toggleTicketExpansion(ticket._id)}
                     onViewDetails={() => handleViewTicketDetails(ticket)}
                     onUnhold={() => handleUnholdTicket(ticket._id)}
+                    onServe={() => handleServeTicket(ticket)}
                   />
                 ))
               ) : (
@@ -1420,6 +1543,74 @@ const TicketsPage: React.FC = () => {
           departments={departments}
         />
 
+        {/* Serve Ticket Dialog */}
+        <Dialog open={showServeDialog} onOpenChange={setShowServeDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Serve Ticket {selectedTicket?.ticketNo}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <p className="text-sm text-slate-600 mb-4">
+                  This ticket is waiting in {selectedTicket?.departmentHistory?.find(h => !h.completed && !h.roomId)?.department}. Select from today's rooms to start serving:
+                </p>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Today's Rooms</label>
+                  <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
+                    <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
+                      <SelectValue placeholder="Select a room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableRooms.map((room) => (
+                        <SelectItem key={room._id} value={room._id}>
+                          <div className="flex items-center gap-2 w-full">
+                            <span>Room {room.roomNumber}</span>
+                            <span className="text-sm text-slate-500">
+                              - {room.staff.firstName} {room.staff.lastName}
+                            </span>
+                            <Badge 
+                              variant={room.available ? "default" : "secondary"}
+                              className={`ml-auto text-xs ${
+                                room.available 
+                                  ? "bg-green-100 text-green-800 border-green-200" 
+                                  : "bg-red-100 text-red-800 border-red-200"
+                              }`}
+                            >
+                              {room.available ? "Available" : "Occupied"}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowServeDialog(false)
+                  setSelectedRoomId("")
+                  setAvailableRooms([])
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleConfirmServe}
+                disabled={!selectedRoomId || isServingTicket}
+                className="bg-[#0e4480] hover:bg-blue-800 text-white"
+              >
+                {isServingTicket ? "Serving..." : "Start Serving"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Toaster />
       </div>
     </ProtectedRoute>
@@ -1433,12 +1624,14 @@ const TicketCard = ({
   onToggleExpand,
   onViewDetails,
   onUnhold,
+  onServe,
 }: {
   ticket: Ticket
   isExpanded: boolean
   onToggleExpand: () => void
   onViewDetails: () => void
   onUnhold: () => void
+  onServe?: () => void
 }) => {
   // Find current department
   const currentDept = ticket.departmentHistory?.find((history) => !history.completed)
@@ -1493,7 +1686,6 @@ const TicketCard = ({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -1502,6 +1694,13 @@ const TicketCard = ({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={onViewDetails}>View Details</DropdownMenuItem>
+                  {!ticket.completed && !ticket.noShow && !ticket.held && 
+                   ticket.departmentHistory?.some(h => !h.completed && !h.roomId) && (
+                    <DropdownMenuItem onClick={() => onServe && onServe()}>
+                      <Users className="h-4 w-4 mr-2" />
+                      Serve Ticket
+                    </DropdownMenuItem>
+                  )}
                   {ticket.held && <DropdownMenuItem onClick={onUnhold}>Return to Queue</DropdownMenuItem>}
                 </DropdownMenuContent>
               </DropdownMenu>
