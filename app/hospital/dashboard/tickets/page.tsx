@@ -10,15 +10,48 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import { Users, AlertCircle, Clock, CheckCircle2, PauseCircle, User, Search, Filter, RefreshCw, ChevronDown, ChevronUp, MoreHorizontal, X } from 'lucide-react'
+import {
+  Users,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  PauseCircle,
+  User,
+  Search,
+  Filter,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  MoreHorizontal,
+  X,
+  Eye,
+  Play,
+  ArrowRight,
+  MapPin,
+  Timer,
+  UserCheck,
+  Zap,
+  Grid3X3,
+  List,
+  SortAsc,
+  SortDesc,
+} from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Progress } from "@/components/ui/progress"
 import type { SessionData } from "@/lib/session"
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
@@ -66,7 +99,7 @@ interface Ticket {
   receptionistNote?: string
   departmentNote?: string
   held?: boolean
-  emergency?: boolean // Add this line
+  emergency?: boolean
   departmentHistory?: DepartmentHistoryEntry[]
   userType?: string
   language?: string
@@ -86,7 +119,7 @@ const formatDuration = (seconds: number | undefined): string => {
   const remainingSeconds = Math.floor(seconds % 60)
 
   if (hours > 0) {
-    return `${hours}h ${minutes}m ${remainingSeconds}s`
+    return `${hours}h ${minutes}m`
   } else if (minutes > 0) {
     return `${minutes}m ${remainingSeconds}s`
   } else {
@@ -173,22 +206,24 @@ const DepartmentRoomBadge = ({
   }, [department, roomIdPartial])
 
   if (isLoading) {
-    return <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 animate-pulse">Loading...</Badge>
+    return (
+      <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 animate-pulse text-xs">Loading...</Badge>
+    )
   }
 
   if (hasError) {
     return (
-      <Badge className="ml-2 bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+      <Badge className="ml-2 bg-red-100 text-red-800 border-red-200 flex items-center gap-1 text-xs">
         <User className="h-3 w-3" />
-        Room: Unknown Staff
+        Room: Unknown
       </Badge>
     )
   }
 
   return (
-    <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 flex items-center gap-1">
-      <User className="h-3 w-3" />
-      {roomInfo?.roomNumber ? `Room ${roomInfo.roomNumber}` : "Room"}: {roomInfo?.staffName || "Unknown"}
+    <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 flex items-center gap-1 text-xs">
+      <MapPin className="h-3 w-3" />
+      {roomInfo?.roomNumber ? `R${roomInfo.roomNumber}` : "Room"}: {roomInfo?.staffName?.split(" ")[0] || "Unknown"}
     </Badge>
   )
 }
@@ -239,19 +274,39 @@ const RealTimeDuration = ({
 // Component to display ticket status
 const TicketStatusBadge = ({ ticket }: { ticket: Ticket }) => {
   if (ticket.emergency && !ticket.completed && !ticket.noShow) {
-    return <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">🚨 EMERGENCY</Badge>
+    return (
+      <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1">
+        <Zap className="h-3 w-3" />
+        EMERGENCY
+      </Badge>
+    )
   }
 
   if (ticket.completed) {
-    return <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>
+    return (
+      <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
+        <CheckCircle2 className="h-3 w-3" />
+        Completed
+      </Badge>
+    )
   }
 
   if (ticket.noShow) {
-    return <Badge className="bg-red-100 text-red-800 border-red-200">No Show</Badge>
+    return (
+      <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+        <X className="h-3 w-3" />
+        No Show
+      </Badge>
+    )
   }
 
   if (ticket.held) {
-    return <Badge className="bg-amber-100 text-amber-800 border-amber-200">On Hold</Badge>
+    return (
+      <Badge className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
+        <PauseCircle className="h-3 w-3" />
+        On Hold
+      </Badge>
+    )
   }
 
   // Check if ticket is being served in any department
@@ -260,10 +315,20 @@ const TicketStatusBadge = ({ ticket }: { ticket: Ticket }) => {
   )
 
   if (isBeingServed) {
-    return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Being Served</Badge>
+    return (
+      <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
+        <UserCheck className="h-3 w-3" />
+        Being Served
+      </Badge>
+    )
   }
 
-  return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Waiting</Badge>
+  return (
+    <Badge className="bg-purple-100 text-purple-800 border-purple-200 flex items-center gap-1">
+      <Timer className="h-3 w-3" />
+      Waiting
+    </Badge>
+  )
 }
 
 // Component to display current department
@@ -272,14 +337,15 @@ const CurrentDepartmentBadge = ({ ticket }: { ticket: Ticket }) => {
   const currentDept = ticket.departmentHistory?.find((history) => !history.completed)
 
   if (!currentDept) {
-    return <Badge className="bg-slate-100 text-slate-800 border-slate-200">No Department</Badge>
+    return <Badge className="bg-slate-100 text-slate-800 border-slate-200 text-xs">No Department</Badge>
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 flex items-center gap-1">
-        {currentDept.icon && <span className="mr-1">{currentDept.icon}</span>}
-        {currentDept.department}
+    <div className="flex items-center gap-1 flex-wrap">
+      <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 flex items-center gap-1 text-xs">
+        {currentDept.icon && <span className="text-sm">{currentDept.icon}</span>}
+        <span className="hidden sm:inline">{currentDept.department}</span>
+        <span className="sm:hidden">{currentDept.department.substring(0, 3)}</span>
       </Badge>
       {currentDept.roomId && (
         <DepartmentRoomBadge
@@ -303,6 +369,217 @@ const CurrentDepartmentBadge = ({ ticket }: { ticket: Ticket }) => {
   )
 }
 
+// Quick Stats Component
+const QuickStats = ({ tickets }: { tickets: Ticket[] }) => {
+  const stats = {
+    total: tickets.length,
+    waiting: tickets.filter(
+      (t) => !t.completed && !t.noShow && !t.held && !t.departmentHistory?.some((h) => !h.completed && h.startedAt),
+    ).length,
+    serving: tickets.filter(
+      (t) => !t.completed && !t.noShow && !t.held && t.departmentHistory?.some((h) => !h.completed && h.startedAt),
+    ).length,
+    emergency: tickets.filter((t) => t.emergency && !t.completed && !t.noShow).length,
+    completed: tickets.filter((t) => t.completed).length,
+    held: tickets.filter((t) => t.held).length,
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <Card className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-blue-600" />
+          <div>
+            <p className="text-xs text-blue-600 font-medium">Total</p>
+            <p className="text-lg font-bold text-blue-700">{stats.total}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-3 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+        <div className="flex items-center gap-2">
+          <Timer className="h-4 w-4 text-purple-600" />
+          <div>
+            <p className="text-xs text-purple-600 font-medium">Waiting</p>
+            <p className="text-lg font-bold text-purple-700">{stats.waiting}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-blue-600" />
+          <div>
+            <p className="text-xs text-blue-600 font-medium">Serving</p>
+            <p className="text-lg font-bold text-blue-700">{stats.serving}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-3 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-red-600" />
+          <div>
+            <p className="text-xs text-red-600 font-medium">Emergency</p>
+            <p className="text-lg font-bold text-red-700">{stats.emergency}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-3 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <div>
+            <p className="text-xs text-green-600 font-medium">Done</p>
+            <p className="text-lg font-bold text-green-700">{stats.completed}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-3 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+        <div className="flex items-center gap-2">
+          <PauseCircle className="h-4 w-4 text-amber-600" />
+          <div>
+            <p className="text-xs text-amber-600 font-medium">Hold</p>
+            <p className="text-lg font-bold text-amber-700">{stats.held}</p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// Mobile Filters Sheet
+const MobileFiltersSheet = ({
+  searchQuery,
+  setSearchQuery,
+  filterDepartment,
+  setFilterDepartment,
+  filterStatus,
+  setFilterStatus,
+  departments,
+  sortBy,
+  setSortBy,
+  sortOrder,
+  setSortOrder,
+}: {
+  searchQuery: string
+  setSearchQuery: (value: string) => void
+  filterDepartment: string
+  setFilterDepartment: (value: string) => void
+  filterStatus: string
+  setFilterStatus: (value: string) => void
+  departments: Department[]
+  sortBy: string
+  setSortBy: (value: string) => void
+  sortOrder: "asc" | "desc"
+  setSortOrder: (value: "asc" | "desc") => void
+}) => {
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="outline" size="sm" className="lg:hidden">
+          <Filter className="h-4 w-4 mr-2" />
+          Filters
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+        <SheetHeader>
+          <SheetTitle>Filters & Search</SheetTitle>
+          <SheetDescription>Filter and search through tickets</SheetDescription>
+        </SheetHeader>
+        <div className="space-y-4 mt-6">
+          <div>
+            <label className="text-sm font-medium mb-2 block">Search</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <Input
+                placeholder="Search tickets..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-2 block">Department</label>
+            <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {departments.map((dept) => (
+                  <SelectItem key={dept._id} value={dept.title}>
+                    {dept.icon} {dept.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-2 block">Status</label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="waiting">Waiting</SelectItem>
+                <SelectItem value="serving">Being Served</SelectItem>
+                <SelectItem value="held">On Hold</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="noshow">No Show</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-2 block">Sort By</label>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="created">Created Time</SelectItem>
+                <SelectItem value="ticket">Ticket Number</SelectItem>
+                <SelectItem value="patient">Patient Name</SelectItem>
+                <SelectItem value="department">Department</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-2 block">Sort Order</label>
+            <div className="flex gap-2">
+              <Button
+                variant={sortOrder === "asc" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSortOrder("asc")}
+                className="flex-1"
+              >
+                <SortAsc className="h-4 w-4 mr-2" />
+                Ascending
+              </Button>
+              <Button
+                variant={sortOrder === "desc" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSortOrder("desc")}
+                className="flex-1"
+              >
+                <SortDesc className="h-4 w-4 mr-2" />
+                Descending
+              </Button>
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 const TicketsPage: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([])
@@ -317,6 +594,9 @@ const TicketsPage: React.FC = () => {
   const [showNextStepDialog, setShowNextStepDialog] = useState(false)
   const [departmentNote, setDepartmentNote] = useState("")
   const [expandedTickets, setExpandedTickets] = useState<Record<string, boolean>>({})
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list")
+  const [sortBy, setSortBy] = useState("created")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
   const { toast } = useToast()
   const router = useRouter()
 
@@ -393,7 +673,7 @@ const TicketsPage: React.FC = () => {
     }
   }, [toast])
 
-  // Apply filters and search
+  // Apply filters, search, and sorting
   useEffect(() => {
     let result = [...tickets]
 
@@ -448,8 +728,41 @@ const TicketsPage: React.FC = () => {
       }
     }
 
+    // Apply sorting
+    result.sort((a, b) => {
+      let aValue: any, bValue: any
+
+      switch (sortBy) {
+        case "created":
+          aValue = new Date(a.createdAt).getTime()
+          bValue = new Date(b.createdAt).getTime()
+          break
+        case "ticket":
+          aValue = a.ticketNo
+          bValue = b.ticketNo
+          break
+        case "patient":
+          aValue = a.patientName || ""
+          bValue = b.patientName || ""
+          break
+        case "department":
+          aValue = a.departmentHistory?.find((h) => !h.completed)?.department || ""
+          bValue = b.departmentHistory?.find((h) => !h.completed)?.department || ""
+          break
+        default:
+          aValue = new Date(a.createdAt).getTime()
+          bValue = new Date(b.createdAt).getTime()
+      }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1
+      } else {
+        return aValue < bValue ? 1 : -1
+      }
+    })
+
     setFilteredTickets(result)
-  }, [tickets, searchQuery, filterDepartment, filterStatus])
+  }, [tickets, searchQuery, filterDepartment, filterStatus, sortBy, sortOrder])
 
   // Initial data loading
   useEffect(() => {
@@ -509,6 +822,11 @@ const TicketsPage: React.FC = () => {
       const currentDepartment =
         selectedTicket.departmentHistory?.find((history) => !history.completed)?.department || "Unknown"
 
+      // Find the current department history entry with roomId before moving to next step
+      const currentDeptHistory = selectedTicket.departmentHistory?.find(
+        (history) => !history.completed && history.roomId,
+      )
+
       const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}/next-step`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -521,6 +839,36 @@ const TicketsPage: React.FC = () => {
       })
 
       if (!response.ok) throw new Error("Failed to assign next step")
+
+      // If the ticket was being served in a room, clear the room's currentTicket
+      if (currentDeptHistory && currentDeptHistory.roomId) {
+        try {
+          const roomId =
+            typeof currentDeptHistory.roomId === "string"
+              ? currentDeptHistory.roomId
+              : currentDeptHistory.roomId &&
+                  typeof currentDeptHistory.roomId === "object" &&
+                  "oid" in currentDeptHistory.roomId
+                ? (currentDeptHistory.roomId as any).$oid
+                : String(currentDeptHistory.roomId)
+
+          const roomResponse = await fetch(`/api/hospital/room/${roomId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentTicket: null,
+              available: true,
+            }),
+          })
+
+          if (!roomResponse.ok) {
+            console.warn("Failed to clear room's currentTicket, but ticket was moved to next step successfully")
+          }
+        } catch (roomError) {
+          console.error("Error clearing room's currentTicket:", roomError)
+          // Don't throw here as the ticket was successfully moved
+        }
+      }
 
       toast({
         title: "Success",
@@ -552,6 +900,11 @@ const TicketsPage: React.FC = () => {
       const currentDepartment =
         selectedTicket.departmentHistory?.find((history) => !history.completed)?.department || "Unknown"
 
+      // Find the current department history entry with roomId
+      const currentDeptHistory = selectedTicket.departmentHistory?.find(
+        (history) => !history.completed && history.roomId,
+      )
+
       const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}/clear`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -562,6 +915,36 @@ const TicketsPage: React.FC = () => {
       })
 
       if (!response.ok) throw new Error("Failed to clear ticket")
+
+      // If the ticket was being served in a room, clear the room's currentTicket
+      if (currentDeptHistory && currentDeptHistory.roomId) {
+        try {
+          const roomId =
+            typeof currentDeptHistory.roomId === "string"
+              ? currentDeptHistory.roomId
+              : currentDeptHistory.roomId &&
+                  typeof currentDeptHistory.roomId === "object" &&
+                  "oid" in currentDeptHistory.roomId
+                ? (currentDeptHistory.roomId as any).$oid
+                : String(currentDeptHistory.roomId)
+
+          const roomResponse = await fetch(`/api/hospital/room/${roomId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentTicket: null,
+              available: true,
+            }),
+          })
+
+          if (!roomResponse.ok) {
+            console.warn("Failed to clear room's currentTicket, but ticket was cleared successfully")
+          }
+        } catch (roomError) {
+          console.error("Error clearing room's currentTicket:", roomError)
+          // Don't throw here as the ticket was successfully cleared
+        }
+      }
 
       toast({
         title: "Success",
@@ -592,6 +975,11 @@ const TicketsPage: React.FC = () => {
       const currentDepartment =
         selectedTicket.departmentHistory?.find((history) => !history.completed)?.department || "Unknown"
 
+      // Find the current department history entry with roomId before putting on hold
+      const currentDeptHistory = selectedTicket.departmentHistory?.find(
+        (history) => !history.completed && history.roomId,
+      )
+
       const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -603,6 +991,36 @@ const TicketsPage: React.FC = () => {
       })
 
       if (!response.ok) throw new Error("Failed to hold ticket")
+
+      // If the ticket was being served in a room, clear the room's currentTicket
+      if (currentDeptHistory && currentDeptHistory.roomId) {
+        try {
+          const roomId =
+            typeof currentDeptHistory.roomId === "string"
+              ? currentDeptHistory.roomId
+              : currentDeptHistory.roomId &&
+                  typeof currentDeptHistory.roomId === "object" &&
+                  "oid" in currentDeptHistory.roomId
+                ? (currentDeptHistory.roomId as any).$oid
+                : String(currentDeptHistory.roomId)
+
+          const roomResponse = await fetch(`/api/hospital/room/${roomId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentTicket: null,
+              available: true,
+            }),
+          })
+
+          if (!roomResponse.ok) {
+            console.warn("Failed to clear room's currentTicket, but ticket was put on hold successfully")
+          }
+        } catch (roomError) {
+          console.error("Error clearing room's currentTicket:", roomError)
+          // Don't throw here as the ticket was successfully put on hold
+        }
+      }
 
       toast({
         title: "Success",
@@ -665,6 +1083,11 @@ const TicketsPage: React.FC = () => {
     if (!selectedTicket) return
 
     try {
+      // Find the current department history entry with roomId
+      const currentDeptHistory = selectedTicket.departmentHistory?.find(
+        (history) => !history.completed && history.roomId,
+      )
+
       const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -675,6 +1098,36 @@ const TicketsPage: React.FC = () => {
       })
 
       if (!response.ok) throw new Error("Failed to cancel ticket")
+
+      // If the ticket was being served in a room, clear the room's currentTicket
+      if (currentDeptHistory && currentDeptHistory.roomId) {
+        try {
+          const roomId =
+            typeof currentDeptHistory.roomId === "string"
+              ? currentDeptHistory.roomId
+              : currentDeptHistory.roomId &&
+                  typeof currentDeptHistory.roomId === "object" &&
+                  "oid" in currentDeptHistory.roomId
+                ? (currentDeptHistory.roomId as any).$oid
+                : String(currentDeptHistory.roomId)
+
+          const roomResponse = await fetch(`/api/hospital/room/${roomId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentTicket: null,
+              available: true,
+            }),
+          })
+
+          if (!roomResponse.ok) {
+            console.warn("Failed to clear room's currentTicket, but ticket was cancelled successfully")
+          }
+        } catch (roomError) {
+          console.error("Error clearing room's currentTicket:", roomError)
+          // Don't throw here as the ticket was successfully cancelled
+        }
+      }
 
       toast({
         title: "Success",
@@ -748,7 +1201,7 @@ const TicketsPage: React.FC = () => {
   const handleServeTicket = async (ticket: Ticket) => {
     // Find the current department for this ticket (one that's not completed and has no roomId)
     const currentDept = ticket.departmentHistory?.find((history) => !history.completed && !history.roomId)
-    
+
     if (!currentDept) {
       toast({
         title: "Error",
@@ -759,8 +1212,8 @@ const TicketsPage: React.FC = () => {
     }
 
     // Find the department
-    const department = departments.find(d => d.title === currentDept.department)
-    
+    const department = departments.find((d) => d.title === currentDept.department)
+
     if (!department) {
       toast({
         title: "Error",
@@ -773,17 +1226,17 @@ const TicketsPage: React.FC = () => {
     try {
       // Get today's date in YYYY-MM-DD format
       const today = new Date().toISOString().split("T")[0]
-      
+
       // Fetch today's rooms for this specific department
       const response = await fetch(`/api/hospital/department/${department._id}/rooms?date=${today}`)
-      
+
       if (!response.ok) {
         throw new Error("Failed to fetch today's rooms")
       }
-      
+
       const data = await response.json()
       const todaysRooms = data.rooms || []
-      
+
       if (todaysRooms.length === 0) {
         toast({
           title: "No Rooms Available",
@@ -796,7 +1249,6 @@ const TicketsPage: React.FC = () => {
       setSelectedTicket(ticket)
       setAvailableRooms(todaysRooms) // Show all rooms, not just available ones
       setShowServeDialog(true)
-      
     } catch (error) {
       console.error("Error fetching today's rooms:", error)
       toast({
@@ -806,7 +1258,7 @@ const TicketsPage: React.FC = () => {
       })
     }
   }
-  
+
   const handleConfirmServe = async () => {
     if (!selectedTicket || !selectedRoomId) {
       toast({
@@ -840,7 +1292,7 @@ const TicketsPage: React.FC = () => {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          currentTicket: selectedTicket._id,
+          currentTicket: selectedTicket._id, // Set to ticket ID, not null
           available: true, // Mark room as actively serving
         }),
       })
@@ -860,7 +1312,6 @@ const TicketsPage: React.FC = () => {
       setSelectedRoomId("")
       setAvailableRooms([])
       await fetchTickets()
-
     } catch (error: any) {
       console.error("Error serving ticket:", error)
       toast({
@@ -908,200 +1359,297 @@ const TicketsPage: React.FC = () => {
 
   return (
     <ProtectedRoute requiredPermission="Tickets">
-      <div className="bg-gradient-to-b from-white to-blue-50 min-h-screen">
-        <div className="container mx-auto p-6 space-y-6">
+      <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen">
+        <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
           {/* Header Section */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-blue-100">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight mb-1 text-[#0e4480]">Ticket Management Dashboard</h1>
-              <p className="text-slate-500">Monitor and manage all tickets in the system</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-[#0e4480]/10 px-4 py-2 rounded-full">
-                <Users className="h-5 w-5 text-[#0e4480]" />
-                <span className="font-medium text-[#0e4480]">{filteredTickets.length} tickets</span>
+          <div className="bg-white/80 backdrop-blur-sm p-4 sm:p-6 rounded-2xl shadow-lg border border-white/20">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight mb-1 bg-gradient-to-r from-[#0e4480] to-blue-600 bg-clip-text text-transparent">
+                  Ticket Management
+                </h1>
+                <p className="text-slate-500 text-sm sm:text-base">Monitor and manage all tickets in real-time</p>
               </div>
-              <Button variant="outline" size="sm" onClick={refreshTickets} className="flex items-center gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Refresh
-              </Button>
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                <div className="flex items-center gap-2 bg-[#0e4480]/10 px-3 py-2 rounded-full flex-1 sm:flex-none">
+                  <Users className="h-4 w-4 text-[#0e4480]" />
+                  <span className="font-medium text-[#0e4480] text-sm">{filteredTickets.length} tickets</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshTickets}
+                  className="flex items-center gap-2 shrink-0"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+              </div>
             </div>
           </div>
 
+          {/* Quick Stats */}
+          <QuickStats tickets={tickets} />
+
           {/* Search and Filter Section */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative md:col-span-2">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-              <Input
-                placeholder="Search by ticket number, patient name, or reason..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 border-slate-300 focus:ring-[#0e4480]"
-              />
-              {searchQuery && (
+          <div className="bg-white/80 backdrop-blur-sm p-4 sm:p-6 rounded-2xl shadow-lg border border-white/20">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search - Full width on mobile */}
+              <div className="relative flex-1 lg:flex-2">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                <Input
+                  placeholder="Search by ticket number, patient name, or reason..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Desktop Filters */}
+              <div className="hidden lg:flex gap-4">
+                <div className="relative min-w-[200px]">
+                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                  <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                    <SelectTrigger className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50">
+                      <SelectValue placeholder="Filter by department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept._id} value={dept.title}>
+                          {dept.icon} {dept.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="relative min-w-[180px]">
+                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="waiting">Waiting</SelectItem>
+                      <SelectItem value="serving">Being Served</SelectItem>
+                      <SelectItem value="held">On Hold</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="noshow">No Show</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Mobile/Tablet Controls */}
+              <div className="flex items-center gap-2 lg:hidden">
+                <MobileFiltersSheet
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  filterDepartment={filterDepartment}
+                  setFilterDepartment={setFilterDepartment}
+                  filterStatus={filterStatus}
+                  setFilterStatus={setFilterStatus}
+                  departments={departments}
+                  sortBy={sortBy}
+                  setSortBy={setSortBy}
+                  sortOrder={sortOrder}
+                  setSortOrder={setSortOrder}
+                />
+              </div>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6"
-                  onClick={() => setSearchQuery("")}
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className="h-8 w-8 p-0"
                 >
-                  <X className="h-4 w-4" />
+                  <List className="h-4 w-4" />
                 </Button>
-              )}
-            </div>
-
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-              <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                <SelectTrigger className="pl-10 border-slate-300 focus:ring-[#0e4480]">
-                  <SelectValue placeholder="Filter by department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept._id} value={dept.title}>
-                      {dept.icon} {dept.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="pl-10 border-slate-300 focus:ring-[#0e4480]">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="waiting">Waiting</SelectItem>
-                  <SelectItem value="serving">Being Served</SelectItem>
-                  <SelectItem value="held">On Hold</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="noshow">No Show</SelectItem>
-                </SelectContent>
-              </Select>
+                <Button
+                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("grid")}
+                  className="h-8 w-8 p-0"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
           {/* Tickets List */}
           <Tabs defaultValue="active" className="w-full">
-            <TabsList className="mb-4">
-              <TabsTrigger value="active">Active Tickets</TabsTrigger>
-              <TabsTrigger value="held">On Hold</TabsTrigger>
-              <TabsTrigger value="completed">Completed</TabsTrigger>
-              <TabsTrigger value="all">All Tickets</TabsTrigger>
-            </TabsList>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+              <div className="p-4 sm:p-6 border-b border-slate-200">
+                <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4">
+                  <TabsTrigger value="active" className="text-xs sm:text-sm">
+                    Active
+                  </TabsTrigger>
+                  <TabsTrigger value="held" className="text-xs sm:text-sm">
+                    On Hold
+                  </TabsTrigger>
+                  <TabsTrigger value="completed" className="text-xs sm:text-sm">
+                    Completed
+                  </TabsTrigger>
+                  <TabsTrigger value="all" className="text-xs sm:text-sm">
+                    All
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
-            <TabsContent value="active" className="space-y-4">
-              {filteredTickets.filter((t) => !t.completed && !t.noShow && !t.held).length > 0 ? (
-                filteredTickets
-                  .filter((t) => !t.completed && !t.noShow && !t.held)
-                  .map((ticket) => (
-                    <TicketCard
-                      key={ticket._id}
-                      ticket={ticket}
-                      isExpanded={!!expandedTickets[ticket._id]}
-                      onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                      onViewDetails={() => handleViewTicketDetails(ticket)}
-                      onUnhold={() => handleUnholdTicket(ticket._id)}
-                      onServe={() => handleServeTicket(ticket)}
-                    />
-                  ))
-              ) : (
-                <Alert className="bg-blue-50 border-blue-100">
-                  <AlertCircle className="h-4 w-4 text-blue-600" />
-                  <AlertDescription className="text-blue-700">
-                    No active tickets found matching your filters.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </TabsContent>
+              <div className="p-4 sm:p-6">
+                <TabsContent value="active" className="space-y-3 sm:space-y-4 mt-0">
+                  {filteredTickets.filter((t) => !t.completed && !t.noShow && !t.held).length > 0 ? (
+                    <div
+                      className={
+                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
+                      }
+                    >
+                      {filteredTickets
+                        .filter((t) => !t.completed && !t.noShow && !t.held)
+                        .map((ticket) => (
+                          <TicketCard
+                            key={ticket._id}
+                            ticket={ticket}
+                            isExpanded={!!expandedTickets[ticket._id]}
+                            onToggleExpand={() => toggleTicketExpansion(ticket._id)}
+                            onViewDetails={() => handleViewTicketDetails(ticket)}
+                            onUnhold={() => handleUnholdTicket(ticket._id)}
+                            onServe={() => handleServeTicket(ticket)}
+                            viewMode={viewMode}
+                          />
+                        ))}
+                    </div>
+                  ) : (
+                    <Alert className="bg-blue-50 border-blue-100">
+                      <AlertCircle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-700">
+                        No active tickets found matching your filters.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </TabsContent>
 
-            <TabsContent value="held" className="space-y-4">
-              {filteredTickets.filter((t) => t.held).length > 0 ? (
-                filteredTickets
-                  .filter((t) => t.held)
-                  .map((ticket) => (
-                    <TicketCard
-                      key={ticket._id}
-                      ticket={ticket}
-                      isExpanded={!!expandedTickets[ticket._id]}
-                      onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                      onViewDetails={() => handleViewTicketDetails(ticket)}
-                      onUnhold={() => handleUnholdTicket(ticket._id)}
-                      onServe={() => handleServeTicket(ticket)}
-                    />
-                  ))
-              ) : (
-                <Alert className="bg-amber-50 border-amber-100">
-                  <AlertCircle className="h-4 w-4 text-amber-600" />
-                  <AlertDescription className="text-amber-700">
-                    No tickets on hold found matching your filters.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </TabsContent>
+                <TabsContent value="held" className="space-y-3 sm:space-y-4 mt-0">
+                  {filteredTickets.filter((t) => t.held).length > 0 ? (
+                    <div
+                      className={
+                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
+                      }
+                    >
+                      {filteredTickets
+                        .filter((t) => t.held)
+                        .map((ticket) => (
+                          <TicketCard
+                            key={ticket._id}
+                            ticket={ticket}
+                            isExpanded={!!expandedTickets[ticket._id]}
+                            onToggleExpand={() => toggleTicketExpansion(ticket._id)}
+                            onViewDetails={() => handleViewTicketDetails(ticket)}
+                            onUnhold={() => handleUnholdTicket(ticket._id)}
+                            onServe={() => handleServeTicket(ticket)}
+                            viewMode={viewMode}
+                          />
+                        ))}
+                    </div>
+                  ) : (
+                    <Alert className="bg-amber-50 border-amber-100">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-700">
+                        No tickets on hold found matching your filters.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </TabsContent>
 
-            <TabsContent value="completed" className="space-y-4">
-              {filteredTickets.filter((t) => t.completed === true || t.noShow === true).length > 0 ? (
-                filteredTickets
-                  .filter((t) => t.completed === true || t.noShow === true)
-                  .map((ticket) => (
-                    <TicketCard
-                      key={ticket._id}
-                      ticket={ticket}
-                      isExpanded={!!expandedTickets[ticket._id]}
-                      onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                      onViewDetails={() => handleViewTicketDetails(ticket)}
-                      onUnhold={() => handleUnholdTicket(ticket._id)}
-                      onServe={() => handleServeTicket(ticket)}
-                    />
-                  ))
-              ) : (
-                <Alert className="bg-green-50 border-green-100">
-                  <AlertCircle className="h-4 w-4 text-green-600" />
-                  <AlertDescription className="text-green-700">
-                    No completed tickets found matching your filters.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </TabsContent>
+                <TabsContent value="completed" className="space-y-3 sm:space-y-4 mt-0">
+                  {filteredTickets.filter((t) => t.completed === true || t.noShow === true).length > 0 ? (
+                    <div
+                      className={
+                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
+                      }
+                    >
+                      {filteredTickets
+                        .filter((t) => t.completed === true || t.noShow === true)
+                        .map((ticket) => (
+                          <TicketCard
+                            key={ticket._id}
+                            ticket={ticket}
+                            isExpanded={!!expandedTickets[ticket._id]}
+                            onToggleExpand={() => toggleTicketExpansion(ticket._id)}
+                            onViewDetails={() => handleViewTicketDetails(ticket)}
+                            onUnhold={() => handleUnholdTicket(ticket._id)}
+                            onServe={() => handleServeTicket(ticket)}
+                            viewMode={viewMode}
+                          />
+                        ))}
+                    </div>
+                  ) : (
+                    <Alert className="bg-green-50 border-green-100">
+                      <AlertCircle className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-700">
+                        No completed tickets found matching your filters.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </TabsContent>
 
-            <TabsContent value="all" className="space-y-4">
-              {filteredTickets.length > 0 ? (
-                filteredTickets.map((ticket) => (
-                  <TicketCard
-                    key={ticket._id}
-                    ticket={ticket}
-                    isExpanded={!!expandedTickets[ticket._id]}
-                    onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                    onViewDetails={() => handleViewTicketDetails(ticket)}
-                    onUnhold={() => handleUnholdTicket(ticket._id)}
-                    onServe={() => handleServeTicket(ticket)}
-                  />
-                ))
-              ) : (
-                <Alert className="bg-slate-50 border-slate-100">
-                  <AlertCircle className="h-4 w-4 text-slate-600" />
-                  <AlertDescription className="text-slate-700">
-                    No tickets found matching your filters.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </TabsContent>
+                <TabsContent value="all" className="space-y-3 sm:space-y-4 mt-0">
+                  {filteredTickets.length > 0 ? (
+                    <div
+                      className={
+                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
+                      }
+                    >
+                      {filteredTickets.map((ticket) => (
+                        <TicketCard
+                          key={ticket._id}
+                          ticket={ticket}
+                          isExpanded={!!expandedTickets[ticket._id]}
+                          onToggleExpand={() => toggleTicketExpansion(ticket._id)}
+                          onViewDetails={() => handleViewTicketDetails(ticket)}
+                          onUnhold={() => handleUnholdTicket(ticket._id)}
+                          onServe={() => handleServeTicket(ticket)}
+                          viewMode={viewMode}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <Alert className="bg-slate-50 border-slate-100">
+                      <AlertCircle className="h-4 w-4 text-slate-600" />
+                      <AlertDescription className="text-slate-700">
+                        No tickets found matching your filters.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </TabsContent>
+              </div>
+            </div>
           </Tabs>
         </div>
 
         {/* Ticket Details Dialog */}
         <Dialog open={showTicketDetailsDialog} onOpenChange={setShowTicketDetailsDialog}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             {selectedTicket && (
               <>
                 <DialogHeader>
-                  <DialogTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <DialogTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <Badge className="bg-[#0e4480] text-white text-lg px-4 py-1.5 rounded-lg">
                         {selectedTicket.ticketNo}
                       </Badge>
@@ -1113,7 +1661,7 @@ const TicketsPage: React.FC = () => {
                   </DialogTitle>
                 </DialogHeader>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
                   {/* Patient Information */}
                   <Card className="border-slate-200">
                     <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -1213,7 +1761,7 @@ const TicketsPage: React.FC = () => {
                     </CardHeader>
                     <CardContent>
                       {!selectedTicket.completed && !selectedTicket.noShow ? (
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                           <div>
                             <p className="text-sm font-medium text-slate-700">Mark as Emergency</p>
                             <p className="text-xs text-slate-500">Emergency tickets will be prioritized in the queue</p>
@@ -1282,12 +1830,12 @@ const TicketsPage: React.FC = () => {
                   </Card>
 
                   {/* Current Status */}
-                  <Card className="border-slate-200">
+                  <Card className="border-slate-200 lg:col-span-2">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-lg">Current Status</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <p className="text-sm font-medium text-slate-500">Current Department</p>
                         <CurrentDepartmentBadge ticket={selectedTicket} />
                       </div>
@@ -1326,53 +1874,55 @@ const TicketsPage: React.FC = () => {
                           </div>
                         )}
 
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">Total Time</p>
-                        <p className="font-medium">
-                          {selectedTicket.completed ? (
-                            formatDuration(selectedTicket.totalDuration)
-                          ) : (
-                            <RealTimeDuration
-                              startTime={selectedTicket.createdAt}
-                              endTime={selectedTicket.completed ? selectedTicket.completedAt : null}
-                              isActive={!selectedTicket.completed && !selectedTicket.noShow}
-                            />
-                          )}
-                        </p>
-                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-slate-500">Total Time</p>
+                          <p className="font-medium">
+                            {selectedTicket.completed ? (
+                              formatDuration(selectedTicket.totalDuration)
+                            ) : (
+                              <RealTimeDuration
+                                startTime={selectedTicket.createdAt}
+                                endTime={selectedTicket.completed ? selectedTicket.completedAt : null}
+                                isActive={!selectedTicket.completed && !selectedTicket.noShow}
+                              />
+                            )}
+                          </p>
+                        </div>
 
-                      {/* Current department processing time */}
-                      {selectedTicket.departmentHistory &&
-                        selectedTicket.departmentHistory.find((h) => !h.completed) && (
+                        {/* Current department processing time */}
+                        {selectedTicket.departmentHistory &&
+                          selectedTicket.departmentHistory.find((h) => !h.completed) && (
+                            <div>
+                              <p className="text-sm font-medium text-slate-500">Current Processing Time</p>
+                              <p className="font-medium">
+                                <RealTimeDuration
+                                  startTime={
+                                    selectedTicket.departmentHistory.find((h) => !h.completed)?.startedAt || null
+                                  }
+                                  endTime={null}
+                                  isActive={!!selectedTicket.departmentHistory.find((h) => !h.completed)?.startedAt}
+                                />
+                              </p>
+                            </div>
+                          )}
+
+                        {/* If on hold, show hold duration */}
+                        {selectedTicket.held && selectedTicket.departmentHistory && (
                           <div>
-                            <p className="text-sm font-medium text-slate-500">Current Processing Time</p>
+                            <p className="text-sm font-medium text-slate-500">Hold Duration</p>
                             <p className="font-medium">
                               <RealTimeDuration
                                 startTime={
-                                  selectedTicket.departmentHistory.find((h) => !h.completed)?.startedAt || null
+                                  selectedTicket.departmentHistory.find((h) => !h.completed)?.holdStartedAt || null
                                 }
                                 endTime={null}
-                                isActive={!!selectedTicket.departmentHistory.find((h) => !h.completed)?.startedAt}
+                                isActive={true}
                               />
                             </p>
                           </div>
                         )}
-
-                      {/* If on hold, show hold duration */}
-                      {selectedTicket.held && selectedTicket.departmentHistory && (
-                        <div>
-                          <p className="text-sm font-medium text-slate-500">Hold Duration</p>
-                          <p className="font-medium">
-                            <RealTimeDuration
-                              startTime={
-                                selectedTicket.departmentHistory.find((h) => !h.completed)?.holdStartedAt || null
-                              }
-                              endTime={null}
-                              isActive={true}
-                            />
-                          </p>
-                        </div>
-                      )}
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
@@ -1392,14 +1942,14 @@ const TicketsPage: React.FC = () => {
                               history.completed ? "bg-green-50/30 border-green-200" : "bg-blue-50/30 border-blue-200"
                             }`}
                           >
-                            <div className="flex justify-between mb-2">
-                              <span className="font-medium flex items-center">
-                                {history.icon && <span className="mr-2 text-lg">{history.icon}</span>}
-                                {history.department}
+                            <div className="flex flex-col sm:flex-row justify-between mb-2 gap-2">
+                              <span className="font-medium flex items-center flex-wrap gap-2">
+                                {history.icon && <span className="text-lg">{history.icon}</span>}
+                                <span>{history.department}</span>
                                 {history.completed ? (
-                                  <Badge className="ml-2 bg-green-100 text-green-800 border-green-200">Completed</Badge>
+                                  <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>
                                 ) : (
-                                  <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200">Active</Badge>
+                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200">Active</Badge>
                                 )}
                                 {history.roomId && (
                                   <DepartmentRoomBadge
@@ -1425,7 +1975,7 @@ const TicketsPage: React.FC = () => {
                               </span>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 text-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
                               <div className="bg-white p-2 rounded-md shadow-sm">
                                 <p className="text-xs text-slate-500">Waiting Time</p>
                                 <p className="font-medium">{formatDuration(history.waitingDuration)}</p>
@@ -1480,13 +2030,13 @@ const TicketsPage: React.FC = () => {
 
                 {/* Action Buttons */}
                 {!selectedTicket.completed && !selectedTicket.noShow && (
-                  <DialogFooter className="mt-6 flex justify-end gap-3">
+                  <DialogFooter className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
                     <Button
                       variant="outline"
                       onClick={handleCancelTicket}
-                      className="border-red-400 text-red-600 hover:bg-red-50"
+                      className="border-red-400 text-red-600 hover:bg-red-50 w-full sm:w-auto"
                     >
-                      <AlertCircle className="h-5 w-5 mr-2" />
+                      <AlertCircle className="h-4 w-4 mr-2" />
                       Cancel Ticket
                     </Button>
 
@@ -1494,18 +2044,18 @@ const TicketsPage: React.FC = () => {
                       <Button
                         variant="outline"
                         onClick={handleHoldTicket}
-                        className="border-amber-400 text-amber-600 hover:bg-amber-50"
+                        className="border-amber-400 text-amber-600 hover:bg-amber-50 w-full sm:w-auto"
                       >
-                        <PauseCircle className="h-5 w-5 mr-2" />
+                        <PauseCircle className="h-4 w-4 mr-2" />
                         Hold Ticket
                       </Button>
                     ) : (
                       <Button
                         variant="outline"
                         onClick={() => handleUnholdTicket(selectedTicket._id)}
-                        className="border-green-400 text-green-600 hover:bg-green-50"
+                        className="border-green-400 text-green-600 hover:bg-green-50 w-full sm:w-auto"
                       >
-                        <CheckCircle2 className="h-5 w-5 mr-2" />
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
                         Return to Queue
                       </Button>
                     )}
@@ -1515,14 +2065,17 @@ const TicketsPage: React.FC = () => {
                         setShowNextStepDialog(true)
                         setShowTicketDetailsDialog(false)
                       }}
-                      className="bg-[#0e4480] hover:bg-blue-800 text-white"
+                      className="bg-[#0e4480] hover:bg-blue-800 text-white w-full sm:w-auto"
                     >
-                      <Users className="h-5 w-5 mr-2" />
+                      <ArrowRight className="h-4 w-4 mr-2" />
                       Next Step
                     </Button>
 
-                    <Button onClick={handleClearTicket} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                      <CheckCircle2 className="h-5 w-5 mr-2" />
+                    <Button
+                      onClick={handleClearTicket}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
                       Clear Ticket
                     </Button>
                   </DialogFooter>
@@ -1552,9 +2105,11 @@ const TicketsPage: React.FC = () => {
             <div className="space-y-4 py-4">
               <div>
                 <p className="text-sm text-slate-600 mb-4">
-                  This ticket is waiting in {selectedTicket?.departmentHistory?.find(h => !h.completed && !h.roomId)?.department}. Select from today's rooms to start serving:
+                  This ticket is waiting in{" "}
+                  {selectedTicket?.departmentHistory?.find((h) => !h.completed && !h.roomId)?.department}. Select from
+                  today's rooms to start serving:
                 </p>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Today's Rooms</label>
                   <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
@@ -1569,11 +2124,11 @@ const TicketsPage: React.FC = () => {
                             <span className="text-sm text-slate-500">
                               - {room.staff.firstName} {room.staff.lastName}
                             </span>
-                            <Badge 
+                            <Badge
                               variant={room.available ? "default" : "secondary"}
                               className={`ml-auto text-xs ${
-                                room.available 
-                                  ? "bg-green-100 text-green-800 border-green-200" 
+                                room.available
+                                  ? "bg-green-100 text-green-800 border-green-200"
                                   : "bg-red-100 text-red-800 border-red-200"
                               }`}
                             >
@@ -1585,27 +2140,37 @@ const TicketsPage: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                
               </div>
             </div>
-            
-            <DialogFooter>
-              <Button 
-                variant="outline" 
+
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowServeDialog(false)
                   setSelectedRoomId("")
                   setAvailableRooms([])
                 }}
+                className="w-full sm:w-auto"
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={handleConfirmServe}
                 disabled={!selectedRoomId || isServingTicket}
-                className="bg-[#0e4480] hover:bg-blue-800 text-white"
+                className="bg-[#0e4480] hover:bg-blue-800 text-white w-full sm:w-auto"
               >
-                {isServingTicket ? "Serving..." : "Start Serving"}
+                {isServingTicket ? (
+                  <>
+                    <QueueSpinner size="sm" color="bg-white" dotCount={3} />
+                    <span className="ml-2">Serving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Start Serving
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1617,7 +2182,7 @@ const TicketsPage: React.FC = () => {
   )
 }
 
-// Ticket Card Component
+// Enhanced Ticket Card Component
 const TicketCard = ({
   ticket,
   isExpanded,
@@ -1625,6 +2190,7 @@ const TicketCard = ({
   onViewDetails,
   onUnhold,
   onServe,
+  viewMode = "list",
 }: {
   ticket: Ticket
   isExpanded: boolean
@@ -1632,50 +2198,56 @@ const TicketCard = ({
   onViewDetails: () => void
   onUnhold: () => void
   onServe?: () => void
+  viewMode?: "grid" | "list"
 }) => {
   // Find current department
   const currentDept = ticket.departmentHistory?.find((history) => !history.completed)
-
-  // Calculate time in current department
-  const currentDeptStartTime = currentDept?.startedAt ? new Date(currentDept.startedAt).getTime() : null
 
   // Calculate total time since creation
   const creationTime = new Date(ticket.createdAt).getTime()
   const now = new Date().getTime()
   const totalTimeSeconds = Math.floor((now - creationTime) / 1000)
 
+  // Calculate progress for visual indicator
+  const maxTime = 3600 // 1 hour in seconds
+  const progress = Math.min((totalTimeSeconds / maxTime) * 100, 100)
+
+  const getStatusColor = () => {
+    if (ticket.noShow) return "border-l-red-400 bg-red-50/30"
+    if (ticket.completed) return "border-l-green-400 bg-green-50/30"
+    if (ticket.held) return "border-l-amber-400 bg-amber-50/30"
+    if (currentDept?.startedAt) return "border-l-blue-400 bg-blue-50/30"
+    return "border-l-purple-400 bg-purple-50/30"
+  }
+
   return (
     <Card
-      className={`border-l-4 ${
-        ticket.noShow
-          ? "border-l-red-400"
-          : ticket.completed
-            ? "border-l-green-400"
-            : ticket.held
-              ? "border-l-amber-400"
-              : currentDept?.startedAt
-                ? "border-l-blue-400"
-                : "border-l-purple-400"
-      }`}
+      className={`border-l-4 ${getStatusColor()} hover:shadow-lg transition-all duration-200 ${viewMode === "grid" ? "h-fit" : ""}`}
     >
       <CardContent className="p-0">
-        <div className="p-4">
-          <div className="flex flex-col md:flex-row justify-between">
-            <div className="flex items-center gap-3 mb-2 md:mb-0 flex-wrap">
-              <Badge className="bg-[#0e4480] text-white px-3 py-1 text-base">{ticket.ticketNo}</Badge>
+        <div className="p-3 sm:p-4">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge className="bg-[#0e4480] text-white px-2 sm:px-3 py-1 text-sm sm:text-base font-mono">
+                {ticket.ticketNo}
+              </Badge>
               {ticket.emergency && !ticket.completed && !ticket.noShow && (
-                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">🚨 EMERGENCY</Badge>
+                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1 text-xs">
+                  <Zap className="h-3 w-3" />
+                  <span className="hidden sm:inline">EMERGENCY</span>
+                  <span className="sm:hidden">EMG</span>
+                </Badge>
               )}
               <TicketStatusBadge ticket={ticket} />
-              <CurrentDepartmentBadge ticket={ticket} />
             </div>
 
             <div className="flex items-center gap-2">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded text-sm">
-                      <Clock className="h-3.5 w-3.5 text-slate-600" />
+                    <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded text-xs sm:text-sm">
+                      <Clock className="h-3 w-3 text-slate-600" />
                       <span>
                         {ticket.completed ? formatDuration(ticket.totalDuration) : formatDuration(totalTimeSeconds)}
                       </span>
@@ -1686,6 +2258,7 @@ const TicketCard = ({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -1693,118 +2266,165 @@ const TicketCard = ({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onViewDetails}>View Details</DropdownMenuItem>
-                  {!ticket.completed && !ticket.noShow && !ticket.held && 
-                   ticket.departmentHistory?.some(h => !h.completed && !h.roomId) && (
-                    <DropdownMenuItem onClick={() => onServe && onServe()}>
-                      <Users className="h-4 w-4 mr-2" />
-                      Serve Ticket
+                  <DropdownMenuItem onClick={onViewDetails}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details
+                  </DropdownMenuItem>
+                  {!ticket.completed &&
+                    !ticket.noShow &&
+                    !ticket.held &&
+                    ticket.departmentHistory?.some((h) => !h.completed && !h.roomId) && (
+                      <DropdownMenuItem onClick={() => onServe && onServe()}>
+                        <Play className="h-4 w-4 mr-2" />
+                        Serve Ticket
+                      </DropdownMenuItem>
+                    )}
+                  {ticket.held && (
+                    <DropdownMenuItem onClick={onUnhold}>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Return to Queue
                     </DropdownMenuItem>
                   )}
-                  {ticket.held && <DropdownMenuItem onClick={onUnhold}>Return to Queue</DropdownMenuItem>}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={onToggleExpand}>
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp className="h-4 w-4 mr-2" />
+                        Collapse
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4 mr-2" />
+                        Expand
+                      </>
+                    )}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              <Button variant="ghost" size="icon" onClick={onToggleExpand} className="h-8 w-8">
-                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
             </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <p className="text-xs text-slate-500">Patient</p>
-              <p className="font-medium">{ticket.patientName || "Not provided"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Reason</p>
-              <p>{ticket.reasonforVisit || "Not provided"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Created</p>
-              <p>{new Date(ticket.createdAt).toLocaleString()}</p>
-            </div>
+          {/* Progress Bar */}
+          <div className="mt-3">
+            <Progress value={progress} className="h-1" />
           </div>
 
+          {/* Department Badge */}
+          <div className="mt-3">
+            <CurrentDepartmentBadge ticket={ticket} />
+          </div>
+
+          {/* Main Info */}
+          <div className="mt-3 grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Patient</p>
+                <p className="font-medium truncate">{ticket.patientName || "Not provided"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Created</p>
+                <p className="text-xs">{new Date(ticket.createdAt).toLocaleString()}</p>
+              </div>
+            </div>
+
+            {ticket.reasonforVisit && (
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Reason</p>
+                <p className="text-sm line-clamp-2">{ticket.reasonforVisit}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Expanded Content */}
           {isExpanded && (
-            <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
               {/* Department History */}
-              <h4 className="font-medium text-slate-700 mb-2">Department History</h4>
-              <div className="space-y-3">
-                {ticket.departmentHistory && ticket.departmentHistory.length > 0 ? (
-                  ticket.departmentHistory.map((history, index) => (
-                    <div
-                      key={index}
-                      className={`p-3 rounded-lg border ${
-                        history.completed ? "bg-green-50/30 border-green-200" : "bg-blue-50/30 border-blue-200"
-                      }`}
-                    >
-                      <div className="flex justify-between mb-1">
-                        <span className="font-medium flex items-center">
-                          {history.icon && <span className="mr-2 text-lg">{history.icon}</span>}
-                          {history.department}
-                          {history.completed ? (
-                            <Badge className="ml-2 bg-green-100 text-green-800 border-green-200">Completed</Badge>
-                          ) : (
-                            <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200">Active</Badge>
-                          )}
-                        </span>
-                        <span className="text-xs text-blue-600">{new Date(history.timestamp).toLocaleString()}</span>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
-                        <div className="bg-white p-1.5 rounded-md shadow-sm">
-                          <p className="text-xs text-slate-500">Waiting</p>
-                          <p className="font-medium">{formatDuration(history.waitingDuration)}</p>
-                        </div>
-                        <div className="bg-white p-1.5 rounded-md shadow-sm">
-                          <p className="text-xs text-slate-500">Processing</p>
-                          <p className="font-medium">
+              <div>
+                <h4 className="font-medium text-slate-700 mb-2 text-sm">Department History</h4>
+                <div className="space-y-2">
+                  {ticket.departmentHistory && ticket.departmentHistory.length > 0 ? (
+                    ticket.departmentHistory.map((history, index) => (
+                      <div
+                        key={index}
+                        className={`p-2 rounded-md border text-xs ${
+                          history.completed ? "bg-green-50/50 border-green-200" : "bg-blue-50/50 border-blue-200"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-medium flex items-center gap-1">
+                            {history.icon && <span className="text-sm">{history.icon}</span>}
+                            <span className="truncate">{history.department}</span>
                             {history.completed ? (
-                              formatDuration(history.processingDuration)
+                              <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">Done</Badge>
                             ) : (
-                              <RealTimeDuration
-                                startTime={history.startedAt || null}
-                                endTime={history.completedAt || null}
-                                isActive={!history.completed && !!history.startedAt}
-                              />
+                              <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">Active</Badge>
                             )}
-                          </p>
+                          </span>
                         </div>
-                        <div className="bg-white p-1.5 rounded-md shadow-sm">
-                          <p className="text-xs text-slate-500">Hold</p>
-                          <p className="font-medium">{formatDuration(history.holdDuration)}</p>
+
+                        <div className="grid grid-cols-3 gap-1 text-xs">
+                          <div>
+                            <p className="text-slate-500">Wait</p>
+                            <p className="font-medium">{formatDuration(history.waitingDuration)}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Process</p>
+                            <p className="font-medium">
+                              {history.completed ? (
+                                formatDuration(history.processingDuration)
+                              ) : (
+                                <RealTimeDuration
+                                  startTime={history.startedAt || null}
+                                  endTime={history.completedAt || null}
+                                  isActive={!history.completed && !!history.startedAt}
+                                />
+                              )}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Hold</p>
+                            <p className="font-medium">{formatDuration(history.holdDuration)}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-slate-500 text-sm">No department history available</p>
-                )}
+                    ))
+                  ) : (
+                    <p className="text-slate-500 text-xs">No department history available</p>
+                  )}
+                </div>
               </div>
 
               {/* Notes */}
               {(ticket.receptionistNote || ticket.departmentNote) && (
-                <div className="mt-3">
-                  <h4 className="font-medium text-slate-700 mb-2">Notes</h4>
-                  {ticket.receptionistNote && (
-                    <div className="mb-2">
-                      <p className="text-xs text-slate-500">Receptionist Note</p>
-                      <p className="p-2 bg-slate-50 rounded-md text-sm">{ticket.receptionistNote}</p>
-                    </div>
-                  )}
-                  {ticket.departmentNote && (
-                    <div>
-                      <p className="text-xs text-slate-500">Department Note</p>
-                      <p className="p-2 bg-slate-50 rounded-md text-sm">{ticket.departmentNote}</p>
-                    </div>
-                  )}
+                <div>
+                  <h4 className="font-medium text-slate-700 mb-2 text-sm">Notes</h4>
+                  <div className="space-y-2">
+                    {ticket.receptionistNote && (
+                      <div className="p-2 bg-slate-50 rounded-md">
+                        <p className="text-xs text-slate-500 font-medium">Receptionist</p>
+                        <p className="text-xs">{ticket.receptionistNote}</p>
+                      </div>
+                    )}
+                    {ticket.departmentNote && (
+                      <div className="p-2 bg-slate-50 rounded-md">
+                        <p className="text-xs text-slate-500 font-medium">Department</p>
+                        <p className="text-xs">{ticket.departmentNote}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div className="mt-4 flex justify-end">
-                <Button variant="outline" size="sm" onClick={onViewDetails} className="text-[#0e4480] border-[#0e4480]">
-                  View Full Details
+              {/* Action Button */}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onViewDetails}
+                  className="text-[#0e4480] border-[#0e4480] text-xs"
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  View Details
                 </Button>
               </div>
             </div>
