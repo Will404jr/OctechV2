@@ -601,7 +601,7 @@ const DepartmentsComponent = () => {
                                     room.available ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
                                   }`}
                                 >
-                                  {room.available ? "Available" : "Occupied"}
+                                  {room.available ? "Available" : "Unavailable"}
                                 </Badge>
                               </div>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">

@@ -857,7 +857,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: true,
+              available: false,
             }),
           })
 
@@ -933,7 +933,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: true,
+              available: false,
             }),
           })
 
@@ -1009,7 +1009,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: true,
+              available: false,
             }),
           })
 
@@ -1116,7 +1116,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: true,
+              available: false,
             }),
           })
 
@@ -1293,7 +1293,7 @@ const TicketsPage: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           currentTicket: selectedTicket._id, // Set to ticket ID, not null
-          available: true, // Mark room as actively serving
+          available: false, // Mark room as actively serving
         }),
       })
 

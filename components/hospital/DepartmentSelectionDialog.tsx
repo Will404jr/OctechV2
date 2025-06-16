@@ -170,7 +170,7 @@ export const DepartmentSelectionDialog: React.FC<
                       {availableRooms.map((room) => (
                         <SelectItem key={room._id} value={room._id}>
                           Room {room.roomNumber} - {room.staff.firstName}{" "}
-                          {room.staff.lastName} {room.available ? "(Available)" : "(Occupied)"}
+                          {room.staff.lastName} {room.available ? "(Available)" : "(Unavailable)"}
                         </SelectItem>
                       ))}
                     </SelectContent>
