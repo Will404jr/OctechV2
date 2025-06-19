@@ -66,7 +66,11 @@ const routes = [
   },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  onLinkClick?: () => void
+}
+
+export function Sidebar({ onLinkClick }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({})
@@ -103,6 +107,12 @@ export function Sidebar() {
 
   const filteredRoutes = routes.filter((route) => userPermissions[route.permission])
 
+  const handleLinkClick = () => {
+    if (onLinkClick) {
+      onLinkClick()
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-full">
@@ -114,7 +124,7 @@ export function Sidebar() {
   return (
     <div className="space-y-4 py-4 flex flex-col h-full bg-white">
       <div className={cn("px-3 py-2 flex-shrink-0", collapsed && "flex justify-center")}>
-        <Link href="/hospital/dashboard">
+        <Link href="/hospital/dashboard" onClick={handleLinkClick}>
           {collapsed ? (
             <div className="w-10 h-10 relative overflow-hidden rounded-full">
               <Image src={Octech || "/placeholder.svg"} alt="octech logo" fill className="object-cover" />
@@ -138,7 +148,7 @@ export function Sidebar() {
                   )}
                   asChild
                 >
-                  <Link href={route.href}>
+                  <Link href={route.href} onClick={handleLinkClick}>
                     <route.icon className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-2")} />
                     {!collapsed && route.label}
                   </Link>

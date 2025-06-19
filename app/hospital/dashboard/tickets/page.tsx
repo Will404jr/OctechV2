@@ -39,7 +39,6 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -455,25 +454,29 @@ const MobileFiltersSheet = ({
   setSearchQuery,
   filterDepartment,
   setFilterDepartment,
-  filterStatus,
-  setFilterStatus,
+  activeTab,
+  setActiveTab,
   departments,
   sortBy,
   setSortBy,
   sortOrder,
   setSortOrder,
+  filterStatus,
+  setFilterStatus,
 }: {
   searchQuery: string
   setSearchQuery: (value: string) => void
   filterDepartment: string
   setFilterDepartment: (value: string) => void
-  filterStatus: string
-  setFilterStatus: (value: string) => void
+  activeTab: string
+  setActiveTab: (value: string) => void
   departments: Department[]
   sortBy: string
   setSortBy: (value: string) => void
   sortOrder: "asc" | "desc"
   setSortOrder: (value: "asc" | "desc") => void
+  filterStatus: string
+  setFilterStatus: (value: string) => void
 }) => {
   return (
     <Sheet>
@@ -520,20 +523,41 @@ const MobileFiltersSheet = ({
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-2 block">Status</label>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="waiting">Waiting</SelectItem>
-                <SelectItem value="serving">Being Served</SelectItem>
-                <SelectItem value="held">On Hold</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="noshow">No Show</SelectItem>
-              </SelectContent>
-            </Select>
+            <label className="text-sm font-medium mb-2 block">Status Category</label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={activeTab === "active" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveTab("active")}
+                className="text-xs"
+              >
+                Active
+              </Button>
+              <Button
+                variant={activeTab === "held" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveTab("held")}
+                className="text-xs"
+              >
+                On Hold
+              </Button>
+              <Button
+                variant={activeTab === "completed" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveTab("completed")}
+                className="text-xs"
+              >
+                Completed
+              </Button>
+              <Button
+                variant={activeTab === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveTab("all")}
+                className="text-xs"
+              >
+                All
+              </Button>
+            </div>
           </div>
 
           <div>
@@ -574,6 +598,60 @@ const MobileFiltersSheet = ({
               </Button>
             </div>
           </div>
+
+          <div>
+            <label className="text-sm font-medium mb-2 block">Status Filter</label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={filterStatus === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("all")}
+                className="text-xs"
+              >
+                All
+              </Button>
+              <Button
+                variant={filterStatus === "waiting" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("waiting")}
+                className="text-xs"
+              >
+                Waiting
+              </Button>
+              <Button
+                variant={filterStatus === "serving" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("serving")}
+                className="text-xs"
+              >
+                Serving
+              </Button>
+              <Button
+                variant={filterStatus === "held" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("held")}
+                className="text-xs"
+              >
+                On Hold
+              </Button>
+              <Button
+                variant={filterStatus === "completed" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("completed")}
+                className="text-xs"
+              >
+                Completed
+              </Button>
+              <Button
+                variant={filterStatus === "noshow" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("noshow")}
+                className="text-xs"
+              >
+                No Show
+              </Button>
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -588,7 +666,7 @@ const TicketsPage: React.FC = () => {
   const [session, setSession] = useState<SessionData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterDepartment, setFilterDepartment] = useState<string>("all")
-  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [activeTab, setActiveTab] = useState<string>("active")
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
   const [showTicketDetailsDialog, setShowTicketDetailsDialog] = useState(false)
   const [showNextStepDialog, setShowNextStepDialog] = useState(false)
@@ -609,6 +687,9 @@ const TicketsPage: React.FC = () => {
   const [selectedRoomId, setSelectedRoomId] = useState("")
   const [availableRooms, setAvailableRooms] = useState<Room[]>([])
   const [isServingTicket, setIsServingTicket] = useState(false)
+
+  // Add filterStatus state variable (around line 600)
+  const [filterStatus, setFilterStatus] = useState<string>("all")
 
   // Fetch tickets
   const fetchTickets = useCallback(async () => {
@@ -695,6 +776,22 @@ const TicketsPage: React.FC = () => {
       )
     }
 
+    // Apply tab filter
+    switch (activeTab) {
+      case "active":
+        result = result.filter((ticket) => !ticket.completed && !ticket.noShow && !ticket.held)
+        break
+      case "held":
+        result = result.filter((ticket) => ticket.held === true)
+        break
+      case "completed":
+        result = result.filter((ticket) => ticket.completed === true || ticket.noShow === true)
+        break
+      case "all":
+        // Show all tickets
+        break
+    }
+
     // Apply status filter
     if (filterStatus !== "all") {
       switch (filterStatus) {
@@ -762,7 +859,7 @@ const TicketsPage: React.FC = () => {
     })
 
     setFilteredTickets(result)
-  }, [tickets, searchQuery, filterDepartment, filterStatus, sortBy, sortOrder])
+  }, [tickets, searchQuery, filterDepartment, activeTab, filterStatus, sortBy, sortOrder])
 
   // Initial data loading
   useEffect(() => {
@@ -857,7 +954,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: false,
+              available: true,
             }),
           })
 
@@ -933,7 +1030,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: false,
+              available: true,
             }),
           })
 
@@ -1009,7 +1106,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: false,
+              available: true,
             }),
           })
 
@@ -1116,7 +1213,7 @@ const TicketsPage: React.FC = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               currentTicket: null,
-              available: false,
+              available: true,
             }),
           })
 
@@ -1293,7 +1390,7 @@ const TicketsPage: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           currentTicket: selectedTicket._id, // Set to ticket ID, not null
-          available: false, // Mark room as actively serving
+          available: true, // Mark room as actively serving
         }),
       })
 
@@ -1434,21 +1531,40 @@ const TicketsPage: React.FC = () => {
                   </Select>
                 </div>
 
-                <div className="relative min-w-[180px]">
-                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50">
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="waiting">Waiting</SelectItem>
-                      <SelectItem value="serving">Being Served</SelectItem>
-                      <SelectItem value="held">On Hold</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="noshow">No Show</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Status Category Tabs - Now in filter section */}
+                <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 min-w-[320px]">
+                  <Button
+                    variant={activeTab === "active" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setActiveTab("active")}
+                    className="text-xs px-3"
+                  >
+                    Active
+                  </Button>
+                  <Button
+                    variant={activeTab === "held" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setActiveTab("held")}
+                    className="text-xs px-3"
+                  >
+                    On Hold
+                  </Button>
+                  <Button
+                    variant={activeTab === "completed" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setActiveTab("completed")}
+                    className="text-xs px-3"
+                  >
+                    Completed
+                  </Button>
+                  <Button
+                    variant={activeTab === "all" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setActiveTab("all")}
+                    className="text-xs px-3"
+                  >
+                    All
+                  </Button>
                 </div>
               </div>
 
@@ -1459,13 +1575,15 @@ const TicketsPage: React.FC = () => {
                   setSearchQuery={setSearchQuery}
                   filterDepartment={filterDepartment}
                   setFilterDepartment={setFilterDepartment}
-                  filterStatus={filterStatus}
-                  setFilterStatus={setFilterStatus}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
                   departments={departments}
                   sortBy={sortBy}
                   setSortBy={setSortBy}
                   sortOrder={sortOrder}
                   setSortOrder={setSortOrder}
+                  filterStatus={filterStatus}
+                  setFilterStatus={setFilterStatus}
                 />
               </div>
 
@@ -1492,154 +1610,96 @@ const TicketsPage: React.FC = () => {
           </div>
 
           {/* Tickets List */}
-          <Tabs defaultValue="active" className="w-full">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
-              <div className="p-4 sm:p-6 border-b border-slate-200">
-                <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4">
-                  <TabsTrigger value="active" className="text-xs sm:text-sm">
-                    Active
-                  </TabsTrigger>
-                  <TabsTrigger value="held" className="text-xs sm:text-sm">
-                    On Hold
-                  </TabsTrigger>
-                  <TabsTrigger value="completed" className="text-xs sm:text-sm">
-                    Completed
-                  </TabsTrigger>
-                  <TabsTrigger value="all" className="text-xs sm:text-sm">
-                    All
-                  </TabsTrigger>
-                </TabsList>
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              {/* Status Filter Navbar - Now vertical like tabs */}
+              <div className="flex items-center justify-between mb-4">
               </div>
-
-              <div className="p-4 sm:p-6">
-                <TabsContent value="active" className="space-y-3 sm:space-y-4 mt-0">
-                  {filteredTickets.filter((t) => !t.completed && !t.noShow && !t.held).length > 0 ? (
-                    <div
-                      className={
-                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
-                      }
-                    >
-                      {filteredTickets
-                        .filter((t) => !t.completed && !t.noShow && !t.held)
-                        .map((ticket) => (
-                          <TicketCard
-                            key={ticket._id}
-                            ticket={ticket}
-                            isExpanded={!!expandedTickets[ticket._id]}
-                            onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                            onViewDetails={() => handleViewTicketDetails(ticket)}
-                            onUnhold={() => handleUnholdTicket(ticket._id)}
-                            onServe={() => handleServeTicket(ticket)}
-                            viewMode={viewMode}
-                          />
-                        ))}
-                    </div>
-                  ) : (
-                    <Alert className="bg-blue-50 border-blue-100">
-                      <AlertCircle className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-700">
-                        No active tickets found matching your filters.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="held" className="space-y-3 sm:space-y-4 mt-0">
-                  {filteredTickets.filter((t) => t.held).length > 0 ? (
-                    <div
-                      className={
-                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
-                      }
-                    >
-                      {filteredTickets
-                        .filter((t) => t.held)
-                        .map((ticket) => (
-                          <TicketCard
-                            key={ticket._id}
-                            ticket={ticket}
-                            isExpanded={!!expandedTickets[ticket._id]}
-                            onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                            onViewDetails={() => handleViewTicketDetails(ticket)}
-                            onUnhold={() => handleUnholdTicket(ticket._id)}
-                            onServe={() => handleServeTicket(ticket)}
-                            viewMode={viewMode}
-                          />
-                        ))}
-                    </div>
-                  ) : (
-                    <Alert className="bg-amber-50 border-amber-100">
-                      <AlertCircle className="h-4 w-4 text-amber-600" />
-                      <AlertDescription className="text-amber-700">
-                        No tickets on hold found matching your filters.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="completed" className="space-y-3 sm:space-y-4 mt-0">
-                  {filteredTickets.filter((t) => t.completed === true || t.noShow === true).length > 0 ? (
-                    <div
-                      className={
-                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
-                      }
-                    >
-                      {filteredTickets
-                        .filter((t) => t.completed === true || t.noShow === true)
-                        .map((ticket) => (
-                          <TicketCard
-                            key={ticket._id}
-                            ticket={ticket}
-                            isExpanded={!!expandedTickets[ticket._id]}
-                            onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                            onViewDetails={() => handleViewTicketDetails(ticket)}
-                            onUnhold={() => handleUnholdTicket(ticket._id)}
-                            onServe={() => handleServeTicket(ticket)}
-                            viewMode={viewMode}
-                          />
-                        ))}
-                    </div>
-                  ) : (
-                    <Alert className="bg-green-50 border-green-100">
-                      <AlertCircle className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-700">
-                        No completed tickets found matching your filters.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="all" className="space-y-3 sm:space-y-4 mt-0">
-                  {filteredTickets.length > 0 ? (
-                    <div
-                      className={
-                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
-                      }
-                    >
-                      {filteredTickets.map((ticket) => (
-                        <TicketCard
-                          key={ticket._id}
-                          ticket={ticket}
-                          isExpanded={!!expandedTickets[ticket._id]}
-                          onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                          onViewDetails={() => handleViewTicketDetails(ticket)}
-                          onUnhold={() => handleUnholdTicket(ticket._id)}
-                          onServe={() => handleServeTicket(ticket)}
-                          viewMode={viewMode}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <Alert className="bg-slate-50 border-slate-100">
-                      <AlertCircle className="h-4 w-4 text-slate-600" />
-                      <AlertDescription className="text-slate-700">
-                        No tickets found matching your filters.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </TabsContent>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={filterStatus === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilterStatus("all")}
+                  className="text-xs px-3"
+                >
+                  All Statuses
+                </Button>
+                <Button
+                  variant={filterStatus === "waiting" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilterStatus("waiting")}
+                  className="text-xs px-3"
+                >
+                  <Timer className="h-3 w-3 mr-1" />
+                  Waiting
+                </Button>
+                <Button
+                  variant={filterStatus === "serving" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilterStatus("serving")}
+                  className="text-xs px-3"
+                >
+                  <UserCheck className="h-3 w-3 mr-1" />
+                  Being Served
+                </Button>
+                <Button
+                  variant={filterStatus === "held" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilterStatus("held")}
+                  className="text-xs px-3"
+                >
+                  <PauseCircle className="h-3 w-3 mr-1" />
+                  On Hold
+                </Button>
+                <Button
+                  variant={filterStatus === "completed" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilterStatus("completed")}
+                  className="text-xs px-3"
+                >
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Completed
+                </Button>
+                <Button
+                  variant={filterStatus === "noshow" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilterStatus("noshow")}
+                  className="text-xs px-3"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  No Show
+                </Button>
               </div>
             </div>
-          </Tabs>
+
+            <div className="p-4 sm:p-6">
+              {filteredTickets.length > 0 ? (
+                <div
+                  className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"}
+                >
+                  {filteredTickets.map((ticket) => (
+                    <TicketCard
+                      key={ticket._id}
+                      ticket={ticket}
+                      isExpanded={!!expandedTickets[ticket._id]}
+                      onToggleExpand={() => toggleTicketExpansion(ticket._id)}
+                      onViewDetails={() => handleViewTicketDetails(ticket)}
+                      onUnhold={() => handleUnholdTicket(ticket._id)}
+                      onServe={() => handleServeTicket(ticket)}
+                      viewMode={viewMode}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <Alert className="bg-slate-50 border-slate-100">
+                  <AlertCircle className="h-4 w-4 text-slate-600" />
+                  <AlertDescription className="text-slate-700">
+                    No tickets found matching your filters.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Ticket Details Dialog */}

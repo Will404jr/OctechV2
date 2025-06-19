@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { User, Calendar, Volume2, VolumeX, Loader2 } from "lucide-react"
+import { User, Calendar, Volume2, VolumeX, Loader2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -12,16 +12,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent } from "@/components/ui/card"
-import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Marquee } from "@/components/Marquee"
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { useToast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
 
 interface Ticket {
   _id: string
   ticketNo: string
+  patientName?: string
   journeyId?: {
     _id: string
     name: string
@@ -31,6 +32,8 @@ interface Ticket {
   journeySteps?: { [key: string]: boolean }
   completed?: boolean
   call?: boolean
+  held?: boolean
+  emergency?: boolean
   departmentHistory?: {
     department: string
     icon?: string
@@ -38,6 +41,7 @@ interface Ticket {
     note?: string
     completed?: boolean
     roomId?: string
+    startedAt?: string | null
   }[]
   createdAt: string
   updatedAt: string
@@ -71,6 +75,18 @@ interface ActiveTicket {
   call: boolean
 }
 
+interface WaitingTicket {
+  ticketId: string
+  ticketNo: string
+  patientName?: string
+  department: string
+  departmentIcon: string
+  waitingTime: number
+  emergency?: boolean
+  held?: boolean
+  position: number
+}
+
 interface Event {
   _id: string
   title: string
@@ -97,6 +113,7 @@ interface AudioCacheStatus {
 export default function HallDisplay() {
   const [isMuted, setIsMuted] = useState(false)
   const [activeTickets, setActiveTickets] = useState<ActiveTicket[]>([])
+  const [waitingTickets, setWaitingTickets] = useState<WaitingTicket[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [ads, setAds] = useState<Ad[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -493,6 +510,77 @@ export default function HallDisplay() {
     }
   }, [announceTicket])
 
+  const fetchWaitingTickets = useCallback(async () => {
+    try {
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split("T")[0]
+
+      // Fetch all tickets for today
+      const ticketsRes = await fetch(`/api/hospital/ticket?date=${today}`)
+      if (!ticketsRes.ok) return
+
+      const allTickets: Ticket[] = await ticketsRes.json()
+
+      // Filter for waiting tickets (not completed, not being served, not on hold)
+      const waitingTicketsData: WaitingTicket[] = []
+
+      // Group tickets by department
+      const ticketsByDepartment: { [key: string]: { tickets: Ticket[]; icon: string } } = {}
+
+      for (const ticket of allTickets) {
+        // Skip completed, held, or tickets without department history
+        if (ticket.completed || ticket.held || !ticket.departmentHistory?.length) {
+          continue
+        }
+
+        // Find current department (not completed)
+        const currentDept = ticket.departmentHistory.find((history) => !history.completed)
+        if (!currentDept) continue
+
+        // Skip if ticket is currently being served (has startedAt but not completedAt)
+        if (currentDept.startedAt && !currentDept.completed) {
+          continue
+        }
+
+        // This is a waiting ticket
+        if (!ticketsByDepartment[currentDept.department]) {
+          ticketsByDepartment[currentDept.department] = {
+            tickets: [],
+            icon: currentDept.icon || "🏥",
+          }
+        }
+
+        ticketsByDepartment[currentDept.department].tickets.push(ticket)
+      }
+
+      // Convert to waiting tickets with position and waiting time
+      for (const [department, data] of Object.entries(ticketsByDepartment)) {
+        // Sort by creation time (oldest first)
+        data.tickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+        data.tickets.forEach((ticket, index) => {
+          const waitingTime = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000)
+
+          waitingTicketsData.push({
+            ticketId: ticket._id,
+            ticketNo: ticket.ticketNo,
+            patientName: ticket.patientName,
+            department,
+            departmentIcon: data.icon,
+            waitingTime,
+            emergency: ticket.emergency,
+            held: ticket.held,
+            position: index + 1,
+          })
+        })
+      }
+
+      setWaitingTickets(waitingTicketsData)
+    } catch (error) {
+      console.error("Error fetching waiting tickets:", error)
+    }
+  }, [])
+
   const fetchData = useCallback(async () => {
     try {
       const [eventsRes, adsRes, settingsRes] = await Promise.all([
@@ -509,11 +597,11 @@ export default function HallDisplay() {
       setAds(adsData)
       setSettings(settingsData)
 
-      await fetchActiveTickets()
+      await Promise.all([fetchActiveTickets(), fetchWaitingTickets()])
     } catch (error) {
       console.error("Error fetching data:", error)
     }
-  }, [fetchActiveTickets])
+  }, [fetchActiveTickets, fetchWaitingTickets])
 
   useEffect(() => {
     const savedMuteState = localStorage.getItem("hallDisplayMuted")
@@ -545,22 +633,17 @@ export default function HallDisplay() {
   useEffect(() => {
     fetchData()
 
-    const ticketsIntervalId = setInterval(fetchActiveTickets, 5000)
+    const ticketsIntervalId = setInterval(() => {
+      fetchActiveTickets()
+      fetchWaitingTickets()
+    }, 5000)
     const dataIntervalId = setInterval(fetchData, 30000)
 
     return () => {
       clearInterval(ticketsIntervalId)
       clearInterval(dataIntervalId)
     }
-  }, [fetchData, fetchActiveTickets])
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentAdIndex((prevIndex) => (prevIndex + 1) % Math.max(1, ads.length))
-    }, 5000)
-
-    return () => clearInterval(timer)
-  }, [ads.length])
+  }, [fetchData, fetchActiveTickets, fetchWaitingTickets])
 
   useEffect(() => {
     const handleUserInteraction = () => {
@@ -625,6 +708,18 @@ export default function HallDisplay() {
 
   const loadingProgress =
     audioCacheStatus.totalCount > 0 ? (audioCacheStatus.loadedCount / audioCacheStatus.totalCount) * 100 : 0
+
+  // Group waiting tickets by department
+  const waitingTicketsByDepartment = waitingTickets.reduce(
+    (acc, ticket) => {
+      if (!acc[ticket.department]) {
+        acc[ticket.department] = []
+      }
+      acc[ticket.department].push(ticket)
+      return acc
+    },
+    {} as { [key: string]: WaitingTicket[] },
+  )
 
   return (
     <ToastProvider>
@@ -746,30 +841,104 @@ export default function HallDisplay() {
             </CardContent>
           </Card>
 
+          {/* Waiting Tickets Display - Shows All Departments */}
           <div className="w-3/5 overflow-hidden">
-            <Carousel className="w-full h-full">
-              <CarouselContent className="h-full">
-                {ads.length > 0 ? (
-                  ads.map((ad, index) => (
-                    <CarouselItem key={ad._id} className={`h-full ${index === currentAdIndex ? "" : "hidden"}`}>
-                      <div className="w-full h-full">
-                        <img
-                          src={ad.image || "/placeholder.svg"}
-                          alt={ad.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    </CarouselItem>
-                  ))
+            <Card className="h-full">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-2xl font-bold flex items-center gap-3">
+                  <Users className="h-8 w-8 text-blue-600" />
+                  Waiting Queue
+                  <Badge variant="secondary" className="ml-2">
+                    {waitingTickets.length} total
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="h-full overflow-auto pb-6">
+                {waitingTickets.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                    <Users className="h-16 w-16 mb-4 opacity-50" />
+                    <p className="text-xl font-medium">No tickets waiting</p>
+                    <p className="text-sm">All patients are being served</p>
+                  </div>
                 ) : (
-                  <CarouselItem className="h-full">
-                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                      <p className="text-xl text-gray-500">No advertisements available</p>
-                    </div>
-                  </CarouselItem>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {Object.entries(waitingTicketsByDepartment).map(([department, tickets]) => (
+                      <div key={department} className="bg-white rounded-lg border border-gray-200 p-4">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                          <span className="text-2xl">{tickets[0]?.departmentIcon || "🏥"}</span>
+                          <h3 className="text-lg font-semibold text-gray-800">{department}</h3>
+                          <Badge variant="outline" className="ml-auto">
+                            {tickets.length} waiting
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {tickets.slice(0, 6).map((ticket, index) => (
+                            <div
+                              key={ticket.ticketId}
+                              className={`
+                                flex items-center justify-between p-2 rounded-md transition-all duration-300
+                                ${
+                                  ticket.emergency
+                                    ? "bg-red-50 border border-red-200"
+                                    : index === 0
+                                      ? "bg-blue-50 border border-blue-200"
+                                      : "bg-gray-50 border border-gray-100"
+                                }
+                              `}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`
+                                    w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+                                    ${
+                                      ticket.emergency
+                                        ? "bg-red-500 text-white"
+                                        : index === 0
+                                          ? "bg-blue-500 text-white"
+                                          : "bg-gray-400 text-white"
+                                    }
+                                  `}
+                                >
+                                  {ticket.position}
+                                </div>
+
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-lg font-bold text-gray-800">{ticket.ticketNo}</span>
+                                    {ticket.emergency && (
+                                      <Badge variant="destructive" className="text-xs animate-pulse">
+                                        EMG
+                                      </Badge>
+                                    )}
+                                    {index === 0 && (
+                                      <Badge variant="default" className="text-xs bg-blue-500">
+                                        NEXT
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {ticket.patientName && (
+                                    <span className="text-xs text-gray-600 truncate max-w-32">
+                                      {ticket.patientName}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {tickets.length > 6 && (
+                            <div className="text-center py-2 text-gray-500">
+                              <p className="text-xs">+ {tickets.length - 6} more</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </CarouselContent>
-            </Carousel>
+              </CardContent>
+            </Card>
           </div>
 
           <Card className="w-1/5 overflow-auto rounded-lg pb-3">
