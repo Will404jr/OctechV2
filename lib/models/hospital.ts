@@ -33,8 +33,9 @@ const hospitalRoleSchema = new mongoose.Schema(
       Staff: { type: Boolean, default: false },
       Roles: { type: Boolean, default: false },
       Receptionist: { type: Boolean, default: false },
+      Billing: { type: Boolean, default: false },
       Tickets: { type: Boolean, default: false },
-      Queues: { type: Boolean, default: false },
+      Departments: { type: Boolean, default: false },
       UpcomingEvents: { type: Boolean, default: false },
       Ads: { type: Boolean, default: false },
       Settings: { type: Boolean, default: false },
@@ -150,7 +151,7 @@ const ticketSchema = new mongoose.Schema(
         department: { type: String, required: true },
         icon: { type: String, default: "" },
         timestamp: { type: Date, default: Date.now }, // When added to department
-        startedAt: { type: Date, default: null }, // When roomId is assigned
+        startedAt: { type: Date, default: null }, // When roomId is assigned AND staff actually starts serving
         completedAt: { type: Date, default: null }, // When completed = true
         processingDuration: { type: Number, default: 0 }, // Time in seconds from startedAt to completedAt
         waitingDuration: { type: Number, default: 0 }, // Time in seconds from timestamp to startedAt
@@ -165,6 +166,10 @@ const ticketSchema = new mongoose.Schema(
         // Hold tracking
         holdStartedAt: { type: Date, default: null }, // When put on hold
         holdDuration: { type: Number, default: 0 }, // Total hold time in seconds
+        // NEW FIELD: Track if staff actually started serving
+        actuallyStarted: { type: Boolean, default: false }, // True when staff begins serving, false when just assigned to room
+        cashCleared: {type: String, enum: ['Cleared', 'Pending', 'Rejected'], default: null}, // Status of cash payment
+        paidAt: { type: Date, default: null }, // Timestamp when payment was cleared
       },
     ],
     userType: {
@@ -184,7 +189,7 @@ const ticketSchema = new mongoose.Schema(
     // Time tracking fields
     completedAt: { type: Date, default: null }, // When ticket is fully completed
     totalDuration: { type: Number, default: 0 }, // Total time in seconds from creation to completion
-    emergency: { type: Boolean, default: false},
+    emergency: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

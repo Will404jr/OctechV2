@@ -9,23 +9,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { Toaster } from "@/components/ui/toaster"
 import {
   Users,
   AlertCircle,
-  Clock,
   CheckCircle2,
   PauseCircle,
   User,
   Search,
   Filter,
   RefreshCw,
-  ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
   X,
-  Eye,
-  Play,
   ArrowRight,
   MapPin,
   Timer,
@@ -35,22 +28,14 @@ import {
   List,
   SortAsc,
   SortDesc,
+  DollarSign,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Progress } from "@/components/ui/progress"
 import type { SessionData } from "@/lib/session"
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
@@ -86,6 +71,8 @@ interface DepartmentHistoryEntry {
   roomId?: string
   holdStartedAt?: string | null
   holdDuration: number
+  actuallyStarted?: boolean
+  cashCleared?: boolean | null
 }
 
 interface Ticket {
@@ -272,6 +259,22 @@ const RealTimeDuration = ({
 
 // Component to display ticket status
 const TicketStatusBadge = ({ ticket }: { ticket: Ticket }) => {
+  // Check for pending payment (cash tickets that haven't been cleared)
+  if (ticket.userType === "Cash" && !ticket.completed && !ticket.noShow) {
+    const currentDept = ticket.departmentHistory?.find(
+      (history) => !history.completed && history.department !== "Reception",
+    )
+
+    if (currentDept && (currentDept.cashCleared === null || currentDept.cashCleared === undefined)) {
+      return (
+        <Badge className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
+          <DollarSign className="h-3 w-3" />
+          Pending Payment
+        </Badge>
+      )
+    }
+  }
+
   if (ticket.emergency && !ticket.completed && !ticket.noShow) {
     return (
       <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1">
@@ -308,9 +311,10 @@ const TicketStatusBadge = ({ ticket }: { ticket: Ticket }) => {
     )
   }
 
-  // Check if ticket is being served in any department
+  // IMPROVED LOGIC: Check if ticket is actually being served
+  // A ticket is being served if it has roomId, startedAt, and actuallyStarted is not false
   const isBeingServed = ticket.departmentHistory?.some(
-    (history) => !history.completed && history.startedAt && !history.completedAt,
+    (history) => !history.completed && history.roomId && history.startedAt && history.actuallyStarted !== false,
   )
 
   if (isBeingServed) {
@@ -373,10 +377,18 @@ const QuickStats = ({ tickets }: { tickets: Ticket[] }) => {
   const stats = {
     total: tickets.length,
     waiting: tickets.filter(
-      (t) => !t.completed && !t.noShow && !t.held && !t.departmentHistory?.some((h) => !h.completed && h.startedAt),
+      (t) =>
+        !t.completed &&
+        !t.noShow &&
+        !t.held &&
+        !t.departmentHistory?.some((h) => !h.completed && h.roomId && h.startedAt && h.actuallyStarted !== false),
     ).length,
     serving: tickets.filter(
-      (t) => !t.completed && !t.noShow && !t.held && t.departmentHistory?.some((h) => !h.completed && h.startedAt),
+      (t) =>
+        !t.completed &&
+        !t.noShow &&
+        !t.held &&
+        t.departmentHistory?.some((h) => !h.completed && h.roomId && h.startedAt && h.actuallyStarted !== false),
     ).length,
     emergency: tickets.filter((t) => t.emergency && !t.completed && !t.noShow).length,
     completed: tickets.filter((t) => t.completed).length,
@@ -801,7 +813,10 @@ const TicketsPage: React.FC = () => {
               ticket.completed !== true &&
               ticket.noShow !== true &&
               ticket.held !== true &&
-              !ticket.departmentHistory?.some((history) => !history.completed && history.startedAt),
+              !ticket.departmentHistory?.some(
+                (history) =>
+                  !history.completed && history.roomId && history.startedAt && history.actuallyStarted !== false,
+              ),
           )
           break
         case "serving":
@@ -810,7 +825,10 @@ const TicketsPage: React.FC = () => {
               ticket.completed !== true &&
               ticket.noShow !== true &&
               ticket.held !== true &&
-              ticket.departmentHistory?.some((history) => !history.completed && history.startedAt),
+              ticket.departmentHistory?.some(
+                (history) =>
+                  !history.completed && history.roomId && history.startedAt && history.actuallyStarted !== false,
+              ),
           )
           break
         case "held":
@@ -1614,6 +1632,7 @@ const TicketsPage: React.FC = () => {
             <div className="p-4 sm:p-6 border-b border-slate-200">
               {/* Status Filter Navbar - Now vertical like tabs */}
               <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-800">Tickets</h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -2220,275 +2239,285 @@ const TicketsPage: React.FC = () => {
                 disabled={!selectedRoomId || isServingTicket}
                 className="bg-[#0e4480] hover:bg-blue-800 text-white w-full sm:w-auto"
               >
-                {isServingTicket ? (
-                  <>
-                    <QueueSpinner size="sm" color="bg-white" dotCount={3} />
-                    <span className="ml-2">Serving...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Serving
-                  </>
-                )}
+                {isServingTicket ? <>Serving...</> : <>Serve Ticket</>}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        <Toaster />
+        {/* Next Step Dialog */}
+        <DepartmentSelectionDialog
+          isOpen={showNextStepDialog}
+          onClose={() => {
+            setShowNextStepDialog(false)
+            setShowTicketDetailsDialog(true)
+          }}
+          onSubmit={handleNextStep}
+          departments={departments}
+        />
+
+        {/* Serve Ticket Dialog */}
+        <Dialog open={showServeDialog} onOpenChange={setShowServeDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Serve Ticket {selectedTicket?.ticketNo}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <p className="text-sm text-slate-600 mb-4">
+                  This ticket is waiting in{" "}
+                  {selectedTicket?.departmentHistory?.find((h) => !h.completed && !h.roomId)?.department}. Select from
+                  today's rooms to start serving:
+                </p>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Today's Rooms</label>
+                  <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
+                    <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
+                      <SelectValue placeholder="Select a room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableRooms.map((room) => (
+                        <SelectItem key={room._id} value={room._id}>
+                          <div className="flex items-center gap-2 w-full">
+                            <span>Room {room.roomNumber}</span>
+                            <span className="text-sm text-slate-500">
+                              - {room.staff.firstName} {room.staff.lastName}
+                            </span>
+                            <Badge
+                              variant={room.available ? "default" : "secondary"}
+                              className={`ml-auto text-xs ${
+                                room.available
+                                  ? "bg-green-100 text-green-800 border-green-200"
+                                  : "bg-red-100 text-red-800 border-red-200"
+                              }`}
+                            >
+                              {room.available ? "Available" : "Occupied"}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowServeDialog(false)
+                  setSelectedRoomId("")
+                  setAvailableRooms([])
+                }}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmServe}
+                disabled={!selectedRoomId || isServingTicket}
+                className="bg-[#0e4480] hover:bg-blue-800 text-white w-full sm:w-auto"
+              >
+                {isServingTicket ? <>Serving...</> : <>Serve Ticket</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedRoute>
   )
 }
 
-// Enhanced Ticket Card Component
-const TicketCard = ({
-  ticket,
-  isExpanded,
-  onToggleExpand,
-  onViewDetails,
-  onUnhold,
-  onServe,
-  viewMode = "list",
-}: {
+const TicketCard: React.FC<{
   ticket: Ticket
   isExpanded: boolean
   onToggleExpand: () => void
   onViewDetails: () => void
   onUnhold: () => void
-  onServe?: () => void
-  viewMode?: "grid" | "list"
-}) => {
-  // Find current department
+  onServe: () => void
+  viewMode: "grid" | "list"
+}> = ({ ticket, isExpanded, onToggleExpand, onViewDetails, onUnhold, onServe, viewMode }) => {
   const currentDept = ticket.departmentHistory?.find((history) => !history.completed)
 
-  // Calculate total time since creation
-  const creationTime = new Date(ticket.createdAt).getTime()
-  const now = new Date().getTime()
-  const totalTimeSeconds = Math.floor((now - creationTime) / 1000)
+  // Check if ticket is being served (has room and actually started)
+  const isBeingServed = ticket.departmentHistory?.some(
+    (history) => !history.completed && history.roomId && history.startedAt && history.actuallyStarted !== false,
+  )
 
-  // Calculate progress for visual indicator
-  const maxTime = 3600 // 1 hour in seconds
-  const progress = Math.min((totalTimeSeconds / maxTime) * 100, 100)
-
-  const getStatusColor = () => {
-    if (ticket.noShow) return "border-l-red-400 bg-red-50/30"
-    if (ticket.completed) return "border-l-green-400 bg-green-50/30"
-    if (ticket.held) return "border-l-amber-400 bg-amber-50/30"
-    if (currentDept?.startedAt) return "border-l-blue-400 bg-blue-50/30"
-    return "border-l-purple-400 bg-purple-50/30"
-  }
+  // Check if ticket can be served (waiting in department but no room assigned)
+  const canBeServed = currentDept && !currentDept.roomId && !ticket.held && !ticket.completed && !ticket.noShow
 
   return (
     <Card
-      className={`border-l-4 ${getStatusColor()} hover:shadow-lg transition-all duration-200 ${viewMode === "grid" ? "h-fit" : ""}`}
+      className={`transition-all duration-200 hover:shadow-md border-l-4 ${
+        ticket.emergency
+          ? "border-l-red-500 bg-red-50/30"
+          : ticket.held
+            ? "border-l-amber-500 bg-amber-50/30"
+            : ticket.completed
+              ? "border-l-green-500 bg-green-50/30"
+              : ticket.noShow
+                ? "border-l-red-500 bg-red-50/30"
+                : isBeingServed
+                  ? "border-l-blue-500 bg-blue-50/30"
+                  : "border-l-purple-500 bg-purple-50/30"
+      }`}
     >
-      <CardContent className="p-0">
-        <div className="p-3 sm:p-4">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row justify-between gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge className="bg-[#0e4480] text-white px-2 sm:px-3 py-1 text-sm sm:text-base font-mono">
-                {ticket.ticketNo}
-              </Badge>
-              {ticket.emergency && !ticket.completed && !ticket.noShow && (
-                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1 text-xs">
+      <CardContent className="p-4">
+        <div className="flex flex-col sm:flex-row justify-between gap-4">
+          <div className="flex-1">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-3">
+              <Badge className="bg-[#0e4480] text-white px-3 py-1 text-base font-mono">{ticket.ticketNo}</Badge>
+              <TicketStatusBadge ticket={ticket} />
+              {ticket.emergency && (
+                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1">
                   <Zap className="h-3 w-3" />
-                  <span className="hidden sm:inline">EMERGENCY</span>
-                  <span className="sm:hidden">EMG</span>
+                  EMERGENCY
                 </Badge>
               )}
-              <TicketStatusBadge ticket={ticket} />
             </div>
 
-            <div className="flex items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded text-xs sm:text-sm">
-                      <Clock className="h-3 w-3 text-slate-600" />
-                      <span>
-                        {ticket.completed ? formatDuration(ticket.totalDuration) : formatDuration(totalTimeSeconds)}
-                      </span>
+            {/* Patient Info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Patient Name</p>
+                <p className="font-medium">{ticket.patientName || "Not provided"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">User Type</p>
+                <p className="text-sm">{ticket.userType || "Not specified"}</p>
+              </div>
+            </div>
+
+            {/* Department Info */}
+            <div className="mb-3">
+              <p className="text-xs text-slate-500 font-medium mb-1">Current Department</p>
+              <CurrentDepartmentBadge ticket={ticket} />
+            </div>
+
+            {/* Expandable Content */}
+            {isExpanded && (
+              <div className="space-y-3 pt-3 border-t border-slate-200">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Reason for Visit</p>
+                  <p className="text-sm">{ticket.reasonforVisit || "Not provided"}</p>
+                </div>
+
+                {ticket.receptionistNote && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Receptionist Note</p>
+                    <p className="text-sm p-2 bg-slate-50 rounded-md">{ticket.receptionistNote}</p>
+                  </div>
+                )}
+
+                {/* Time Information */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Total Time</p>
+                    <p className="font-medium">
+                      {ticket.completed ? (
+                        formatDuration(ticket.totalDuration)
+                      ) : (
+                        <RealTimeDuration
+                          startTime={ticket.createdAt}
+                          endTime={ticket.completed ? ticket.completedAt : null}
+                          isActive={!ticket.completed && !ticket.noShow}
+                        />
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Current department processing time */}
+                  {currentDept && currentDept.startedAt && (
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">Processing Time</p>
+                      <p className="font-medium">
+                        <RealTimeDuration
+                          startTime={currentDept.startedAt}
+                          endTime={currentDept.completedAt}
+                          isActive={!currentDept.completed}
+                        />
+                      </p>
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Total time since creation</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onViewDetails}>
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Details
-                  </DropdownMenuItem>
-                  {!ticket.completed &&
-                    !ticket.noShow &&
-                    !ticket.held &&
-                    ticket.departmentHistory?.some((h) => !h.completed && !h.roomId) && (
-                      <DropdownMenuItem onClick={() => onServe && onServe()}>
-                        <Play className="h-4 w-4 mr-2" />
-                        Serve Ticket
-                      </DropdownMenuItem>
-                    )}
-                  {ticket.held && (
-                    <DropdownMenuItem onClick={onUnhold}>
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Return to Queue
-                    </DropdownMenuItem>
                   )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={onToggleExpand}>
-                    {isExpanded ? (
-                      <>
-                        <ChevronUp className="h-4 w-4 mr-2" />
-                        Collapse
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4 mr-2" />
-                        Expand
-                      </>
-                    )}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
+                </div>
 
-          {/* Progress Bar */}
-          <div className="mt-3">
-            <Progress value={progress} className="h-1" />
-          </div>
-
-          {/* Department Badge */}
-          <div className="mt-3">
-            <CurrentDepartmentBadge ticket={ticket} />
-          </div>
-
-          {/* Main Info */}
-          <div className="mt-3 grid grid-cols-1 gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-slate-500 font-medium">Patient</p>
-                <p className="font-medium truncate">{ticket.patientName || "Not provided"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 font-medium">Created</p>
-                <p className="text-xs">{new Date(ticket.createdAt).toLocaleString()}</p>
-              </div>
-            </div>
-
-            {ticket.reasonforVisit && (
-              <div>
-                <p className="text-xs text-slate-500 font-medium">Reason</p>
-                <p className="text-sm line-clamp-2">{ticket.reasonforVisit}</p>
+                {/* Department History Summary */}
+                {ticket.departmentHistory && ticket.departmentHistory.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium mb-2">Department Journey</p>
+                    <div className="flex flex-wrap gap-1">
+                      {ticket.departmentHistory.map((history, index) => (
+                        <Badge
+                          key={index}
+                          className={`text-xs ${
+                            history.completed
+                              ? "bg-green-100 text-green-800 border-green-200"
+                              : "bg-blue-100 text-blue-800 border-blue-200"
+                          }`}
+                        >
+                          {history.icon} {history.department}
+                          {history.completed && <CheckCircle2 className="h-3 w-3 ml-1" />}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Expanded Content */}
-          {isExpanded && (
-            <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
-              {/* Department History */}
-              <div>
-                <h4 className="font-medium text-slate-700 mb-2 text-sm">Department History</h4>
-                <div className="space-y-2">
-                  {ticket.departmentHistory && ticket.departmentHistory.length > 0 ? (
-                    ticket.departmentHistory.map((history, index) => (
-                      <div
-                        key={index}
-                        className={`p-2 rounded-md border text-xs ${
-                          history.completed ? "bg-green-50/50 border-green-200" : "bg-blue-50/50 border-blue-200"
-                        }`}
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-medium flex items-center gap-1">
-                            {history.icon && <span className="text-sm">{history.icon}</span>}
-                            <span className="truncate">{history.department}</span>
-                            {history.completed ? (
-                              <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">Done</Badge>
-                            ) : (
-                              <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">Active</Badge>
-                            )}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-1 text-xs">
-                          <div>
-                            <p className="text-slate-500">Wait</p>
-                            <p className="font-medium">{formatDuration(history.waitingDuration)}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-500">Process</p>
-                            <p className="font-medium">
-                              {history.completed ? (
-                                formatDuration(history.processingDuration)
-                              ) : (
-                                <RealTimeDuration
-                                  startTime={history.startedAt || null}
-                                  endTime={history.completedAt || null}
-                                  isActive={!history.completed && !!history.startedAt}
-                                />
-                              )}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-slate-500">Hold</p>
-                            <p className="font-medium">{formatDuration(history.holdDuration)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-slate-500 text-xs">No department history available</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Notes */}
-              {(ticket.receptionistNote || ticket.departmentNote) && (
-                <div>
-                  <h4 className="font-medium text-slate-700 mb-2 text-sm">Notes</h4>
-                  <div className="space-y-2">
-                    {ticket.receptionistNote && (
-                      <div className="p-2 bg-slate-50 rounded-md">
-                        <p className="text-xs text-slate-500 font-medium">Receptionist</p>
-                        <p className="text-xs">{ticket.receptionistNote}</p>
-                      </div>
-                    )}
-                    {ticket.departmentNote && (
-                      <div className="p-2 bg-slate-50 rounded-md">
-                        <p className="text-xs text-slate-500 font-medium">Department</p>
-                        <p className="text-xs">{ticket.departmentNote}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-2 min-w-[120px]">
+            <Button variant="outline" size="sm" onClick={onToggleExpand} className="flex items-center gap-2">
+              {isExpanded ? (
+                <>
+                  <X className="h-4 w-4" />
+                  <span className="hidden sm:inline">Collapse</span>
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="h-4 w-4" />
+                  <span className="hidden sm:inline">Expand</span>
+                </>
               )}
+            </Button>
 
-              {/* Action Button */}
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onViewDetails}
-                  className="text-[#0e4480] border-[#0e4480] text-xs"
-                >
-                  <Eye className="h-3 w-3 mr-1" />
-                  View Details
-                </Button>
-              </div>
-            </div>
-          )}
+            <Button
+              onClick={onViewDetails}
+              size="sm"
+              className="bg-[#0e4480] hover:bg-blue-800 text-white flex items-center gap-2"
+            >
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Details</span>
+            </Button>
+
+            {/* Conditional Action Buttons */}
+            {ticket.held && !ticket.completed && (
+              <Button
+                onClick={onUnhold}
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Unhold</span>
+              </Button>
+            )}
+
+            {canBeServed && (
+              <Button
+                onClick={onServe}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+              >
+                <UserCheck className="h-4 w-4" />
+                <span className="hidden sm:inline">Serve</span>
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

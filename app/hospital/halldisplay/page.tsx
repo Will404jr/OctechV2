@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { User, Calendar, Volume2, VolumeX, Loader2, Users } from "lucide-react"
+import { User, Volume2, VolumeX, Loader2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -42,9 +42,12 @@ interface Ticket {
     completed?: boolean
     roomId?: string
     startedAt?: string | null
+    actuallyStarted?: boolean
+    cashCleared?: "Cleared" | "Pending" | "Rejected"
   }[]
   createdAt: string
   updatedAt: string
+  userType?: string
 }
 
 interface Room {
@@ -87,6 +90,15 @@ interface WaitingTicket {
   position: number
 }
 
+interface HeldTicket {
+  ticketId: string
+  ticketNo: string
+  department: string
+  departmentIcon: string
+  roomNumber?: string
+  heldTime: number
+}
+
 interface Event {
   _id: string
   title: string
@@ -114,6 +126,7 @@ export default function HallDisplay() {
   const [isMuted, setIsMuted] = useState(false)
   const [activeTickets, setActiveTickets] = useState<ActiveTicket[]>([])
   const [waitingTickets, setWaitingTickets] = useState<WaitingTicket[]>([])
+  const [heldTickets, setHeldTickets] = useState<HeldTicket[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [ads, setAds] = useState<Ad[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -521,7 +534,7 @@ export default function HallDisplay() {
 
       const allTickets: Ticket[] = await ticketsRes.json()
 
-      // Filter for waiting tickets (not completed, not being served, not on hold)
+      // Filter for waiting tickets with improved logic
       const waitingTicketsData: WaitingTicket[] = []
 
       // Group tickets by department
@@ -537,12 +550,27 @@ export default function HallDisplay() {
         const currentDept = ticket.departmentHistory.find((history) => !history.completed)
         if (!currentDept) continue
 
-        // Skip if ticket is currently being served (has startedAt but not completedAt)
-        if (currentDept.startedAt && !currentDept.completed) {
+        // Skip cash tickets that haven't been cleared for payment (except Reception)
+        if (ticket.userType === "Cash" && currentDept.department !== "Reception") {
+          if (currentDept.cashCleared !== "Cleared") {
+            continue // Skip this ticket - payment not cleared
+          }
+        }
+
+        // IMPROVED LOGIC: A ticket is waiting if:
+        // 1. It has no roomId assigned, OR
+        // 2. It has roomId but staff hasn't actually started serving (no actuallyStarted flag)
+        // 3. It has roomId and startedAt but the room is not marked as occupied in the system
+
+        const isActuallyBeingServed =
+          currentDept.roomId && currentDept.startedAt && currentDept.actuallyStarted !== false
+
+        // Skip if ticket is actually being served
+        if (isActuallyBeingServed) {
           continue
         }
 
-        // This is a waiting ticket
+        // This is a waiting ticket (either no room assigned or assigned but not started)
         if (!ticketsByDepartment[currentDept.department]) {
           ticketsByDepartment[currentDept.department] = {
             tickets: [],
@@ -581,6 +609,64 @@ export default function HallDisplay() {
     }
   }, [])
 
+  const fetchHeldTickets = useCallback(async () => {
+    try {
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split("T")[0]
+
+      // Fetch all tickets for today
+      const ticketsRes = await fetch(`/api/hospital/ticket?date=${today}`)
+      if (!ticketsRes.ok) return
+
+      const allTickets: Ticket[] = await ticketsRes.json()
+
+      // Filter for held tickets
+      const heldTicketsData: HeldTicket[] = []
+
+      for (const ticket of allTickets) {
+        // Only get held tickets
+        if (!ticket.held || ticket.completed) {
+          continue
+        }
+
+        // Find current department (not completed)
+        const currentDept = ticket.departmentHistory?.find((history) => !history.completed)
+        if (!currentDept) continue
+
+        // Calculate held time
+        const heldTime = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000)
+
+        // Get room number if assigned
+        let roomNumber: string | undefined
+        if (currentDept.roomId) {
+          // Find the room number from departments
+          for (const dept of departments) {
+            if (dept.title === currentDept.department) {
+              const room = dept.rooms.find((r) => r._id === currentDept.roomId)
+              if (room) {
+                roomNumber = room.roomNumber
+                break
+              }
+            }
+          }
+        }
+
+        heldTicketsData.push({
+          ticketId: ticket._id,
+          ticketNo: ticket.ticketNo,
+          department: currentDept.department,
+          departmentIcon: currentDept.icon || "🏥",
+          roomNumber,
+          heldTime,
+        })
+      }
+
+      setHeldTickets(heldTicketsData)
+    } catch (error) {
+      console.error("Error fetching held tickets:", error)
+    }
+  }, [departments])
+
   const fetchData = useCallback(async () => {
     try {
       const [eventsRes, adsRes, settingsRes] = await Promise.all([
@@ -597,11 +683,11 @@ export default function HallDisplay() {
       setAds(adsData)
       setSettings(settingsData)
 
-      await Promise.all([fetchActiveTickets(), fetchWaitingTickets()])
+      await Promise.all([fetchActiveTickets(), fetchWaitingTickets(), fetchHeldTickets()])
     } catch (error) {
       console.error("Error fetching data:", error)
     }
-  }, [fetchActiveTickets, fetchWaitingTickets])
+  }, [fetchActiveTickets, fetchWaitingTickets, fetchHeldTickets])
 
   useEffect(() => {
     const savedMuteState = localStorage.getItem("hallDisplayMuted")
@@ -636,6 +722,7 @@ export default function HallDisplay() {
     const ticketsIntervalId = setInterval(() => {
       fetchActiveTickets()
       fetchWaitingTickets()
+      fetchHeldTickets()
     }, 5000)
     const dataIntervalId = setInterval(fetchData, 30000)
 
@@ -643,7 +730,7 @@ export default function HallDisplay() {
       clearInterval(ticketsIntervalId)
       clearInterval(dataIntervalId)
     }
-  }, [fetchData, fetchActiveTickets, fetchWaitingTickets])
+  }, [fetchData, fetchActiveTickets, fetchWaitingTickets, fetchHeldTickets])
 
   useEffect(() => {
     const handleUserInteraction = () => {
@@ -668,6 +755,19 @@ export default function HallDisplay() {
       day: "numeric",
     }
     return new Date(dateString).toLocaleDateString(undefined, options)
+  }
+
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`
+    } else if (minutes > 0) {
+      return `${minutes}m`
+    } else {
+      return `${seconds}s`
+    }
   }
 
   const testTicketAnnouncement = () => {
@@ -905,7 +1005,7 @@ export default function HallDisplay() {
 
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-lg font-bold text-gray-800">{ticket.ticketNo}</span>
+                                    <span className="text-2xl font-bold text-gray-800">{ticket.ticketNo}</span>
                                     {ticket.emergency && (
                                       <Badge variant="destructive" className="text-xs animate-pulse">
                                         EMG
@@ -917,11 +1017,6 @@ export default function HallDisplay() {
                                       </Badge>
                                     )}
                                   </div>
-                                  {ticket.patientName && (
-                                    <span className="text-xs text-gray-600 truncate max-w-32">
-                                      {ticket.patientName}
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             </div>
@@ -941,26 +1036,41 @@ export default function HallDisplay() {
             </Card>
           </div>
 
-          <Card className="w-1/5 overflow-auto rounded-lg pb-3">
+          {/* Held Tickets Section - Table Format */}
+          <Card className="w-1/5 overflow-auto rounded-lg">
             <CardContent>
-              <h2 className="text-xl font-bold mb-4 pt-2">Announcements</h2>
-              <div className="space-y-4">
-                {events.length > 0 ? (
-                  events.map((event) => (
-                    <div key={event._id} className="bg-gray-100 rounded-lg p-4 transition-all hover:shadow-md">
-                      <div className="flex items-start space-x-3">
-                        <Calendar className="w-5 h-5 text-blue-500 mt-1" />
-                        <div>
-                          <h3 className="font-semibold text-2xl leading-tight">{event.title}</h3>
-                          <p className="text-xl text-gray-600 mt-1">{formatDate(event.date)}</p>
+              <h2 className="text-xl font-bold mb-2 pt-2">Held Tickets</h2>
+              <Table className="font-bold">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ticket</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Room No.</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {heldTickets.map((ticket) => (
+                    <TableRow key={ticket.ticketId} className="bg-amber-50">
+                      <TableCell className="text-2xl font-extrabold text-amber-800">{ticket.ticketNo}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center text-2xl font-extrabold text-amber-700">
+                          {ticket.department}
                         </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">No announcements available</div>
-                )}
-              </div>
+                      </TableCell>
+                      <TableCell className="text-2xl font-extrabold text-amber-700">
+                        {ticket.roomNumber || "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {heldTickets.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                        No held tickets
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </main>

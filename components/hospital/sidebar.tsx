@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Users, Shield, MonitorPlay, ListTodo, Menu, Settings, Building2, ConciergeBell } from "lucide-react"
+import { Users, Shield, MonitorPlay, ListTodo, Menu, Settings, Building2, ConciergeBell, DollarSign } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
@@ -34,11 +34,17 @@ const routes = [
     href: "/hospital/dashboard/tickets",
     permission: "Tickets",
   },
+   {
+    label: "Billing",
+    icon: DollarSign,
+    href: "/hospital/dashboard/billing",
+    permission: "Billing",
+  },
   {
     label: "Departments",
     icon: ListTodo,
-    href: "/hospital/dashboard/queues",
-    permission: "Queues",
+    href: "/hospital/dashboard/departments",
+    permission: "Departments",
   },
   {
     label: "Receptionist",

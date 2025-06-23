@@ -37,7 +37,7 @@ const menuItems = [
   "Staff",
   "Roles",
   "Tickets",
-  "Queues",
+  "Departments",
   "UpcomingEvents",
   "Ads",
   "Settings",

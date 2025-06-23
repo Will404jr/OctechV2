@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         Staff: true,
         Roles: true,
         Tickets: true,
-        // Serving: true,
+        Billing: true,
         Queues: true,
         UpcomingEvents: true,
         Ads: true,

@@ -1,3 +1,5 @@
+// api/hospital/ticket/[id]/clear/route.ts
+
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import { Ticket, Department } from "@/lib/models/hospital";
