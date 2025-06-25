@@ -2364,6 +2364,13 @@ const TicketsPage: React.FC = () => {
           }}
           onSubmit={handleNextStep}
           departments={departments}
+          currentDepartment={selectedTicket?.departmentHistory?.find((h) => !h.completed)?.department}
+          currentDepartmentId={
+            departments.find(
+              (d) => d.title === selectedTicket?.departmentHistory?.find((h) => !h.completed)?.department,
+            )?._id
+          }
+          currentRoomId={selectedTicket?.departmentHistory?.find((h) => !h.completed)?.roomId as string}
         />
 
         {/* Serve Ticket Dialog */}

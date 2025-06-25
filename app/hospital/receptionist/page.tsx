@@ -1418,6 +1418,9 @@ const ReceptionistPage: React.FC = () => {
             onClose={() => setShowNextStepDialog(false)}
             onSubmit={handleNextStep}
             departments={departments}
+            currentDepartment="Reception"
+            currentDepartmentId={departments.find((d) => d.title === "Reception")?._id}
+            currentRoomId={roomId || undefined}
           />
 
           <Dialog

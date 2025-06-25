@@ -2,15 +2,21 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
+import { Info } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { X, Plus, ArrowRight, Info } from "lucide-react"
 
 interface Department {
   _id: string
@@ -25,24 +31,17 @@ interface Department {
       lastName: string
     }
     available: boolean
-    createdAt?: string
   }[]
 }
 
 interface DepartmentSelectionDialogProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (departments: Array<{ departmentId: string; roomId?: string }>) => void
+  onSubmit: (departments: Array<{ departmentId: string; roomId?: string }>, andBack?: boolean) => void
   departments: Department[]
-  currentDepartmentId?: string
+  currentDepartment?: string
   currentRoomId?: string
-}
-
-interface SelectedDepartment {
-  departmentId: string
-  departmentName: string
-  roomId?: string
-  assignToAnyRoom: boolean
+  currentDepartmentId?: string
 }
 
 export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps> = ({
@@ -50,397 +49,238 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
   onClose,
   onSubmit,
   departments,
-  currentDepartmentId,
+  currentDepartment,
   currentRoomId,
+  currentDepartmentId,
 }) => {
-  const [selectedDepartments, setSelectedDepartments] = useState<SelectedDepartment[]>([])
-  const [currentDepartment, setCurrentDepartment] = useState<string>("")
-  const [currentRoom, setCurrentRoom] = useState<string>("")
-  const [assignToAnyRoom, setAssignToAnyRoom] = useState<boolean>(true)
-  const [availableRooms, setAvailableRooms] = useState<Department["rooms"]>([])
-  const [multipleMode, setMultipleMode] = useState<boolean>(false)
-  const [andBack, setAndBack] = useState<boolean>(false)
+  console.log("DepartmentSelectionDialog props:", { currentDepartmentId, currentRoomId, isOpen })
+  const [selectedDepartments, setSelectedDepartments] = useState<Record<string, boolean>>({})
+  const [selectedRooms, setSelectedRooms] = useState<Record<string, string>>({})
+  const [andBack, setAndBack] = useState(false)
+  const [todaysRooms, setTodaysRooms] = useState<Record<string, any[]>>({})
+  const [loadingRooms, setLoadingRooms] = useState<Record<string, boolean>>({})
+
+  const fetchTodaysRooms = async (departmentId: string) => {
+    if (todaysRooms[departmentId] || loadingRooms[departmentId]) {
+      return // Already loaded or loading
+    }
+
+    setLoadingRooms((prev) => ({ ...prev, [departmentId]: true }))
+
+    try {
+      const today = new Date().toISOString().split("T")[0]
+      const response = await fetch(`/api/hospital/department/${departmentId}/rooms?date=${today}`)
+
+      if (response.ok) {
+        const data = await response.json()
+        setTodaysRooms((prev) => ({ ...prev, [departmentId]: data.rooms || [] }))
+      } else {
+        console.error("Failed to fetch today's rooms")
+        setTodaysRooms((prev) => ({ ...prev, [departmentId]: [] }))
+      }
+    } catch (error) {
+      console.error("Error fetching today's rooms:", error)
+      setTodaysRooms((prev) => ({ ...prev, [departmentId]: [] }))
+    } finally {
+      setLoadingRooms((prev) => ({ ...prev, [departmentId]: false }))
+    }
+  }
+
+  // Reset state when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedDepartments({})
+      setSelectedRooms({})
+      setAndBack(false)
+      setTodaysRooms({})
+      setLoadingRooms({})
+    }
+  }, [isOpen])
+
+  const handleDepartmentToggle = (departmentId: string, checked: boolean) => {
+    setSelectedDepartments((prev) => ({
+      ...prev,
+      [departmentId]: checked,
+    }))
+
+    // Clear room selection if department is unchecked
+    if (!checked) {
+      setSelectedRooms((prev) => {
+        const newRooms = { ...prev }
+        delete newRooms[departmentId]
+        return newRooms
+      })
+    } else {
+      // Fetch today's rooms when department is selected
+      fetchTodaysRooms(departmentId)
+    }
+  }
+
+  const handleRoomSelection = (departmentId: string, roomId: string) => {
+    setSelectedRooms((prev) => ({
+      ...prev,
+      [departmentId]: roomId,
+    }))
+  }
 
   const handleSubmit = () => {
-    let departmentQueue: Array<{ departmentId: string; roomId?: string }> = []
+    const selectedDeptIds = Object.keys(selectedDepartments).filter((id) => selectedDepartments[id])
 
-    if (multipleMode) {
-      if (selectedDepartments.length === 0) return
+    if (selectedDeptIds.length === 0) {
+      return
+    }
 
-      departmentQueue = selectedDepartments.map((dept) => ({
-        departmentId: dept.departmentId,
-        roomId: dept.assignToAnyRoom ? undefined : dept.roomId,
-      }))
-    } else {
-      if (!currentDepartment) return
+    let departmentSelections = selectedDeptIds.map((departmentId) => ({
+      departmentId,
+      roomId: selectedRooms[departmentId],
+    }))
 
-      departmentQueue = [
+    if (andBack && currentDepartment && currentDepartmentId && currentRoomId) {
+      // Add the current department and room to the end of the queue
+      departmentSelections = [
+        ...departmentSelections,
         {
-          departmentId: currentDepartment,
-          roomId: assignToAnyRoom ? undefined : currentRoom,
+          departmentId: currentDepartmentId,
+          roomId: currentRoomId,
         },
       ]
     }
 
-    // Add current department and room to the end if "And back" is enabled
-    if (andBack && currentDepartmentId) {
-      departmentQueue.push({
-        departmentId: currentDepartmentId,
-        roomId: currentRoomId,
-      })
-    }
-
-    onSubmit(departmentQueue)
-
-    // Reset form
-    setSelectedDepartments([])
-    setCurrentDepartment("")
-    setCurrentRoom("")
-    setAssignToAnyRoom(true)
-    setMultipleMode(false)
-    setAndBack(false)
+    onSubmit(departmentSelections, andBack)
+    onClose()
   }
 
-  const addDepartment = () => {
-    if (!currentDepartment) return
-
-    const department = departments.find((d) => d._id === currentDepartment)
-    if (!department) return
-
-    // Check if department is already selected
-    if (selectedDepartments.some((d) => d.departmentId === currentDepartment)) {
-      return
-    }
-
-    const newDept: SelectedDepartment = {
-      departmentId: currentDepartment,
-      departmentName: department.title,
-      roomId: assignToAnyRoom ? undefined : currentRoom,
-      assignToAnyRoom,
-    }
-
-    setSelectedDepartments([...selectedDepartments, newDept])
-    setCurrentDepartment("")
-    setCurrentRoom("")
-    setAssignToAnyRoom(true)
-  }
-
-  const removeDepartment = (index: number) => {
-    setSelectedDepartments(selectedDepartments.filter((_, i) => i !== index))
-  }
-
-  const moveDepartment = (fromIndex: number, toIndex: number) => {
-    const newDepartments = [...selectedDepartments]
-    const [movedItem] = newDepartments.splice(fromIndex, 1)
-    newDepartments.splice(toIndex, 0, movedItem)
-    setSelectedDepartments(newDepartments)
-  }
-
-  // Fetch rooms for the selected department
-  useEffect(() => {
-    const fetchRoomsForDepartment = async () => {
-      if (!currentDepartment) {
-        setAvailableRooms([])
-        return
-      }
-
-      try {
-        const today = new Date().toISOString().split("T")[0]
-        const response = await fetch(`/api/hospital/department/${currentDepartment}/rooms?date=${today}`)
-        if (!response.ok) throw new Error("Failed to fetch rooms")
-
-        const data = await response.json()
-        setAvailableRooms(data.rooms)
-      } catch (error) {
-        console.error("Error fetching rooms:", error)
-        setAvailableRooms([])
-      }
-    }
-
-    fetchRoomsForDepartment()
-  }, [currentDepartment])
-
-  // Reset selected room when department changes
-  useEffect(() => {
-    setCurrentRoom("")
-  }, [currentDepartment])
+  const selectedCount = Object.values(selectedDepartments).filter(Boolean).length
 
   return (
     <TooltipProvider>
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Select Next Department(s)</DialogTitle>
+            <DialogDescription>
+              Choose which department(s) this ticket should be sent to next. You can select multiple departments to
+              create a queue.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* Mode Selection */}
-            <div className="space-y-4">
-              <RadioGroup
-                value={multipleMode ? "multiple" : "single"}
-                onValueChange={(value) => {
-                  setMultipleMode(value === "multiple")
-                  if (value === "single") {
-                    setSelectedDepartments([])
-                  }
-                }}
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="single" id="single" />
-                  <Label htmlFor="single">Send to single department</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="multiple" id="multiple" />
-                  <Label htmlFor="multiple">Send to multiple departments (in order)</Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {multipleMode && (
-              <>
-                {/* Selected Departments Queue */}
-                {selectedDepartments.length > 0 && (
-                  <div className="space-y-2">
-                    <Label>Department Queue (in order):</Label>
-                    <div className="space-y-2 p-4 bg-gray-50 rounded-lg">
-                      {selectedDepartments.map((dept, index) => {
-                        const deptInfo = departments.find((d) => d._id === dept.departmentId)
-                        return (
-                          <div key={index} className="flex items-center justify-between bg-white p-3 rounded border">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline">{index + 1}</Badge>
-                              <span className="flex items-center gap-2">
-                                {deptInfo?.icon} {dept.departmentName}
-                              </span>
-                              {!dept.assignToAnyRoom && dept.roomId && <Badge variant="secondary">Specific Room</Badge>}
-                              {index < selectedDepartments.length - 1 && (
-                                <ArrowRight className="h-4 w-4 text-gray-400" />
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {index > 0 && (
-                                <Button variant="ghost" size="sm" onClick={() => moveDepartment(index, index - 1)}>
-                                  ↑
-                                </Button>
-                              )}
-                              {index < selectedDepartments.length - 1 && (
-                                <Button variant="ghost" size="sm" onClick={() => moveDepartment(index, index + 1)}>
-                                  ↓
-                                </Button>
-                              )}
-                              <Button variant="ghost" size="sm" onClick={() => removeDepartment(index)}>
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Add Department Section */}
-                <div className="space-y-4 p-4 border rounded-lg">
-                  <Label>Add Department to Queue:</Label>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
-                    <Select
-                      value={currentDepartment}
-                      onValueChange={(value) => {
-                        setCurrentDepartment(value)
-                        setCurrentRoom("")
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments
-                          .filter((dept) => !selectedDepartments.some((d) => d.departmentId === dept._id))
-                          .map((dept) => (
-                            <SelectItem key={dept._id} value={dept._id}>
-                              <span className="flex items-center">
-                                <span className="mr-2">{dept.icon}</span> {dept.title}
-                              </span>
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {currentDepartment && (
-                    <div className="space-y-4">
-                      <RadioGroup
-                        value={assignToAnyRoom ? "any" : "specific"}
-                        onValueChange={(value) => setAssignToAnyRoom(value === "any")}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="any" id="any" />
-                          <Label htmlFor="any">Assign to any available room</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="specific" id="specific" />
-                          <Label htmlFor="specific">Assign to specific room</Label>
-                        </div>
-                      </RadioGroup>
-
-                      {!assignToAnyRoom && (
-                        <div className="space-y-2">
-                          <Label htmlFor="room">Room</Label>
-                          <Select
-                            value={currentRoom}
-                            onValueChange={setCurrentRoom}
-                            disabled={availableRooms.length === 0}
-                          >
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={availableRooms.length === 0 ? "No rooms created today" : "Select room"}
-                              />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableRooms.map((room) => (
-                                <SelectItem key={room._id} value={room._id}>
-                                  Room {room.roomNumber} - {room.staff.firstName} {room.staff.lastName}{" "}
-                                  {room.available ? "(Available)" : "(Unavailable)"}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      <Button
-                        onClick={addDepartment}
-                        disabled={!currentDepartment || (!assignToAnyRoom && !currentRoom && availableRooms.length > 0)}
-                        className="w-full"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add to Queue
-                      </Button>
-                    </div>
+          <div className="space-y-4 py-4">
+            {selectedCount > 0 && (
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <div className="text-sm text-blue-800">
+                  Selected {selectedCount} department{selectedCount > 1 ? "s" : ""}
+                  {andBack && currentDepartment && (
+                    <span className="ml-2">
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        + Return to {currentDepartment}
+                      </Badge>
+                    </span>
                   )}
                 </div>
-              </>
-            )}
-
-            {/* Single Department Mode */}
-            {!multipleMode && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Select
-                    value={currentDepartment}
-                    onValueChange={(value) => {
-                      setCurrentDepartment(value)
-                      setCurrentRoom("")
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((dept) => (
-                        <SelectItem key={dept._id} value={dept._id}>
-                          <span className="flex items-center">
-                            <span className="mr-2">{dept.icon}</span> {dept.title}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {currentDepartment && (
-                  <div className="space-y-4">
-                    <RadioGroup
-                      value={assignToAnyRoom ? "any" : "specific"}
-                      onValueChange={(value) => setAssignToAnyRoom(value === "any")}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="any" id="any" />
-                        <Label htmlFor="any">Assign to any available room</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="specific" id="specific" />
-                        <Label htmlFor="specific">Assign to specific room</Label>
-                      </div>
-                    </RadioGroup>
-
-                    {!assignToAnyRoom && (
-                      <div className="space-y-2">
-                        <Label htmlFor="room">Room</Label>
-                        <Select
-                          value={currentRoom}
-                          onValueChange={setCurrentRoom}
-                          disabled={availableRooms.length === 0}
-                        >
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={availableRooms.length === 0 ? "No rooms created today" : "Select room"}
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableRooms.map((room) => (
-                              <SelectItem key={room._id} value={room._id}>
-                                Room {room.roomNumber} - {room.staff.firstName} {room.staff.lastName}{" "}
-                                {room.available ? "(Available)" : "(Unavailable)"}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {availableRooms.length === 0 && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            No rooms were created today in this department. Please select another department or choose
-                            "Assign to any available room".
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <DialogFooter className="flex flex-col sm:flex-row justify-between items-center gap-3">
-            {/* And Back Toggle - Left side */}
-            {(currentDepartmentId || currentRoomId) && (
-              <div className="flex items-center space-x-2">
-                <Switch id="and-back-switch" checked={andBack} onCheckedChange={setAndBack} />
-                <Label htmlFor="and-back-switch" className="text-sm font-medium">
-                  And Back
-                </Label>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>
-                      When enabled, the ticket will return to this department and room after visiting the selected
-                      department(s). This allows the ticket to come back to you after processing elsewhere.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
               </div>
             )}
 
-            {/* Action Buttons - Right side */}
+            <div className="grid gap-4">
+              {departments.map((department) => (
+                <div key={department._id} className="border rounded-lg p-4">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <Checkbox
+                      id={department._id}
+                      checked={selectedDepartments[department._id] || false}
+                      onCheckedChange={(checked) => handleDepartmentToggle(department._id, checked as boolean)}
+                    />
+                    <label htmlFor={department._id} className="flex items-center gap-2 font-medium cursor-pointer">
+                      <span className="text-lg">{department.icon}</span>
+                      {department.title}
+                    </label>
+                  </div>
+
+                  {selectedDepartments[department._id] && (
+                    <div className="ml-6 space-y-2">
+                      <p className="text-sm text-slate-600">Select a room (optional):</p>
+                      <Select
+                        value={selectedRooms[department._id] || "any"}
+                        onValueChange={(value) => handleRoomSelection(department._id, value)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Any available room" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Any available room</SelectItem>
+                          {loadingRooms[department._id] ? (
+                            <SelectItem value="loading" disabled>
+                              Loading today's rooms...
+                            </SelectItem>
+                          ) : (
+                            (todaysRooms[department._id] || []).map((room) => (
+                              <SelectItem key={room._id} value={room._id}>
+                                <div className="flex items-center justify-between w-full">
+                                  <span>Room {room.roomNumber}</span>
+                                  <span className="text-sm text-slate-500 ml-2">
+                                    {room.staff.firstName} {room.staff.lastName}
+                                  </span>
+                                  <Badge
+                                    variant={room.available ? "default" : "secondary"}
+                                    className={`ml-2 text-xs ${
+                                      room.available
+                                        ? "bg-green-100 text-green-800 border-green-200"
+                                        : "bg-red-100 text-red-800 border-red-200"
+                                    }`}
+                                  >
+                                    {room.available ? "Available" : "Occupied"}
+                                  </Badge>
+                                </div>
+                              </SelectItem>
+                            ))
+                          )}
+                          {!loadingRooms[department._id] && (todaysRooms[department._id] || []).length === 0 && (
+                            <SelectItem value="no-rooms" disabled>
+                              No rooms created today
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {true && (
+                <>
+                  <Switch id="and-back" checked={andBack} onCheckedChange={setAndBack} disabled={!currentDepartment} />
+                  <label htmlFor="and-back" className="text-sm font-medium cursor-pointer">
+                    And Back
+                  </label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-slate-400 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">
+                        Add the current department ({currentDepartment}) and room to the end of the queue so the ticket
+                        returns here after visiting the selected departments.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={
-                  multipleMode
-                    ? selectedDepartments.length === 0
-                    : !currentDepartment || (!assignToAnyRoom && !currentRoom && availableRooms.length > 0)
-                }
+                disabled={selectedCount === 0}
+                className="bg-[#0e4480] hover:bg-blue-800 text-white"
               >
-                {multipleMode
-                  ? `Assign to ${selectedDepartments.length} Department${selectedDepartments.length !== 1 ? "s" : ""}`
-                  : "Assign"}
+                Assign to {selectedCount} Department{selectedCount > 1 ? "s" : ""}
+                {andBack && " + Return"}
               </Button>
             </div>
           </DialogFooter>
