@@ -29,6 +29,7 @@ import {
   SortAsc,
   SortDesc,
   DollarSign,
+  Route,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
@@ -75,6 +76,14 @@ interface DepartmentHistoryEntry {
   cashCleared?: boolean | null
 }
 
+interface DepartmentQueueEntry {
+  departmentId: string
+  departmentName: string
+  roomId?: string
+  processed: boolean
+  order: number
+}
+
 interface Ticket {
   _id: string
   ticketNo: string
@@ -87,6 +96,8 @@ interface Ticket {
   held?: boolean
   emergency?: boolean
   departmentHistory?: DepartmentHistoryEntry[]
+  departmentQueue?: DepartmentQueueEntry[]
+  currentQueueIndex?: number
   userType?: string
   language?: string
   completed?: boolean
@@ -372,6 +383,47 @@ const CurrentDepartmentBadge = ({ ticket }: { ticket: Ticket }) => {
   )
 }
 
+// Component to display department queue
+const DepartmentQueueBadge = ({ ticket }: { ticket: Ticket }) => {
+  if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
+    return null
+  }
+
+  const currentIndex = ticket.currentQueueIndex || 0
+  const remainingDepartments = ticket.departmentQueue.slice(currentIndex)
+
+  if (remainingDepartments.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      <Badge className="bg-orange-100 text-orange-800 border-orange-200 flex items-center gap-1 text-xs">
+        <Route className="h-3 w-3" />
+        Queue: {remainingDepartments.length} remaining
+      </Badge>
+      <div className="flex items-center gap-1">
+        {remainingDepartments.slice(0, 3).map((dept, index) => (
+          <Badge
+            key={dept.departmentId}
+            className={`text-xs ${
+              index === 0 ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-gray-100 text-gray-600 border-gray-200"
+            }`}
+          >
+            {dept.departmentName}
+            {index === 0 && " (Current)"}
+          </Badge>
+        ))}
+        {remainingDepartments.length > 3 && (
+          <Badge className="bg-gray-100 text-gray-600 border-gray-200 text-xs">
+            +{remainingDepartments.length - 3} more
+          </Badge>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Quick Stats Component
 const QuickStats = ({ tickets }: { tickets: Ticket[] }) => {
   const stats = {
@@ -393,10 +445,11 @@ const QuickStats = ({ tickets }: { tickets: Ticket[] }) => {
     emergency: tickets.filter((t) => t.emergency && !t.completed && !t.noShow).length,
     completed: tickets.filter((t) => t.completed).length,
     held: tickets.filter((t) => t.held).length,
+    queued: tickets.filter((t) => t.departmentQueue && t.departmentQueue.length > 0 && !t.completed).length,
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
       <Card className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-blue-600" />
@@ -423,6 +476,16 @@ const QuickStats = ({ tickets }: { tickets: Ticket[] }) => {
           <div>
             <p className="text-xs text-blue-600 font-medium">Serving</p>
             <p className="text-lg font-bold text-blue-700">{stats.serving}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-3 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+        <div className="flex items-center gap-2">
+          <Route className="h-4 w-4 text-orange-600" />
+          <div>
+            <p className="text-xs text-orange-600 font-medium">Queued</p>
+            <p className="text-lg font-bold text-orange-700">{stats.queued}</p>
           </div>
         </div>
       </Card>
@@ -703,6 +766,16 @@ const TicketsPage: React.FC = () => {
   // Add filterStatus state variable (around line 600)
   const [filterStatus, setFilterStatus] = useState<string>("all")
 
+  // Helper function to check if ticket is at the last department in queue
+  const isAtLastDepartmentInQueue = (ticket: Ticket): boolean => {
+    if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
+      return false
+    }
+
+    const currentIndex = ticket.currentQueueIndex || 0
+    return currentIndex >= ticket.departmentQueue.length - 1
+  }
+
   // Fetch tickets
   const fetchTickets = useCallback(async () => {
     try {
@@ -930,7 +1003,7 @@ const TicketsPage: React.FC = () => {
     setIsEditingPatient(false)
   }
 
-  const handleNextStep = async (departmentId: string, roomId?: string) => {
+  const handleNextStep = async (departments?: Array<{ departmentId: string; roomId?: string }>) => {
     if (!selectedTicket) return
 
     try {
@@ -942,18 +1015,66 @@ const TicketsPage: React.FC = () => {
         (history) => !history.completed && history.roomId,
       )
 
-      const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}/next-step`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          departmentId,
-          roomId,
-          departmentNote,
-          currentDepartment,
-        }),
-      })
+      // Check if ticket has a department queue and we should auto-progress
+      if (
+        selectedTicket.departmentQueue &&
+        selectedTicket.departmentQueue.length > 0 &&
+        !isAtLastDepartmentInQueue(selectedTicket)
+      ) {
+        // Use the queue progression endpoint
+        const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}/next-step`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentDepartment,
+            departmentNote,
+          }),
+        })
 
-      if (!response.ok) throw new Error("Failed to assign next step")
+        if (!response.ok) throw new Error("Failed to progress in queue")
+
+        const responseData = await response.json()
+
+        if (responseData.message === "Department queue completed") {
+          toast({
+            title: "Queue Complete",
+            description: "All departments in the queue have been processed",
+          })
+        } else {
+          toast({
+            title: "Success",
+            description: "Ticket moved to next department in queue",
+          })
+        }
+      } else {
+        // Regular next step with new department selection - only if departments are provided
+        if (!departments) {
+          // If we're at the last department in queue or no queue exists, open dialog
+          setShowNextStepDialog(true)
+          setShowTicketDetailsDialog(false)
+          return
+        }
+
+        const response = await fetch(`/api/hospital/ticket/${selectedTicket._id}/next-step`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            departments: departments,
+            departmentNote,
+            currentDepartment,
+          }),
+        })
+
+        if (!response.ok) throw new Error("Failed to assign next step")
+
+        toast({
+          title: "Success",
+          description:
+            departments.length > 1
+              ? `Ticket queued for ${departments.length} departments`
+              : "Ticket forwarded to next department",
+        })
+      }
 
       // If the ticket was being served in a room, clear the room's currentTicket
       if (currentDeptHistory && currentDeptHistory.roomId) {
@@ -984,11 +1105,6 @@ const TicketsPage: React.FC = () => {
           // Don't throw here as the ticket was successfully moved
         }
       }
-
-      toast({
-        title: "Success",
-        description: "Ticket forwarded to next department",
-      })
 
       // Close dialogs
       setShowNextStepDialog(false)
@@ -1919,6 +2035,16 @@ const TicketsPage: React.FC = () => {
                         <CurrentDepartmentBadge ticket={selectedTicket} />
                       </div>
 
+                      {/* Department Queue Display */}
+                      {selectedTicket.departmentQueue && selectedTicket.departmentQueue.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-sm font-medium text-slate-500">Department Queue</p>
+                          <div className="flex items-center mt-1">
+                            <DepartmentQueueBadge ticket={selectedTicket} />
+                          </div>
+                        </div>
+                      )}
+
                       {/* Room Information */}
                       {selectedTicket.departmentHistory &&
                         selectedTicket.departmentHistory.find((h) => !h.completed && h.roomId) && (
@@ -2094,6 +2220,70 @@ const TicketsPage: React.FC = () => {
                   </CardContent>
                 </Card>
 
+                {/* Department Queue Details */}
+                {selectedTicket.departmentQueue && selectedTicket.departmentQueue.length > 0 && (
+                  <Card className="border-slate-200 mt-4">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Route className="h-5 w-5" />
+                        Department Queue
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {selectedTicket.departmentQueue.map((queueItem, index) => (
+                          <div
+                            key={queueItem.departmentId}
+                            className={`p-3 rounded-lg border flex items-center justify-between ${
+                              queueItem.processed
+                                ? "bg-green-50/30 border-green-200"
+                                : index === (selectedTicket.currentQueueIndex || 0)
+                                  ? "bg-blue-50/30 border-blue-200"
+                                  : "bg-gray-50/30 border-gray-200"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Badge
+                                className={`${
+                                  queueItem.processed
+                                    ? "bg-green-100 text-green-800 border-green-200"
+                                    : index === (selectedTicket.currentQueueIndex || 0)
+                                      ? "bg-blue-100 text-blue-800 border-blue-200"
+                                      : "bg-gray-100 text-gray-600 border-gray-200"
+                                }`}
+                              >
+                                {index + 1}
+                              </Badge>
+                              <span className="font-medium">{queueItem.departmentName}</span>
+                              {queueItem.processed && (
+                                <Badge className="bg-green-100 text-green-800 border-green-200">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Completed
+                                </Badge>
+                              )}
+                              {!queueItem.processed && index === (selectedTicket.currentQueueIndex || 0) && (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                  <Timer className="h-3 w-3 mr-1" />
+                                  Current
+                                </Badge>
+                              )}
+                              {!queueItem.processed && index > (selectedTicket.currentQueueIndex || 0) && (
+                                <Badge className="bg-gray-100 text-gray-600 border-gray-200">
+                                  <Timer className="h-3 w-3 mr-1" />
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
+                            {selectedTicket.departmentQueue && index < selectedTicket.departmentQueue.length - 1 && (
+                              <ArrowRight className="h-4 w-4 text-gray-400" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Department Note */}
                 {!selectedTicket.completed && !selectedTicket.noShow && (
                   <div className="mt-4">
@@ -2140,14 +2330,15 @@ const TicketsPage: React.FC = () => {
                     )}
 
                     <Button
-                      onClick={() => {
-                        setShowNextStepDialog(true)
-                        setShowTicketDetailsDialog(false)
-                      }}
+                      onClick={() => handleNextStep()}
                       className="bg-[#0e4480] hover:bg-blue-800 text-white w-full sm:w-auto"
                     >
                       <ArrowRight className="h-4 w-4 mr-2" />
-                      Next Step
+                      {selectedTicket.departmentQueue && selectedTicket.departmentQueue.length > 0
+                        ? isAtLastDepartmentInQueue(selectedTicket)
+                          ? "Next Step"
+                          : "Next in Queue"
+                        : "Next Step"}
                     </Button>
 
                     <Button
@@ -2161,87 +2352,6 @@ const TicketsPage: React.FC = () => {
                 )}
               </>
             )}
-          </DialogContent>
-        </Dialog>
-
-        {/* Next Step Dialog */}
-        <DepartmentSelectionDialog
-          isOpen={showNextStepDialog}
-          onClose={() => {
-            setShowNextStepDialog(false)
-            setShowTicketDetailsDialog(true)
-          }}
-          onSubmit={handleNextStep}
-          departments={departments}
-        />
-
-        {/* Serve Ticket Dialog */}
-        <Dialog open={showServeDialog} onOpenChange={setShowServeDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Serve Ticket {selectedTicket?.ticketNo}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <p className="text-sm text-slate-600 mb-4">
-                  This ticket is waiting in{" "}
-                  {selectedTicket?.departmentHistory?.find((h) => !h.completed && !h.roomId)?.department}. Select from
-                  today's rooms to start serving:
-                </p>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Today's Rooms</label>
-                  <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
-                    <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
-                      <SelectValue placeholder="Select a room" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableRooms.map((room) => (
-                        <SelectItem key={room._id} value={room._id}>
-                          <div className="flex items-center gap-2 w-full">
-                            <span>Room {room.roomNumber}</span>
-                            <span className="text-sm text-slate-500">
-                              - {room.staff.firstName} {room.staff.lastName}
-                            </span>
-                            <Badge
-                              variant={room.available ? "default" : "secondary"}
-                              className={`ml-auto text-xs ${
-                                room.available
-                                  ? "bg-green-100 text-green-800 border-green-200"
-                                  : "bg-red-100 text-red-800 border-red-200"
-                              }`}
-                            >
-                              {room.available ? "Available" : "Occupied"}
-                            </Badge>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowServeDialog(false)
-                  setSelectedRoomId("")
-                  setAvailableRooms([])
-                }}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleConfirmServe}
-                disabled={!selectedRoomId || isServingTicket}
-                className="bg-[#0e4480] hover:bg-blue-800 text-white w-full sm:w-auto"
-              >
-                {isServingTicket ? <>Serving...</> : <>Serve Ticket</>}
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -2398,6 +2508,14 @@ const TicketCard: React.FC<{
               <CurrentDepartmentBadge ticket={ticket} />
             </div>
 
+            {/* Department Queue Info */}
+            {ticket.departmentQueue && ticket.departmentQueue.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs text-slate-500 font-medium mb-1">Department Queue</p>
+                <DepartmentQueueBadge ticket={ticket} />
+              </div>
+            )}
+
             {/* Expandable Content */}
             {isExpanded && (
               <div className="space-y-3 pt-3 border-t border-slate-200">
@@ -2463,6 +2581,36 @@ const TicketCard: React.FC<{
                           {history.completed && <CheckCircle2 className="h-3 w-3 ml-1" />}
                         </Badge>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Department Queue Summary */}
+                {ticket.departmentQueue && ticket.departmentQueue.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium mb-2">Remaining Queue</p>
+                    <div className="flex flex-wrap gap-1">
+                      {ticket.departmentQueue
+                        .slice(ticket.currentQueueIndex || 0)
+                        .slice(0, 3)
+                        .map((dept, index) => (
+                          <Badge
+                            key={dept.departmentId}
+                            className={`text-xs ${
+                              index === 0
+                                ? "bg-blue-100 text-blue-800 border-blue-200"
+                                : "bg-gray-100 text-gray-600 border-gray-200"
+                            }`}
+                          >
+                            {dept.departmentName}
+                            {index === 0 && " (Next)"}
+                          </Badge>
+                        ))}
+                      {ticket.departmentQueue.length - (ticket.currentQueueIndex || 0) > 3 && (
+                        <Badge className="bg-gray-100 text-gray-600 border-gray-200 text-xs">
+                          +{ticket.departmentQueue.length - (ticket.currentQueueIndex || 0) - 3} more
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 )}

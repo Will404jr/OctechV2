@@ -141,58 +141,167 @@ export const HospitalSettings =
 //ticket schema
 const ticketSchema = new mongoose.Schema(
   {
-    ticketNo: { type: String, required: true },
-    patientName: { type: String, default: "", required: false },
-    reasonforVisit: { type: String, default: "", required: false },
-    receptionistNote: { type: String, default: "", required: false },
-    // Updated departmentHistory field to track the ticket's journey with time tracking
-    departmentHistory: [
-      {
-        department: { type: String, required: true },
-        icon: { type: String, default: "" },
-        timestamp: { type: Date, default: Date.now }, // When added to department
-        startedAt: { type: Date, default: null }, // When roomId is assigned AND staff actually starts serving
-        completedAt: { type: Date, default: null }, // When completed = true
-        processingDuration: { type: Number, default: 0 }, // Time in seconds from startedAt to completedAt
-        waitingDuration: { type: Number, default: 0 }, // Time in seconds from timestamp to startedAt
-        note: { type: String, default: "" },
-        completed: { type: Boolean, default: false },
-        roomId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Department.rooms",
-          required: false,
-          default: null,
-        },
-        // Hold tracking
-        holdStartedAt: { type: Date, default: null }, // When put on hold
-        holdDuration: { type: Number, default: 0 }, // Total hold time in seconds
-        // NEW FIELD: Track if staff actually started serving
-        actuallyStarted: { type: Boolean, default: false }, // True when staff begins serving, false when just assigned to room
-        cashCleared: {type: String, enum: ['Cleared', 'Pending', 'Rejected'], default: null}, // Status of cash payment
-        paidAt: { type: Date, default: null }, // Timestamp when payment was cleared
-      },
-    ],
+    ticketNo: {
+      type: String,
+      required: true,
+      unique: false,
+    },
+    patientName: {
+      type: String,
+      default: null,
+    },
     userType: {
       type: String,
       enum: ["Cash", "Insurance", "Staff"],
-      required: false,
+      default: null,
     },
-    completed: { type: Boolean, default: false },
-    call: { type: Boolean, default: false },
-    noShow: { type: Boolean, default: false },
-    held: { type: Boolean, default: false },
     language: {
       type: String,
-      enum: ["English", "Luganda"],
       default: "English",
     },
-    // Time tracking fields
-    completedAt: { type: Date, default: null }, // When ticket is fully completed
-    totalDuration: { type: Number, default: 0 }, // Total time in seconds from creation to completion
-    emergency: { type: Boolean, default: false },
+    reasonforVisit: {
+      type: String,
+      default: null,
+    },
+    receptionistNote: {
+      type: String,
+      default: null,
+    },
+    departmentNote: {
+      type: String,
+      default: null,
+    },
+    call: {
+      type: Boolean,
+      default: false,
+    },
+    noShow: {
+      type: Boolean,
+      default: false,
+    },
+    held: {
+      type: Boolean,
+      default: false,
+    },
+    emergency: {
+      type: Boolean,
+      default: false,
+    },
+    completed: {
+      type: Boolean,
+      default: false,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
+    totalDuration: {
+      type: Number,
+      default: 0,
+    },
+    // NEW: Department queue for multi-department routing
+    departmentQueue: [
+      {
+        departmentId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Department",
+          required: true,
+        },
+        departmentName: {
+          type: String,
+          required: true,
+        },
+        roomId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Room",
+          default: null,
+        },
+        processed: {
+          type: Boolean,
+          default: false,
+        },
+        order: {
+          type: Number,
+          required: true,
+        },
+      },
+    ],
+    currentQueueIndex: {
+      type: Number,
+      default: 0,
+    },
+    departmentHistory: [
+      {
+        department: {
+          type: String,
+          required: true,
+        },
+        icon: {
+          type: String,
+          default: null,
+        },
+        timestamp: {
+          type: Date,
+          required: true,
+          default: Date.now,
+        },
+        startedAt: {
+          type: Date,
+          default: null,
+        },
+        completedAt: {
+          type: Date,
+          default: null,
+        },
+        processingDuration: {
+          type: Number,
+          default: 0,
+        },
+        waitingDuration: {
+          type: Number,
+          default: 0,
+        },
+        note: {
+          type: String,
+          default: "",
+        },
+        completed: {
+          type: Boolean,
+          default: false,
+        },
+        roomId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Room",
+          default: null,
+        },
+        holdStartedAt: {
+          type: Date,
+          default: null,
+        },
+        holdDuration: {
+          type: Number,
+          default: 0,
+        },
+        actuallyStarted: {
+          type: Boolean,
+          default: false,
+        },
+        cashCleared: {
+          type: String,
+          enum: ["Cleared", "Pending", "Rejected"],
+          default: null,
+        },
+        paidAt: {
+          type: Date,
+          default: null,
+        },
+      },
+    ],
   },
-  { timestamps: true }
-);
+  {
+    timestamps: true,
+  },
+)
 
 export const Ticket =
   mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);

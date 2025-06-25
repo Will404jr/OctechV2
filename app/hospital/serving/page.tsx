@@ -47,6 +47,8 @@ interface Ticket {
     roomId?: string
   }[]
   userType?: string
+  departmentQueue?: string[]
+  currentQueueIndex?: number
 }
 
 interface Department {
@@ -63,6 +65,16 @@ interface Department {
     }
     available: boolean
   }[]
+}
+
+// Helper function to check if ticket is at the last department in queue
+const isAtLastDepartmentInQueue = (ticket: Ticket): boolean => {
+  if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
+    return false
+  }
+
+  const currentIndex = ticket.currentQueueIndex || 0
+  return currentIndex >= ticket.departmentQueue.length - 1
 }
 
 // Component to render room and staff information
@@ -399,6 +411,137 @@ const ServingPage: React.FC = () => {
     }
   }
 
+  const handleNextStep = async (departments?: Array<{ departmentId: string; roomId?: string }>) => {
+    if (!currentTicket || !session?.department) return
+
+    // Check if ticket has a department queue and we should auto-progress
+    if (
+      !departments &&
+      currentTicket.departmentQueue &&
+      currentTicket.departmentQueue.length > 0 &&
+      !isAtLastDepartmentInQueue(currentTicket)
+    ) {
+      try {
+        // Use the queue progression endpoint
+        const response = await fetch(`/api/hospital/ticket/${currentTicket._id}/next-step`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentDepartment: session.department,
+            departmentNote: departmentNote,
+          }),
+        })
+
+        if (!response.ok) throw new Error("Failed to progress in queue")
+
+        const responseData = await response.json()
+
+        if (responseData.message === "Department queue completed") {
+          toast({
+            title: "Queue Complete",
+            description: "All departments in the queue have been processed",
+          })
+        } else {
+          toast({
+            title: "Success",
+            description: "Ticket moved to next department in queue",
+          })
+        }
+
+        // Clear current ticket and continue with cleanup
+        setCurrentTicket(null)
+        updateRoomServingTicket(null)
+        setShowActionsDialog(true)
+
+        // Check if we were in the process of pausing
+        if (isPausing) {
+          setIsServing(false)
+          setIsPausing(false)
+          toast({
+            title: "Paused",
+            description: "Serving has been paused",
+            variant: "default",
+          })
+        }
+
+        // Reset form
+        setDepartmentNote("")
+
+        // Update tickets list
+        await fetchTickets()
+        return
+      } catch (error) {
+        console.error("Error progressing in queue:", error)
+        toast({
+          title: "Error",
+          description: "Failed to progress in queue",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // If no departments provided, open the dialog for manual selection
+    if (!departments) {
+      setShowNextStepDialog(true)
+      return
+    }
+
+    try {
+      // Regular next step with new department selection
+      const response = await fetch(`/api/hospital/ticket/${currentTicket._id}/next-step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          departments: departments,
+          departmentNote: departmentNote,
+          note: departmentNote,
+          currentDepartment: session.department,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to assign next step")
+
+      toast({
+        title: "Success",
+        description:
+          departments.length > 1
+            ? `Ticket queued for ${departments.length} departments`
+            : "Ticket forwarded to next department",
+      })
+
+      // Clear current ticket
+      setCurrentTicket(null)
+      updateRoomServingTicket(null)
+      setShowActionsDialog(true)
+
+      // Check if we were in the process of pausing
+      if (isPausing) {
+        setIsServing(false)
+        setIsPausing(false)
+        toast({
+          title: "Paused",
+          description: "Serving has been paused",
+          variant: "default",
+        })
+      }
+
+      // Reset form
+      setDepartmentNote("")
+      setShowNextStepDialog(false)
+
+      // Update tickets list
+      await fetchTickets()
+    } catch (error) {
+      console.error("Error assigning next step:", error)
+      toast({
+        title: "Error",
+        description: "Failed to assign next step",
+        variant: "destructive",
+      })
+    }
+  }
+
   useEffect(() => {
     const fetchSession = async () => {
       const response = await fetch("/api/session")
@@ -640,61 +783,6 @@ const ServingPage: React.FC = () => {
       toast({
         title: "Error",
         description: "Failed to pause serving",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleNextStep = async (departmentId: string, roomId?: string) => {
-    if (!currentTicket || !session?.department) return
-
-    try {
-      const response = await fetch(`/api/hospital/ticket/${currentTicket._id}/next-step`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          departmentId,
-          roomId,
-          departmentNote: departmentNote,
-          note: departmentNote, // Add this line
-          currentDepartment: session.department,
-        }),
-      })
-
-      if (!response.ok) throw new Error("Failed to assign next step")
-
-      toast({
-        title: "Success",
-        description: "Ticket forwarded to next department",
-      })
-
-      // Clear current ticket
-      setCurrentTicket(null)
-      updateRoomServingTicket(null)
-      setShowActionsDialog(true)
-
-      // Check if we were in the process of pausing
-      if (isPausing) {
-        setIsServing(false)
-        setIsPausing(false)
-        toast({
-          title: "Paused",
-          description: "Serving has been paused",
-          variant: "default",
-        })
-      }
-
-      // Reset form
-      setDepartmentNote("")
-      setShowNextStepDialog(false)
-
-      // Update tickets list
-      await fetchTickets()
-    } catch (error) {
-      console.error("Error assigning next step:", error)
-      toast({
-        title: "Error",
-        description: "Failed to assign next step",
         variant: "destructive",
       })
     }
@@ -1222,12 +1310,13 @@ const ServingPage: React.FC = () => {
                     </Button>
 
                     {/* Next Step Button - with text */}
-                    <Button
-                      onClick={() => setShowNextStepDialog(true)}
-                      className="bg-[#0e4480] hover:bg-blue-800 text-white"
-                    >
+                    <Button onClick={() => handleNextStep()} className="bg-[#0e4480] hover:bg-blue-800 text-white">
                       <Users className="h-5 w-5 mr-2" />
-                      Next Step
+                      {currentTicket.departmentQueue && currentTicket.departmentQueue.length > 0
+                        ? isAtLastDepartmentInQueue(currentTicket)
+                          ? "Next Step"
+                          : "Next in Queue"
+                        : "Next Step"}
                     </Button>
 
                     {/* Clear Ticket Button - with text */}

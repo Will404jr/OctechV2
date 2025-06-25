@@ -49,6 +49,8 @@ interface Ticket {
     roomId?: string
   }[]
   userType?: string
+  departmentQueue?: string[]
+  currentQueueIndex?: number
 }
 
 interface Department {
@@ -167,6 +169,17 @@ const DepartmentRoomBadge = ({
 }
 
 const USER_TYPES = ["Cash", "Insurance", "Staff"]
+
+// Helper function to check if ticket is at the last department in queue
+const isAtLastDepartmentInQueue = (ticket: Ticket): boolean => {
+  if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
+    return false
+  }
+
+  const currentIndex = ticket.currentQueueIndex || 0
+  return currentIndex >= ticket.departmentQueue.length - 1
+}
+
 const REASON_TYPES = ["General Inquiry", "Appointment", "Emergency", "Follow-up", "Other"]
 
 const ReceptionistPage: React.FC = () => {
@@ -191,6 +204,7 @@ const ReceptionistPage: React.FC = () => {
   const [isLoadingNextTicket, setIsLoadingNextTicket] = useState(false)
   const autoFetchIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const [autoFetchEnabled, setAutoFetchEnabled] = useState(true)
+  const [departmentName, setDepartmentName] = useState<string>("Reception")
 
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return
@@ -579,8 +593,84 @@ const ReceptionistPage: React.FC = () => {
     }
   }
 
-  const handleNextStep = async (departmentId: string, roomId?: string) => {
+  const handleNextStep = async (departments?: Array<{ departmentId: string; roomId?: string }>) => {
     if (!currentTicket) return
+
+    // Check if ticket has a department queue and we should auto-progress
+    if (
+      !departments &&
+      currentTicket.departmentQueue &&
+      currentTicket.departmentQueue.length > 0 &&
+      !isAtLastDepartmentInQueue(currentTicket)
+    ) {
+      try {
+        // Use the queue progression endpoint
+        const response = await fetch(`/api/hospital/ticket/${currentTicket._id}/next-step`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentDepartment: "Reception",
+            receptionistNote: receptionistNote,
+          }),
+        })
+
+        if (!response.ok) throw new Error("Failed to progress in queue")
+
+        const responseData = await response.json()
+
+        if (responseData.message === "Department queue completed") {
+          toast({
+            title: "Queue Complete",
+            description: "All departments in the queue have been processed",
+          })
+        } else {
+          toast({
+            title: "Success",
+            description: "Ticket moved to next department in queue",
+          })
+        }
+
+        // Clear current ticket and continue with cleanup
+        setCurrentTicket(null)
+        updateRoomServingTicket(null)
+        setShowActionsDialog(true)
+
+        // Check if we were in the process of pausing
+        if (isPausing) {
+          setIsServing(false)
+          setIsPausing(false)
+          toast({
+            title: "Paused",
+            description: "Serving has been paused",
+            variant: "default",
+          })
+        }
+
+        // Reset form
+        setUserType("")
+        setReasonForVisit("")
+        setPatientName("")
+        setReceptionistNote("")
+
+        // Update tickets list
+        await fetchTickets()
+        return
+      } catch (error) {
+        console.error("Error progressing in queue:", error)
+        toast({
+          title: "Error",
+          description: "Failed to progress in queue",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // If no departments provided, open the dialog for manual selection
+    if (!departments) {
+      setShowNextStepDialog(true)
+      return
+    }
 
     // For returned tickets, we don't need to validate user type and reason
     const isReturnedTicket = currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1
@@ -599,23 +689,27 @@ const ReceptionistPage: React.FC = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          departmentId,
-          roomId,
+          departments: departments, // Send array of departments
           userType: isReturnedTicket ? currentTicket.userType : userType,
           reasonForVisit: isReturnedTicket ? currentTicket.reasonforVisit : reasonForVisit,
           patientName: isReturnedTicket ? currentTicket.patientName : patientName,
-          receptionistNote: receptionistNote, // Always send the current note
-          note: receptionistNote, // Add this line - the API might be looking for this field name
-          departmentNote: receptionistNote, // Add this line - try another possible field name
+          receptionistNote: receptionistNote,
+          note: receptionistNote,
+          departmentNote: receptionistNote,
           currentDepartment: "Reception",
         }),
       })
 
       if (!response.ok) throw new Error("Failed to assign next step")
 
+      const responseData = await response.json()
+
       toast({
         title: "Success",
-        description: "Ticket forwarded to next department",
+        description:
+          departments.length > 1
+            ? `Ticket queued for ${departments.length} departments`
+            : "Ticket forwarded to next department",
       })
 
       // Clear current ticket
@@ -1243,7 +1337,7 @@ const ReceptionistPage: React.FC = () => {
 
                     {/* Next Step Button - with text */}
                     <Button
-                      onClick={() => setShowNextStepDialog(true)}
+                      onClick={() => handleNextStep()}
                       disabled={
                         !(currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1) &&
                         (!userType || !reasonForVisit)
@@ -1251,7 +1345,11 @@ const ReceptionistPage: React.FC = () => {
                       className="bg-[#0e4480] hover:bg-blue-800 text-white disabled:bg-slate-300"
                     >
                       <Users className="h-5 w-5 mr-2" />
-                      Next Step
+                      {currentTicket.departmentQueue && currentTicket.departmentQueue.length > 0
+                        ? isAtLastDepartmentInQueue(currentTicket)
+                          ? "Next Step"
+                          : "Next in Queue"
+                        : "Next Step"}
                     </Button>
 
                     {/* Clear Ticket Button - with text */}
@@ -1331,7 +1429,7 @@ const ReceptionistPage: React.FC = () => {
           >
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Reception Actions</DialogTitle>
+                <DialogTitle>{departmentName} Actions</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 {/* Primary Actions */}
@@ -1388,6 +1486,9 @@ const ReceptionistPage: React.FC = () => {
                         <div key={ticket._id} className="flex justify-between items-center p-2 bg-green-50 rounded">
                           <div>
                             <span className="font-semibold">{ticket.ticketNo}</span>
+                            {ticket.patientName && (
+                              <p className="text-xs text-gray-700">Patient: {ticket.patientName}</p>
+                            )}
                             {ticket.reasonforVisit && (
                               <p className="text-xs text-muted-foreground">{ticket.reasonforVisit}</p>
                             )}
