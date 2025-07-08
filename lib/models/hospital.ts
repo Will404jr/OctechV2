@@ -224,6 +224,12 @@ const ticketSchema = new mongoose.Schema(
           type: Number,
           required: true,
         },
+        // NEW: Payment clearance field for queue-level bulk clearing
+        clearPayment: {
+          type: String,
+          enum: ["Cleared", "Pending", "Rejected"],
+          default: null,
+        },
       },
     ],
     currentQueueIndex: {
@@ -303,8 +309,8 @@ const ticketSchema = new mongoose.Schema(
   },
 )
 
-export const Ticket =
-  mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema);
+export const Ticket = mongoose.models.Ticket || mongoose.model("Ticket", ticketSchema)
+
 
 //department and room schema
 const roomSchema = new mongoose.Schema(

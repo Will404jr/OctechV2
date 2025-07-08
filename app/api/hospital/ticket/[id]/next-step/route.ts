@@ -5,8 +5,10 @@ import { calculateDurationInSeconds } from "@/lib/utils/time-tracking"
 
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
+
   try {
     await dbConnect()
+
     const body = await req.json()
     const {
       departmentId,
@@ -18,6 +20,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       receptionistNote,
       departmentNote,
       currentDepartment,
+      cashCleared, // Add this field to handle explicit cash clearing
     } = body
 
     console.log(`Processing next step for ticket ${id} from ${currentDepartment}`)
@@ -46,6 +49,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
           roomId: departments[i].roomId || null,
           processed: false,
           order: i,
+          clearPayment: null, // Initialize as null
         })
       }
 
@@ -64,6 +68,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         receptionistNote,
         departmentNote,
         currentDepartment,
+        cashCleared, // Pass the cashCleared field
       })
     }
 
@@ -84,6 +89,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       receptionistNote,
       departmentNote,
       currentDepartment,
+      cashCleared, // Pass the cashCleared field
     })
   } catch (error) {
     console.error("Error assigning next step:", error)
@@ -92,7 +98,15 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
 }
 
 async function processNextDepartment(ticket: any, department: any, roomId: string | null, ticketData: any) {
-  const { userType, patientName, reasonForVisit, receptionistNote, departmentNote, currentDepartment } = ticketData
+  const {
+    userType,
+    patientName,
+    reasonForVisit,
+    receptionistNote,
+    departmentNote,
+    currentDepartment,
+    cashCleared, // Add this parameter
+  } = ticketData
 
   console.log(`Processing department: ${department.title}`)
 
@@ -147,6 +161,33 @@ async function processNextDepartment(ticket: any, department: any, roomId: strin
     })
   }
 
+  // Check if this department is in the queue and get its clearPayment status
+  let queueClearPaymentStatus = null
+  if (ticket.departmentQueue && ticket.departmentQueue.length > 0) {
+    const queueItem = ticket.departmentQueue.find((item: any) => item.departmentName === department.title)
+    if (queueItem) {
+      queueClearPaymentStatus = queueItem.clearPayment
+    }
+  }
+
+  // Determine cashCleared status for the new department entry
+  let newCashCleared = undefined
+  let newPaidAt = undefined
+
+  if (cashCleared === "Cleared") {
+    // Explicitly setting cashCleared to "Cleared" (e.g., when returning a Cash ticket)
+    newCashCleared = "Cleared"
+    newPaidAt = now
+  } else if (queueClearPaymentStatus === "Cleared") {
+    // Queue-based clearing
+    newCashCleared = "Cleared"
+    newPaidAt = now
+  } else if (userType === "Cash") {
+    // Cash ticket but not cleared
+    newCashCleared = null
+    newPaidAt = null
+  }
+
   // Add next department to history
   const nextDeptEntry = {
     department: department.title,
@@ -159,8 +200,8 @@ async function processNextDepartment(ticket: any, department: any, roomId: strin
     completed: false,
     holdDuration: 0,
     actuallyStarted: false,
-    cashCleared: userType === "Cash" ? null : undefined,
-    paidAt: userType === "Cash" ? null : undefined,
+    cashCleared: newCashCleared,
+    paidAt: newPaidAt,
     roomId: roomId || null,
   }
 
@@ -181,7 +222,9 @@ async function processNextDepartment(ticket: any, department: any, roomId: strin
   }
 
   await ticket.save()
+
   console.log(`Ticket ${ticket._id} successfully moved to ${department.title}`)
+  console.log(`Cash cleared status: ${newCashCleared}`)
 
   return NextResponse.json({ success: true, ticket }, { status: 200 })
 }
@@ -189,8 +232,10 @@ async function processNextDepartment(ticket: any, department: any, roomId: strin
 // New endpoint to handle automatic queue progression
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
+
   try {
     await dbConnect()
+
     const body = await req.json()
     const { currentDepartment, departmentNote } = body
 

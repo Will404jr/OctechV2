@@ -7,13 +7,31 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import { AlertCircle, Clock, CheckCircle2, DollarSign, CreditCard, RefreshCw } from "lucide-react"
+import {
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  DollarSign,
+  CreditCard,
+  RefreshCw,
+  Building2,
+  TicketIcon as Queue,
+  Settings,
+} from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import type { SessionData } from "@/lib/session"
-import { Navbar } from "@/components/hospitalNavbar"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog"
 
 interface DepartmentHistoryEntry {
   department: string
@@ -33,6 +51,15 @@ interface DepartmentHistoryEntry {
   paidAt?: string | null
 }
 
+interface DepartmentQueueEntry {
+  departmentId: string
+  departmentName: string
+  roomId?: string
+  processed: boolean
+  order: number
+  clearPayment?: string | null
+}
+
 interface Ticket {
   _id: string
   ticketNo: string
@@ -45,6 +72,8 @@ interface Ticket {
   held?: boolean
   emergency?: boolean
   departmentHistory?: DepartmentHistoryEntry[]
+  departmentQueue?: DepartmentQueueEntry[]
+  currentQueueIndex?: number
   userType?: string
   language?: string
   completed?: boolean
@@ -70,29 +99,246 @@ interface Department {
   }[]
 }
 
-// Component to display current department
-const CurrentDepartmentBadge = ({ ticket }: { ticket: Ticket }) => {
-  // Find the current active department (not completed)
-  const currentDept = ticket.departmentHistory?.find((history) => !history.completed)
+// Component to display pending departments for a ticket
+const PendingDepartmentsList = ({ ticket }: { ticket: Ticket }) => {
+  // Check if ticket has a queue with uncleared payments
+  if (ticket.departmentQueue && ticket.departmentQueue.length > 0) {
+    const pendingQueueDepartments = ticket.departmentQueue.filter(
+      (queueItem) => !queueItem.processed && queueItem.clearPayment !== "Cleared",
+    )
 
-  if (!currentDept) {
-    return <Badge className="bg-slate-100 text-slate-800 border-slate-200 text-xs">No Department</Badge>
+    if (pendingQueueDepartments.length > 0) {
+      return (
+        <div className="flex flex-wrap gap-1">
+          <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1 text-xs">
+            <Queue className="h-3 w-3" />
+            Queue: {pendingQueueDepartments.length} departments
+          </Badge>
+          {pendingQueueDepartments.map((dept, index) => (
+            <Badge key={index} className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
+              {dept.departmentName}
+            </Badge>
+          ))}
+        </div>
+      )
+    }
+  }
+
+  // Fallback to checking department history
+  const pendingDepartments =
+    ticket.departmentHistory?.filter(
+      (history) =>
+        !history.completed &&
+        history.department !== "Reception" &&
+        (history.cashCleared === null || history.cashCleared === undefined),
+    ) || []
+
+  if (pendingDepartments.length === 0) {
+    return <Badge className="bg-slate-100 text-slate-800 border-slate-200 text-xs">No Pending Departments</Badge>
   }
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
-      <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 flex items-center gap-1 text-xs">
-        {currentDept.icon && <span className="text-sm">{currentDept.icon}</span>}
-        <span>{currentDept.department}</span>
-      </Badge>
+    <div className="flex flex-wrap gap-1">
+      {pendingDepartments.map((dept, index) => (
+        <Badge key={index} className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1 text-xs">
+          {dept.icon && <span className="text-sm">{dept.icon}</span>}
+          <span>{dept.department}</span>
+        </Badge>
+      ))}
     </div>
+  )
+}
+
+// Selective Department Clearing Dialog
+const SelectiveClearingDialog = ({
+  isOpen,
+  onClose,
+  ticket,
+  onClear,
+  isProcessing,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  ticket: Ticket | null
+  onClear: (selectedDepartments: string[]) => void
+  isProcessing: boolean
+}) => {
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([])
+
+  // Get pending departments
+  const getPendingDepartments = () => {
+    if (!ticket) return []
+
+    const pending: { name: string; icon?: string; source: "queue" | "history" }[] = []
+
+    // Check queue first
+    if (ticket.departmentQueue && ticket.departmentQueue.length > 0) {
+      ticket.departmentQueue.forEach((queueItem) => {
+        if (!queueItem.processed && queueItem.clearPayment !== "Cleared") {
+          pending.push({
+            name: queueItem.departmentName,
+            source: "queue",
+          })
+        }
+      })
+    }
+
+    // Fallback to history if no queue items
+    if (pending.length === 0 && ticket.departmentHistory) {
+      ticket.departmentHistory.forEach((historyItem) => {
+        if (
+          !historyItem.completed &&
+          historyItem.department !== "Reception" &&
+          (historyItem.cashCleared === null || historyItem.cashCleared === undefined)
+        ) {
+          pending.push({
+            name: historyItem.department,
+            icon: historyItem.icon,
+            source: "history",
+          })
+        }
+      })
+    }
+
+    return pending
+  }
+
+  const pendingDepartments = getPendingDepartments()
+
+  // Reset selection when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedDepartments([])
+    }
+  }, [isOpen])
+
+  const handleDepartmentToggle = (departmentName: string, checked: boolean) => {
+    setSelectedDepartments((prev) => {
+      if (checked) {
+        return [...prev, departmentName]
+      } else {
+        return prev.filter((name) => name !== departmentName)
+      }
+    })
+  }
+
+  const handleSelectAll = () => {
+    setSelectedDepartments(pendingDepartments.map((dept) => dept.name))
+  }
+
+  const handleClearAll = () => {
+    setSelectedDepartments([])
+  }
+
+  const handleSubmit = () => {
+    if (selectedDepartments.length > 0) {
+      onClear(selectedDepartments)
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Select Departments to Clear
+          </DialogTitle>
+          <DialogDescription>
+            Choose which departments you want to clear payment for ticket {ticket?.ticketNo}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {pendingDepartments.length > 0 ? (
+            <>
+              {/* Select All/Clear All buttons */}
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleSelectAll} className="flex-1 bg-transparent">
+                  Select All
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleClearAll} className="flex-1 bg-transparent">
+                  Clear All
+                </Button>
+              </div>
+
+              {/* Department list */}
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {pendingDepartments.map((dept, index) => (
+                  <div key={index} className="flex items-center space-x-3 p-2 rounded-lg border bg-slate-50">
+                    <Checkbox
+                      id={`dept-${index}`}
+                      checked={selectedDepartments.includes(dept.name)}
+                      onCheckedChange={(checked) => handleDepartmentToggle(dept.name, checked as boolean)}
+                    />
+                    <label htmlFor={`dept-${index}`} className="flex items-center gap-2 cursor-pointer flex-1">
+                      {dept.icon && <span className="text-lg">{dept.icon}</span>}
+                      <span className="font-medium">{dept.name}</span>
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${dept.source === "queue" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}`}
+                      >
+                        {dept.source === "queue" ? "Queue" : "History"}
+                      </Badge>
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              {/* Selection summary */}
+              {selectedDepartments.length > 0 && (
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    Selected {selectedDepartments.length} of {pendingDepartments.length} departments
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {selectedDepartments.map((name, index) => (
+                      <Badge key={index} className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>No departments found that need payment clearance.</AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isProcessing}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={selectedDepartments.length === 0 || isProcessing}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {isProcessing ? (
+              <>
+                <QueueSpinner size="sm" color="bg-white" dotCount={3} />
+                <span className="ml-2">Processing...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Clear Selected ({selectedDepartments.length})
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 // Format duration in seconds to a readable format
 const formatDuration = (seconds: number | undefined): string => {
   if (!seconds) return "0s"
-
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const remainingSeconds = Math.floor(seconds % 60)
@@ -112,6 +358,13 @@ const BillingPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [session, setSession] = useState<SessionData | null>(null)
   const [processingTickets, setProcessingTickets] = useState<Set<string>>(new Set())
+  const [selectiveDialog, setSelectiveDialog] = useState<{
+    isOpen: boolean
+    ticket: Ticket | null
+  }>({
+    isOpen: false,
+    ticket: null,
+  })
   const { toast } = useToast()
   const router = useRouter()
 
@@ -124,6 +377,7 @@ const BillingPage: React.FC = () => {
       // Fetch all tickets for today
       const response = await fetch(`/api/hospital/ticket?date=${today}`)
       if (!response.ok) throw new Error("Failed to fetch tickets")
+
       const allTickets = await response.json()
 
       // Filter for cash tickets that need payment clearance
@@ -134,13 +388,23 @@ const BillingPage: React.FC = () => {
         // Must not be completed or cancelled
         if (ticket.completed || ticket.noShow) return false
 
-        // Find current department (not completed and not Reception)
-        const currentDept = ticket.departmentHistory?.find(
-          (history) => !history.completed && history.department !== "Reception",
+        // Check if ticket has a queue with uncleared payments
+        if (ticket.departmentQueue && ticket.departmentQueue.length > 0) {
+          const hasUncleared = ticket.departmentQueue.some(
+            (queueItem) => !queueItem.processed && queueItem.clearPayment !== "Cleared",
+          )
+          if (hasUncleared) return true
+        }
+
+        // Fallback: check department history for pending payments
+        const hasPendingPayment = ticket.departmentHistory?.some(
+          (history) =>
+            !history.completed &&
+            history.department !== "Reception" &&
+            (history.cashCleared === null || history.cashCleared === undefined),
         )
 
-        // Must have a current department and cashCleared must be null
-        return currentDept && (currentDept.cashCleared === null || currentDept.cashCleared === undefined)
+        return hasPendingPayment
       })
 
       // Sort by creation time (oldest first)
@@ -178,8 +442,8 @@ const BillingPage: React.FC = () => {
     }
   }, [toast])
 
-  // Clear payment for a ticket
-  const handleClearPayment = async (ticketId: string) => {
+  // Clear queue payment for a ticket
+  const handleClearQueuePayment = async (ticketId: string) => {
     if (processingTickets.has(ticketId)) return
 
     setProcessingTickets((prev) => new Set(prev).add(ticketId))
@@ -188,21 +452,103 @@ const BillingPage: React.FC = () => {
       const ticket = tickets.find((t) => t._id === ticketId)
       if (!ticket) throw new Error("Ticket not found")
 
-      // Find the current department that needs payment clearance
-      const currentDept = ticket.departmentHistory?.find(
-        (history) => !history.completed && history.department !== "Reception",
-      )
+      const response = await fetch(`/api/hospital/ticket/${ticketId}/clear-queue-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
 
-      if (!currentDept) {
-        throw new Error("No department found for payment clearance")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to clear queue payment")
       }
+
+      const result = await response.json()
+
+      toast({
+        title: "Payment Cleared",
+        description: `Payment cleared for ticket ${ticket.ticketNo}. ${result.message}`,
+      })
+
+      // Refresh the tickets list
+      await fetchPendingPaymentTickets()
+    } catch (error: any) {
+      console.error("Error clearing queue payment:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to clear queue payment",
+        variant: "destructive",
+      })
+    } finally {
+      setProcessingTickets((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(ticketId)
+        return newSet
+      })
+    }
+  }
+
+  // Clear payment for selected departments
+  const handleSelectivePaymentClear = async (selectedDepartments: string[]) => {
+    const ticketId = selectiveDialog.ticket?._id
+    if (!ticketId || processingTickets.has(ticketId)) return
+
+    setProcessingTickets((prev) => new Set(prev).add(ticketId))
+
+    try {
+      const ticket = selectiveDialog.ticket
+      if (!ticket) throw new Error("Ticket not found")
+
+      const response = await fetch(`/api/hospital/ticket/${ticketId}/clear-selective-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedDepartments }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to clear selective payment")
+      }
+
+      const result = await response.json()
+
+      toast({
+        title: "Payment Cleared",
+        description: `Payment cleared for ticket ${ticket.ticketNo} in departments: ${result.clearedDepartments.join(", ")}`,
+      })
+
+      // Close dialog and refresh tickets
+      setSelectiveDialog({ isOpen: false, ticket: null })
+      await fetchPendingPaymentTickets()
+    } catch (error: any) {
+      console.error("Error clearing selective payment:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to clear selective payment",
+        variant: "destructive",
+      })
+    } finally {
+      setProcessingTickets((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(ticketId)
+        return newSet
+      })
+    }
+  }
+
+  // Clear payment for individual department (fallback for non-queue tickets)
+  const handleClearIndividualPayment = async (ticketId: string, department: string) => {
+    if (processingTickets.has(ticketId)) return
+
+    setProcessingTickets((prev) => new Set(prev).add(ticketId))
+
+    try {
+      const ticket = tickets.find((t) => t._id === ticketId)
+      if (!ticket) throw new Error("Ticket not found")
 
       const response = await fetch(`/api/hospital/ticket/${ticketId}/clear-payment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          department: currentDept.department,
-        }),
+        body: JSON.stringify({ department }),
       })
 
       if (!response.ok) {
@@ -212,13 +558,13 @@ const BillingPage: React.FC = () => {
 
       toast({
         title: "Payment Cleared",
-        description: `Payment cleared for ticket ${ticket.ticketNo}. Patient can now be served.`,
+        description: `Payment cleared for ticket ${ticket.ticketNo} in ${department}`,
       })
 
       // Refresh the tickets list
       await fetchPendingPaymentTickets()
     } catch (error: any) {
-      console.error("Error clearing payment:", error)
+      console.error("Error clearing individual payment:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to clear payment",
@@ -233,6 +579,16 @@ const BillingPage: React.FC = () => {
     }
   }
 
+  // Open selective clearing dialog
+  const openSelectiveDialog = (ticket: Ticket) => {
+    setSelectiveDialog({ isOpen: true, ticket })
+  }
+
+  // Close selective clearing dialog
+  const closeSelectiveDialog = () => {
+    setSelectiveDialog({ isOpen: false, ticket: null })
+  }
+
   // Initial data loading
   useEffect(() => {
     const loadData = async () => {
@@ -240,6 +596,7 @@ const BillingPage: React.FC = () => {
       await Promise.all([fetchPendingPaymentTickets(), fetchDepartments()])
       setIsLoading(false)
     }
+
     loadData()
 
     // Set up polling interval to refresh tickets every 5 seconds
@@ -261,6 +618,7 @@ const BillingPage: React.FC = () => {
         setSession(sessionData)
       }
     }
+
     fetchSession()
   }, [])
 
@@ -268,7 +626,6 @@ const BillingPage: React.FC = () => {
     setIsLoading(true)
     await fetchPendingPaymentTickets()
     setIsLoading(false)
-
     toast({
       title: "Refreshed",
       description: "Pending payment tickets have been updated",
@@ -299,7 +656,6 @@ const BillingPage: React.FC = () => {
 
   return (
     <ProtectedRoute requiredPermission="Billing">
-      <Navbar staffId={session?.userId || ""} />
       <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen">
         <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
           {/* Header Section */}
@@ -322,7 +678,7 @@ const BillingPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={refreshTickets}
-                  className="flex items-center gap-2 shrink-0"
+                  className="flex items-center gap-2 shrink-0 bg-transparent"
                 >
                   <RefreshCw className="h-4 w-4" />
                   <span className="hidden sm:inline">Refresh</span>
@@ -347,10 +703,26 @@ const BillingPage: React.FC = () => {
               {tickets.length > 0 ? (
                 <div className="space-y-4">
                   {tickets.map((ticket) => {
-                    const currentDept = ticket.departmentHistory?.find(
-                      (history) => !history.completed && history.department !== "Reception",
-                    )
                     const isProcessing = processingTickets.has(ticket._id)
+                    const hasQueue = ticket.departmentQueue && ticket.departmentQueue.length > 0
+
+                    // Count pending departments
+                    let pendingCount = 0
+                    if (hasQueue) {
+                      pendingCount = ticket.departmentQueue?.filter(
+                        (queueItem) => !queueItem.processed && queueItem.clearPayment !== "Cleared",
+                      ).length || 0
+                    } else {
+                      pendingCount =
+                        ticket.departmentHistory?.filter(
+                          (history) =>
+                            !history.completed &&
+                            history.department !== "Reception" &&
+                            (history.cashCleared === null || history.cashCleared === undefined),
+                        ).length || 0
+                    }
+
+                    const hasMultipleDepartments = pendingCount > 1
 
                     return (
                       <Card
@@ -358,77 +730,143 @@ const BillingPage: React.FC = () => {
                         className="border-l-4 border-l-amber-400 bg-amber-50/30 hover:shadow-lg transition-all duration-200"
                       >
                         <CardContent className="p-4">
-                          <div className="flex flex-col sm:flex-row justify-between gap-4">
-                            <div className="flex-1">
-                              {/* Header */}
-                              <div className="flex items-center gap-3 mb-3">
-                                <Badge className="bg-[#0e4480] text-white px-3 py-1 text-base font-mono">
-                                  {ticket.ticketNo}
+                          <div className="flex flex-col gap-4">
+                            {/* Header */}
+                            <div className="flex items-center gap-3 mb-3">
+                              <Badge className="bg-[#0e4480] text-white px-3 py-1 text-base font-mono">
+                                {ticket.ticketNo}
+                              </Badge>
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
+                                <DollarSign className="h-3 w-3" />
+                                Cash Payment
+                              </Badge>
+                              {ticket.emergency && (
+                                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3" />
+                                  EMERGENCY
                                 </Badge>
-                                <Badge className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
-                                  <DollarSign className="h-3 w-3" />
-                                  Cash Payment
+                              )}
+                              {hasQueue && (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
+                                  <Queue className="h-3 w-3" />
+                                  Queue ({pendingCount} pending)
                                 </Badge>
-                                {ticket.emergency && (
-                                  <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1">
-                                    <AlertCircle className="h-3 w-3" />
-                                    EMERGENCY
-                                  </Badge>
-                                )}
-                              </div>
+                              )}
+                              {!hasQueue && hasMultipleDepartments && (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
+                                  <Building2 className="h-3 w-3" />
+                                  {pendingCount} Departments
+                                </Badge>
+                              )}
+                            </div>
 
-                              {/* Patient Info */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                                <div>
-                                  <p className="text-xs text-slate-500 font-medium">Patient Name</p>
-                                  <p className="font-medium">{ticket.patientName || "Not provided"}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-500 font-medium">Reason for Visit</p>
-                                  <p className="text-sm">{ticket.reasonforVisit || "Not provided"}</p>
-                                </div>
+                            {/* Patient Info */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium">Patient Name</p>
+                                <p className="font-medium">{ticket.patientName || "Not provided"}</p>
                               </div>
-
-                              {/* Department Info */}
-                              <div className="mb-3">
-                                <p className="text-xs text-slate-500 font-medium mb-1">Waiting for Service in</p>
-                                <CurrentDepartmentBadge ticket={ticket} />
-                              </div>
-
-                              {/* Waiting Time */}
-                              <div className="flex items-center gap-2 text-sm text-slate-600">
-                                <Clock className="h-4 w-4" />
-                                <span>
-                                  Waiting for payment clearance:{" "}
-                                  {formatDuration(
-                                    Math.floor(
-                                      (Date.now() - new Date(currentDept?.timestamp || ticket.createdAt).getTime()) /
-                                        1000,
-                                    ),
-                                  )}
-                                </span>
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium">Reason for Visit</p>
+                                <p className="text-sm">{ticket.reasonforVisit || "Not provided"}</p>
                               </div>
                             </div>
 
-                            {/* Action Button */}
-                            <div className="flex items-center">
-                              <Button
-                                onClick={() => handleClearPayment(ticket._id)}
-                                disabled={isProcessing}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[140px]"
-                              >
-                                {isProcessing ? (
-                                  <>
-                                    <QueueSpinner size="sm" color="bg-white" dotCount={3} />
-                                    <span className="ml-2">Processing...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                                    Clear Payment
-                                  </>
-                                )}
-                              </Button>
+                            {/* Pending Departments Summary */}
+                            <div className="mb-3">
+                              <p className="text-xs text-slate-500 font-medium mb-1">
+                                {hasQueue ? "Queue Status" : `Pending Payment Clearance (${pendingCount})`}
+                              </p>
+                              <PendingDepartmentsList ticket={ticket} />
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-col gap-2 pt-2 border-t border-amber-200">
+                              {hasMultipleDepartments ? (
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  {/* Clear All Button */}
+                                  <Button
+                                    onClick={() =>
+                                      hasQueue
+                                        ? handleClearQueuePayment(ticket._id)
+                                        : handleClearIndividualPayment(
+                                            ticket._id,
+                                            ticket.departmentHistory?.find(
+                                              (h) =>
+                                                !h.completed &&
+                                                h.department !== "Reception" &&
+                                                (h.cashCleared === null || h.cashCleared === undefined),
+                                            )?.department || "",
+                                          )
+                                    }
+                                    disabled={isProcessing}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1"
+                                  >
+                                    {isProcessing ? (
+                                      <>
+                                        <QueueSpinner size="sm" color="bg-white" dotCount={3} />
+                                        <span className="ml-2">Processing...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                                        Clear All ({pendingCount})
+                                      </>
+                                    )}
+                                  </Button>
+
+                                  {/* Selective Clear Button */}
+                                  <Button
+                                    onClick={() => openSelectiveDialog(ticket)}
+                                    disabled={isProcessing}
+                                    variant="outline"
+                                    className="border-blue-300 text-blue-600 hover:bg-blue-50 flex-1 sm:flex-none"
+                                  >
+                                    <Settings className="h-4 w-4 mr-2" />
+                                    Select Departments
+                                  </Button>
+                                </div>
+                              ) : (
+                                // Single department - just show clear button
+                                <Button
+                                  onClick={() =>
+                                    hasQueue
+                                      ? handleClearQueuePayment(ticket._id)
+                                      : handleClearIndividualPayment(
+                                          ticket._id,
+                                          ticket.departmentHistory?.find(
+                                            (h) =>
+                                              !h.completed &&
+                                              h.department !== "Reception" &&
+                                              (h.cashCleared === null || h.cashCleared === undefined),
+                                          )?.department || "",
+                                        )
+                                  }
+                                  disabled={isProcessing}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  {isProcessing ? (
+                                    <>
+                                      <QueueSpinner size="sm" color="bg-white" dotCount={3} />
+                                      <span className="ml-2">Processing...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                                      Clear Payment
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Waiting Time */}
+                            <div className="flex items-center gap-2 text-sm text-slate-600 pt-2">
+                              <Clock className="h-4 w-4" />
+                              <span>
+                                Total waiting time:{" "}
+                                {formatDuration(Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000))}
+                              </span>
                             </div>
                           </div>
                         </CardContent>
@@ -447,6 +885,15 @@ const BillingPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Selective Clearing Dialog */}
+        <SelectiveClearingDialog
+          isOpen={selectiveDialog.isOpen}
+          onClose={closeSelectiveDialog}
+          ticket={selectiveDialog.ticket}
+          onClear={handleSelectivePaymentClear}
+          isProcessing={processingTickets.has(selectiveDialog.ticket?._id || "")}
+        />
 
         <Toaster />
       </div>

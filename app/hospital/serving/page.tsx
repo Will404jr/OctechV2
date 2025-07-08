@@ -19,6 +19,7 @@ import {
   ArrowRight,
   User,
   RefreshCw,
+  ArrowLeft,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
@@ -27,7 +28,6 @@ import type { SessionData } from "@/lib/session"
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog"
 import { Navbar } from "@/components/hospitalNavbar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 interface DepartmentHistoryEntry {
   department: string
@@ -99,9 +99,17 @@ const isAtLastDepartmentInQueue = (ticket: Ticket): boolean => {
   if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
     return false
   }
-
   const currentIndex = ticket.currentQueueIndex || 0
   return currentIndex >= ticket.departmentQueue.length - 1
+}
+
+// Helper function to check if ticket has remaining queue departments
+const hasRemainingQueueDepartments = (ticket: Ticket): boolean => {
+  if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
+    return false
+  }
+  const currentIndex = ticket.currentQueueIndex || 0
+  return currentIndex < ticket.departmentQueue.length - 1
 }
 
 // Component to render room and staff information
@@ -128,16 +136,12 @@ const DepartmentRoomBadge = ({
         if (!response.ok) {
           throw new Error("Failed to fetch departments")
         }
-
         const allDepartments = await response.json()
         const dept = allDepartments.find((d: Department) => d.title === department)
-
         if (!dept) {
           throw new Error(`Department ${department} not found`)
         }
-
         const room = dept.rooms.find((r: any) => r._id.toString().includes(roomIdPartial))
-
         if (!room) {
           throw new Error(`Room not found in ${department}`)
         }
@@ -208,7 +212,6 @@ const DepartmentRoomBadge = ({
 // Format duration in seconds to a readable format
 const formatDuration = (seconds: number | undefined): string => {
   if (!seconds) return "0s"
-
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const remainingSeconds = Math.floor(seconds % 60)
@@ -288,7 +291,6 @@ const ServingPage: React.FC = () => {
 
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return
-
     try {
       const response = await fetch(`/api/hospital/room/${roomId}`, {
         method: "PUT",
@@ -312,7 +314,6 @@ const ServingPage: React.FC = () => {
   // Assign roomId to ticket's department history
   const assignRoomToTicket = async (ticketId: string) => {
     if (!roomId || !session?.department) return
-
     try {
       const response = await fetch(`/api/hospital/ticket/${ticketId}/assign-room`, {
         method: "POST",
@@ -322,18 +323,96 @@ const ServingPage: React.FC = () => {
           department: session.department,
         }),
       })
-
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to assign room to ticket")
       }
-
       console.log(`Room ${roomId} assigned to ticket ${ticketId}`)
     } catch (error) {
       console.error("Error assigning room to ticket:", error)
       toast({
         title: "Error",
         description: "Failed to assign room to ticket",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle return to previous department
+  const handleReturnToDepartment = async (departmentName: string, roomId?: string) => {
+    if (!currentTicket || !session?.department) return
+
+    try {
+      // Find the department ID
+      const department = departments.find((d) => d.title === departmentName)
+      if (!department) {
+        toast({
+          title: "Error",
+          description: "Department not found",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const departmentSelections = [
+        {
+          departmentId: department._id,
+          roomId: roomId,
+        },
+      ]
+
+      // Prepare the request body
+      const requestBody: any = {
+        departments: departmentSelections,
+        departmentNote: departmentNote,
+        note: departmentNote,
+        currentDepartment: session.department,
+      }
+
+      // If the ticket is a Cash ticket, set cashCleared to "Cleared"
+      if (currentTicket.userType === "Cash") {
+        requestBody.cashCleared = "Cleared"
+      }
+
+      const response = await fetch(`/api/hospital/ticket/${currentTicket._id}/next-step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) throw new Error("Failed to return ticket to department")
+
+      toast({
+        title: "Success",
+        description: `Ticket sent back to ${departmentName}${currentTicket.userType === "Cash" ? " (Payment cleared)" : ""}`,
+      })
+
+      // Clear current ticket
+      setCurrentTicket(null)
+      updateRoomServingTicket(null)
+      setShowActionsDialog(true)
+
+      // Check if we were in the process of pausing
+      if (isPausing) {
+        setIsServing(false)
+        setIsPausing(false)
+        toast({
+          title: "Paused",
+          description: "Serving has been paused",
+          variant: "default",
+        })
+      }
+
+      // Reset form
+      setDepartmentNote("")
+
+      // Update tickets list
+      await fetchTickets()
+    } catch (error) {
+      console.error("Error returning ticket to department:", error)
+      toast({
+        title: "Error",
+        description: "Failed to return ticket to department",
         variant: "destructive",
       })
     }
@@ -379,7 +458,6 @@ const ServingPage: React.FC = () => {
         const currentDeptHistory = ticket.departmentHistory?.find(
           (history) => !history.completed && history.department === session.department,
         )
-
         // If no roomId in history, show in all rooms (for backward compatibility)
         // If roomId exists, only show in matching room
         return !currentDeptHistory?.roomId || currentDeptHistory.roomId === roomId
@@ -391,7 +469,6 @@ const ServingPage: React.FC = () => {
         : filteredRegularTickets
 
       setTickets(finalFilteredTickets)
-
       return { regular: filteredRegularTickets, heldData: filteredHeldTickets }
     } catch (error) {
       console.error("Error fetching tickets:", error)
@@ -440,7 +517,6 @@ const ServingPage: React.FC = () => {
         const currentDeptHistory = ticket.departmentHistory?.find(
           (history) => !history.completed && history.department === session?.department,
         )
-
         if (!currentDeptHistory) return false
 
         // For cash tickets, check if payment has been cleared
@@ -450,6 +526,7 @@ const ServingPage: React.FC = () => {
           }
         }
 
+        // If no roomId in history, show in all rooms (for backward compatibility)
         // If no roomId in history, show in all rooms (for backward compatibility)
         // If roomId exists, only show in matching room
         return !currentDeptHistory.roomId || currentDeptHistory.roomId === roomId
@@ -461,20 +538,16 @@ const ServingPage: React.FC = () => {
           // Emergency tickets get priority
           if (a.emergency && !b.emergency) return -1
           if (!a.emergency && b.emergency) return 1
-
           // If both are emergency or both are not emergency, sort by creation time
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         })
 
         const nextTicket = sortedTickets[0]
-
         // First, assign the roomId to the ticket's department history
         await assignRoomToTicket(nextTicket._id)
-
         // Then update the current ticket and room
         setCurrentTicket(nextTicket)
         updateRoomServingTicket(nextTicket._id)
-
         // Update tickets list without the new current ticket
         setTickets(regular.filter((ticket: { _id: any }) => ticket._id !== nextTicket._id))
 
@@ -531,7 +604,6 @@ const ServingPage: React.FC = () => {
         if (!response.ok) throw new Error("Failed to progress in queue")
 
         const responseData = await response.json()
-
         if (responseData.message === "Department queue completed") {
           toast({
             title: "Queue Complete",
@@ -661,17 +733,14 @@ const ServingPage: React.FC = () => {
           if (response.ok) {
             const room = await response.json()
             setRoomNumber(room.roomNumber)
-
             // Set isServing based on the room's availability status
             setIsServing(room.available)
-
             // If room is available and has a current ticket, set it
             if (room.available && room.currentTicket) {
               const ticketResponse = await fetch(`/api/hospital/ticket/${room.currentTicket}`)
               if (ticketResponse.ok) {
                 const ticketData = await ticketResponse.json()
                 setCurrentTicket(ticketData)
-
                 // Set the department note from the ticket if it exists
                 if (ticketData.departmentNote) {
                   setDepartmentNote(ticketData.departmentNote)
@@ -708,7 +777,6 @@ const ServingPage: React.FC = () => {
     // Only set up the interval if we're serving and auto-fetch is enabled
     if (isServing && autoFetchEnabled) {
       console.log("Setting up auto-fetch interval. Auto-fetch enabled:", autoFetchEnabled)
-
       autoFetchIntervalRef.current = setInterval(async () => {
         // Double-check all conditions before proceeding
         if (
@@ -720,7 +788,6 @@ const ServingPage: React.FC = () => {
           !showNextStepDialog
         ) {
           console.log("Auto-checking for next ticket...")
-
           try {
             // Check if there are tickets waiting
             const { regular } = await fetchTickets()
@@ -731,7 +798,6 @@ const ServingPage: React.FC = () => {
               const currentDeptHistory = ticket.departmentHistory?.find(
                 (history) => !history.completed && history.department === session?.department,
               )
-
               if (!currentDeptHistory) return false
 
               // For cash tickets, check if payment has been cleared
@@ -741,6 +807,7 @@ const ServingPage: React.FC = () => {
                 }
               }
 
+              // If no roomId in history, show in all rooms (for backward compatibility)
               // If no roomId in history, show in all rooms (for backward compatibility)
               // If roomId exists, only show in matching room
               return !currentDeptHistory.roomId || currentDeptHistory.roomId === roomId
@@ -809,7 +876,6 @@ const ServingPage: React.FC = () => {
 
   const startServing = async () => {
     if (!roomId) return
-
     try {
       // Update room availability to true when starting to serve
       const response = await fetch(`/api/hospital/room/${roomId}`, {
@@ -819,17 +885,14 @@ const ServingPage: React.FC = () => {
           available: true,
         }),
       })
-
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to update room availability")
       }
 
       setIsServing(true)
-
       // Automatically fetch the next ticket
       await fetchNextTicket()
-
       toast({
         title: "Serving Started",
         description: "You are now available to serve tickets.",
@@ -865,7 +928,6 @@ const ServingPage: React.FC = () => {
           available: false,
         }),
       })
-
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to update room availability")
@@ -875,7 +937,6 @@ const ServingPage: React.FC = () => {
       setIsPausing(false)
       setCurrentTicket(null)
       updateRoomServingTicket(null)
-
       toast({
         title: "Paused",
         description: "Serving has been paused and you are now unavailable",
@@ -1146,7 +1207,6 @@ const ServingPage: React.FC = () => {
     setIsLoading(true)
     await fetchTickets()
     setIsLoading(false)
-
     toast({
       title: "Refreshed",
       description: "Ticket list has been updated",
@@ -1196,11 +1256,20 @@ const ServingPage: React.FC = () => {
                   <Users className="h-4 w-4 text-[#0e4480]" />
                   <span className="font-medium text-[#0e4480] text-sm">{tickets.length} waiting</span>
                 </div>
+                <Badge
+                  className={`px-3 py-1 ${
+                    isServing
+                      ? "bg-green-100 text-green-800 border-green-200"
+                      : "bg-red-100 text-red-800 border-red-200"
+                  }`}
+                >
+                  {isServing ? "Available" : "Unavailable"}
+                </Badge>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={refreshTickets}
-                  className="flex items-center gap-2 shrink-0"
+                  className="flex items-center gap-2 shrink-0 bg-transparent"
                 >
                   <RefreshCw className="h-4 w-4" />
                   <span className="hidden sm:inline">Refresh</span>
@@ -1269,17 +1338,16 @@ const ServingPage: React.FC = () => {
                                   currentDepartment: session?.department,
                                 }),
                               })
-
                               if (!response.ok) throw new Error("Failed to update emergency status")
-
                               setCurrentTicket({
                                 ...currentTicket,
                                 emergency: !currentTicket.emergency,
                               })
-
                               toast({
                                 title: "Success",
-                                description: `Ticket ${currentTicket.emergency ? "removed from" : "marked as"} emergency`,
+                                description: `Ticket ${
+                                  currentTicket.emergency ? "removed from" : "marked as"
+                                } emergency`,
                               })
                             } catch (error) {
                               console.error("Error updating emergency status:", error)
@@ -1298,13 +1366,12 @@ const ServingPage: React.FC = () => {
                         >
                           {currentTicket.emergency ? "🚨 Remove Emergency" : "🚨 Mark Emergency"}
                         </Button>
-
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={callTicket}
                           disabled={currentTicket.call}
-                          className="border-[#0e4480] text-[#0e4480] hover:bg-blue-50"
+                          className="border-[#0e4480] text-[#0e4480] hover:bg-blue-50 bg-transparent"
                         >
                           <Volume2 className="h-4 w-4 mr-1 sm:mr-2" />
                           <span className="hidden sm:inline">Call</span>
@@ -1372,37 +1439,23 @@ const ServingPage: React.FC = () => {
                                   />
                                 )}
                               </span>
-                              <span className="text-xs sm:text-sm text-blue-600">
-                                {new Date(history.timestamp).toLocaleString()}
-                              </span>
-                            </div>
-
-                            {/* Time Information */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 text-xs sm:text-sm">
-                              <div className="bg-white p-2 rounded-md shadow-sm">
-                                <p className="text-xs text-slate-500">Waiting</p>
-                                <p className="font-medium">{formatDuration(history.waitingDuration)}</p>
-                              </div>
-                              <div className="bg-white p-2 rounded-md shadow-sm">
-                                <p className="text-xs text-slate-500">Processing</p>
-                                <p className="font-medium">
-                                  {history.completed ? (
-                                    formatDuration(history.processingDuration)
-                                  ) : (
-                                    <RealTimeDuration
-                                      startTime={history.startedAt || null}
-                                      endTime={history.completedAt || null}
-                                      isActive={!history.completed && !!history.startedAt}
-                                    />
-                                  )}
-                                </p>
-                              </div>
-                              <div className="bg-white p-2 rounded-md shadow-sm col-span-2 sm:col-span-1">
-                                <p className="text-xs text-slate-500">Hold Time</p>
-                                <p className="font-medium">{formatDuration(history.holdDuration)}</p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm text-blue-600">
+                                  {new Date(history.timestamp).toLocaleString()}
+                                </span>
+                                {history.completed && !hasRemainingQueueDepartments(currentTicket) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleReturnToDepartment(history.department, history.roomId)}
+                                    className="border-blue-300 text-blue-600 hover:bg-blue-50 text-xs"
+                                  >
+                                    <ArrowLeft className="h-3 w-3 mr-1" />
+                                    Send back
+                                  </Button>
+                                )}
                               </div>
                             </div>
-
                             {history.note && (
                               <div className="mt-3 p-2 sm:p-3 bg-white rounded-md text-xs sm:text-sm border border-slate-100">
                                 <p className="font-medium mb-1 text-slate-700">Notes:</p>
@@ -1443,7 +1496,7 @@ const ServingPage: React.FC = () => {
                     <Button
                       variant="outline"
                       onClick={handleHoldTicket}
-                      className="border-amber-400 text-amber-600 hover:bg-amber-50 text-sm"
+                      className="border-amber-400 text-amber-600 hover:bg-amber-50 text-sm bg-transparent"
                     >
                       <PauseCircle className="h-4 w-4 mr-2" />
                       Hold Ticket
@@ -1453,7 +1506,7 @@ const ServingPage: React.FC = () => {
                     <Button
                       variant="outline"
                       onClick={cancelTicket}
-                      className="border-red-400 text-red-600 hover:bg-red-50 text-sm"
+                      className="border-red-400 text-red-600 hover:bg-red-50 text-sm bg-transparent"
                     >
                       <AlertCircle className="h-4 w-4 mr-2" />
                       Cancel Ticket
@@ -1467,9 +1520,9 @@ const ServingPage: React.FC = () => {
                       <Users className="h-4 w-4 mr-2" />
                       {currentTicket.departmentQueue && currentTicket.departmentQueue.length > 0
                         ? isAtLastDepartmentInQueue(currentTicket)
-                          ? "Next Step"
-                          : "Next in Queue"
-                        : "Next Step"}
+                          ? "Clear"
+                          : "Clear"
+                        : "Clear"}
                     </Button>
 
                     {/* Clear Ticket Button */}
@@ -1478,7 +1531,7 @@ const ServingPage: React.FC = () => {
                       className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Clear Ticket
+                      End Visit
                     </Button>
                   </div>
                 </CardFooter>
@@ -1577,7 +1630,7 @@ const ServingPage: React.FC = () => {
                       <Button
                         onClick={pauseServing}
                         variant="outline"
-                        className="border-red-300 hover:bg-red-50 text-red-600 gap-2 w-full"
+                        className="border-red-300 hover:bg-red-50 text-red-600 gap-2 w-full bg-transparent"
                         disabled={isPausing}
                       >
                         <PauseCircle className="h-4 w-4" />
@@ -1629,7 +1682,6 @@ const ServingPage: React.FC = () => {
                         <span className="bg-white px-2 text-sm text-gray-500">Held Tickets</span>
                       </div>
                     </div>
-
                     <div className="max-h-60 overflow-y-auto space-y-2">
                       {heldTickets.map((ticket) => (
                         <div key={ticket._id} className="flex justify-between items-center p-2 bg-green-50 rounded">
