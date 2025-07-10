@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 interface Department {
   title: string
@@ -468,6 +469,7 @@ const DepartmentsComponent = () => {
   )
 
   return (
+    <ProtectedRoute requiredPermission="Departments">
     <div className="container mx-auto py-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
         <div>
@@ -747,6 +749,7 @@ const DepartmentsComponent = () => {
         </DialogContent>
       </Dialog>
     </div>
+    </ProtectedRoute>
   )
 }
 

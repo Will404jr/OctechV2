@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
-import { Staff, HospitalSettings } from "@/lib/models/hospital";
+import { Staff, HospitalSettings, Department } from "@/lib/models/hospital";
 import { getSession } from "@/lib/session";
 
 interface LoginRequestBody {
@@ -58,6 +58,7 @@ export async function POST(request: Request) {
         Staff: true,
         Roles: true,
         Tickets: true,
+        Departments: true,
         Billing: true,
         Queues: true,
         UpcomingEvents: true,
