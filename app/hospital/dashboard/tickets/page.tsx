@@ -30,6 +30,7 @@ import {
   SortDesc,
   DollarSign,
   Route,
+  DoorOpen,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
@@ -50,6 +51,7 @@ interface Room {
     lastName: string
   }
   available: boolean
+  createdAt: string
 }
 
 interface Department {
@@ -538,6 +540,10 @@ const MobileFiltersSheet = ({
   setSortOrder,
   filterStatus,
   setFilterStatus,
+  selectedDepartment,
+  selectedRoom,
+  setSelectedRoom,
+  getCurrentDepartmentRooms,
 }: {
   searchQuery: string
   setSearchQuery: (value: string) => void
@@ -552,11 +558,15 @@ const MobileFiltersSheet = ({
   setSortOrder: (value: "asc" | "desc") => void
   filterStatus: string
   setFilterStatus: (value: string) => void
+  selectedDepartment: string
+  selectedRoom: string
+  setSelectedRoom: (value: string) => void
+  getCurrentDepartmentRooms: () => Room[]
 }) => {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="lg:hidden">
+        <Button variant="outline" size="sm" className="lg:hidden bg-transparent">
           <Filter className="h-4 w-4 mr-2" />
           Filters
         </Button>
@@ -593,6 +603,34 @@ const MobileFiltersSheet = ({
                     {dept.icon} {dept.title}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Room Filter in Mobile Sheet */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Room</label>
+            <Select value={selectedRoom} onValueChange={setSelectedRoom} disabled={filterDepartment === "all"}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Rooms" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Rooms</SelectItem>
+                {getCurrentDepartmentRooms().map((room) => (
+                  <SelectItem key={room._id} value={room._id}>
+                    <div className="flex items-center justify-between w-full">
+                      <span>Room {room.roomNumber}</span>
+                      <span className="text-sm text-slate-500 ml-2">
+                        {room.staff.firstName} {room.staff.lastName}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+                {getCurrentDepartmentRooms().length === 0 && filterDepartment !== "all" && (
+                  <SelectItem value="no-rooms" disabled>
+                    No rooms created today
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -766,6 +804,13 @@ const TicketsPage: React.FC = () => {
   // Add filterStatus state variable (around line 600)
   const [filterStatus, setFilterStatus] = useState<string>("all")
 
+  // Date state for filtering rooms
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0])
+
+  // State for room filtering
+  const [todaysRooms, setTodaysRooms] = useState<Record<string, Room[]>>({})
+  const [selectedRoom, setSelectedRoom] = useState<string>("all")
+
   // Helper function to check if ticket is at the last department in queue
   const isAtLastDepartmentInQueue = (ticket: Ticket): boolean => {
     if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
@@ -839,6 +884,49 @@ const TicketsPage: React.FC = () => {
     }
   }, [toast])
 
+  // Fetch all rooms for the selected date
+  const fetchAllTodaysRooms = useCallback(
+    async (date: string) => {
+      const roomsData: Record<string, Room[]> = {}
+
+      for (const department of departments) {
+        try {
+          const response = await fetch(`/api/hospital/department/${department._id}/rooms?date=${date}`)
+          if (!response.ok) {
+            console.warn(`Failed to fetch rooms for department ${department.title}`)
+            roomsData[department._id] = []
+            continue
+          }
+
+          const data = await response.json()
+          // Ensure we only get rooms created on the selected date
+          const todaysRooms = (data.rooms || []).filter((room: Room) => {
+            if (!room.createdAt) return false
+            const roomDate = new Date(room.createdAt).toISOString().split("T")[0]
+            return roomDate === date
+          })
+
+          roomsData[department._id] = todaysRooms
+          console.log(`Fetched ${todaysRooms.length} rooms for ${department.title} on ${date}`)
+        } catch (error) {
+          console.error(`Error fetching rooms for department ${department.title}:`, error)
+          roomsData[department._id] = []
+        }
+      }
+
+      setTodaysRooms(roomsData)
+    },
+    [departments],
+  )
+
+  // Get current department rooms for room filter
+  const getCurrentDepartmentRooms = () => {
+    if (filterDepartment === "all") return []
+    const rooms = todaysRooms[filterDepartment] || []
+    console.log(`Rooms for ${filterDepartment} on ${selectedDate}:`, rooms.length)
+    return rooms
+  }
+
   // Apply filters, search, and sorting
   useEffect(() => {
     let result = [...tickets]
@@ -858,6 +946,13 @@ const TicketsPage: React.FC = () => {
     if (filterDepartment !== "all") {
       result = result.filter((ticket) =>
         ticket.departmentHistory?.some((history) => history.department === filterDepartment && !history.completed),
+      )
+    }
+
+    // Apply room filter
+    if (selectedRoom !== "all") {
+      result = result.filter((ticket) =>
+        ticket.departmentHistory?.some((history) => history.roomId === selectedRoom && !history.completed),
       )
     }
 
@@ -950,7 +1045,7 @@ const TicketsPage: React.FC = () => {
     })
 
     setFilteredTickets(result)
-  }, [tickets, searchQuery, filterDepartment, activeTab, filterStatus, sortBy, sortOrder])
+  }, [tickets, searchQuery, filterDepartment, activeTab, filterStatus, sortBy, sortOrder, selectedRoom])
 
   // Initial data loading
   useEffect(() => {
@@ -982,6 +1077,11 @@ const TicketsPage: React.FC = () => {
     }
     fetchSession()
   }, [])
+
+  // Load todays rooms on department change
+  useEffect(() => {
+    fetchAllTodaysRooms(selectedDate)
+  }, [fetchAllTodaysRooms, selectedDate])
 
   // Toggle ticket expansion
   const toggleTicketExpansion = (ticketId: string) => {
@@ -1610,7 +1710,7 @@ const TicketsPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={refreshTickets}
-                  className="flex items-center gap-2 shrink-0"
+                  className="flex items-center gap-2 shrink-0 bg-transparent"
                 >
                   <RefreshCw className="h-4 w-4" />
                   <span className="hidden sm:inline">Refresh</span>
@@ -1665,6 +1765,37 @@ const TicketsPage: React.FC = () => {
                   </Select>
                 </div>
 
+                {/* Room Filter */}
+                <Select value={selectedRoom} onValueChange={setSelectedRoom} disabled={filterDepartment === "all"}>
+                  <SelectTrigger>
+                    <div className="flex items-center gap-2">
+                      <DoorOpen className="h-4 w-4 text-slate-500" />
+                      <SelectValue placeholder="All Rooms" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Rooms</SelectItem>
+                    {getCurrentDepartmentRooms().map((room) => (
+                      <SelectItem key={room._id} value={room._id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>Room {room.roomNumber}</span>
+                          <span className="text-sm text-slate-500 ml-2">
+                            {room.staff.firstName} {room.staff.lastName}
+                          </span>
+                          <Badge variant="secondary" className="ml-2 text-xs bg-blue-100 text-blue-800">
+                            Created: {new Date(room.createdAt).toLocaleDateString()}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {getCurrentDepartmentRooms().length === 0 && filterDepartment !== "all" && (
+                      <SelectItem value="no-rooms" disabled>
+                        No rooms created on {new Date(selectedDate).toLocaleDateString()}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+
                 {/* Status Category Tabs - Now in filter section */}
                 <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 min-w-[320px]">
                   <Button
@@ -1718,6 +1849,10 @@ const TicketsPage: React.FC = () => {
                   setSortOrder={setSortOrder}
                   filterStatus={filterStatus}
                   setFilterStatus={setFilterStatus}
+                  selectedDepartment={filterDepartment}
+                  selectedRoom={selectedRoom}
+                  setSelectedRoom={setSelectedRoom}
+                  getCurrentDepartmentRooms={getCurrentDepartmentRooms}
                 />
               </div>
 
@@ -2303,7 +2438,7 @@ const TicketsPage: React.FC = () => {
                     <Button
                       variant="outline"
                       onClick={handleCancelTicket}
-                      className="border-red-400 text-red-600 hover:bg-red-50 w-full sm:w-auto"
+                      className="border-red-400 text-red-600 hover:bg-red-50 w-full sm:w-auto bg-transparent"
                     >
                       <AlertCircle className="h-4 w-4 mr-2" />
                       Cancel Ticket
@@ -2313,7 +2448,7 @@ const TicketsPage: React.FC = () => {
                       <Button
                         variant="outline"
                         onClick={handleHoldTicket}
-                        className="border-amber-400 text-amber-600 hover:bg-amber-50 w-full sm:w-auto"
+                        className="border-amber-400 text-amber-600 hover:bg-amber-50 w-full sm:w-auto bg-transparent"
                       >
                         <PauseCircle className="h-4 w-4 mr-2" />
                         Hold Ticket
@@ -2336,9 +2471,9 @@ const TicketsPage: React.FC = () => {
                       <ArrowRight className="h-4 w-4 mr-2" />
                       {selectedTicket.departmentQueue && selectedTicket.departmentQueue.length > 0
                         ? isAtLastDepartmentInQueue(selectedTicket)
-                          ? "Next Step"
-                          : "Next in Queue"
-                        : "Next Step"}
+                          ? "Clear"
+                          : "Clear"
+                        : "Clear"}
                     </Button>
 
                     <Button
@@ -2346,7 +2481,7 @@ const TicketsPage: React.FC = () => {
                       className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Clear Ticket
+                      End Journey
                     </Button>
                   </DialogFooter>
                 )}
@@ -2627,7 +2762,12 @@ const TicketCard: React.FC<{
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-2 min-w-[120px]">
-            <Button variant="outline" size="sm" onClick={onToggleExpand} className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onToggleExpand}
+              className="flex items-center gap-2 bg-transparent"
+            >
               {isExpanded ? (
                 <>
                   <X className="h-4 w-4" />

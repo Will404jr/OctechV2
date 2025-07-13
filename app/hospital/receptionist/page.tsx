@@ -27,6 +27,7 @@ import { QueueSpinner } from "@/components/queue-spinner"
 import { Badge } from "@/components/ui/badge"
 import type { SessionData } from "@/lib/session"
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog"
+import { InsuranceTicketsSection } from "@/components/hospital/InsuranceTicketsSection"
 import { Navbar } from "@/components/hospitalNavbar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -211,6 +212,8 @@ const ReceptionistPage: React.FC = () => {
   const [autoFetchEnabled, setAutoFetchEnabled] = useState(true)
   const [departmentName, setDepartmentName] = useState<string>("Reception")
 
+  const [insuranceTickets, setInsuranceTickets] = useState<Ticket[]>([])
+
   const updateRoomServingTicket = async (ticketId: string | null) => {
     if (!roomId) return
     try {
@@ -367,6 +370,16 @@ const ReceptionistPage: React.FC = () => {
         : regular
 
       setTickets(filteredTickets)
+
+      // Add this after fetching held tickets
+      const insuranceResponse = await fetch(`/api/hospital/ticket?userType=Insurance&date=${today}&completed=false`)
+      if (!insuranceResponse.ok) throw new Error("Failed to fetch insurance tickets")
+      const insuranceData = await insuranceResponse.json()
+
+      // Filter to ensure only Insurance userType tickets are included
+      const filteredInsuranceTickets = insuranceData.filter((ticket: Ticket) => ticket.userType === "Insurance")
+      setInsuranceTickets(filteredInsuranceTickets)
+
       return { regular, heldData }
     } catch (error) {
       console.error("Error fetching tickets:", error)
@@ -738,7 +751,7 @@ const ReceptionistPage: React.FC = () => {
     // For returned tickets, we don't need to validate user type and reason
     const isReturnedTicket = currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1
 
-    if (!isReturnedTicket && (!userType || !reasonForVisit)) {
+    if (!isReturnedTicket && !userType) {
       toast({
         title: "Error",
         description: "Please select a user type and reason for visit",
@@ -815,7 +828,7 @@ const ReceptionistPage: React.FC = () => {
     // For returned tickets, we don't need to validate user type and reason
     const isReturnedTicket = currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1
 
-    if (!isReturnedTicket && (!userType || !reasonForVisit)) {
+    if (!isReturnedTicket && !userType) {
       toast({
         title: "Error",
         description: "Please select a user type and reason for visit",
@@ -1157,10 +1170,10 @@ const ReceptionistPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Main Content - Horizontal Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Current Ticket Section */}
-            <Card className="border-none shadow-md overflow-hidden h-full">
+          {/* Main Content - Updated Layout */}
+          <div className="space-y-6">
+            {/* Current Ticket Section - Full Width */}
+            <Card className="border-none shadow-md overflow-hidden">
               <CardHeader className="bg-[#0e4480] text-white py-4">
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <Clock className="h-5 w-5" />
@@ -1318,7 +1331,7 @@ const ReceptionistPage: React.FC = () => {
                     ) : (
                       /* Original form for new tickets */
                       <>
-                        {/* User Type and Reason for Visit on same line */}
+                        {/* User Type and Patient Name on same line */}
                         <div className="grid grid-cols-2 gap-6">
                           <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-700">User Type</label>
@@ -1335,38 +1348,23 @@ const ReceptionistPage: React.FC = () => {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Reason for Visit</label>
-                            <Select value={reasonForVisit} onValueChange={setReasonForVisit}>
-                              <SelectTrigger className="border-slate-300 focus:ring-[#0e4480]">
-                                <SelectValue placeholder="Select reason for visit" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {REASON_TYPES.map((reason) => (
-                                  <SelectItem key={reason} value={reason}>
-                                    {reason}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
 
-                        {/* Patient Name field */}
-                        <div className="space-y-2 mt-4">
-                          <label className="text-sm font-medium text-slate-700">Patient Name</label>
-                          <Input
-                            placeholder="Enter patient name"
-                            value={patientName}
-                            onChange={(e) => setPatientName(e.target.value)}
-                            className="border-slate-300 focus:ring-[#0e4480]"
-                          />
+                          {/* Patient Name field */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">Patient Name</label>
+                            <Input
+                              placeholder="Enter patient name"
+                              value={patientName}
+                              onChange={(e) => setPatientName(e.target.value)}
+                              className="border-slate-300 focus:ring-[#0e4480]"
+                            />
+                          </div>
                         </div>
                       </>
                     )}
 
                     {/* Receptionist Note takes full width */}
-                    <div className="space-y-2">
+                    {/* <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700">Receptionist Note</label>
                       <Textarea
                         placeholder="Add any additional notes here..."
@@ -1374,7 +1372,7 @@ const ReceptionistPage: React.FC = () => {
                         onChange={(e) => setReceptionistNote(e.target.value)}
                         className="h-32 border-slate-300 focus:ring-[#0e4480]"
                       />
-                    </div>
+                    </div> */}
                   </div>
                 ) : (
                   <Alert className="bg-blue-50 border-blue-100 text-[#0e4480]">
@@ -1414,8 +1412,7 @@ const ReceptionistPage: React.FC = () => {
                     <Button
                       onClick={() => handleNextStep()}
                       disabled={
-                        !(currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1) &&
-                        (!userType || !reasonForVisit)
+                        !(currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1) && !userType
                       }
                       className="bg-[#0e4480] hover:bg-blue-800 text-white disabled:bg-slate-300"
                     >
@@ -1431,8 +1428,7 @@ const ReceptionistPage: React.FC = () => {
                     <Button
                       onClick={handleClearTicket}
                       disabled={
-                        !(currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1) &&
-                        (!userType || !reasonForVisit)
+                        !(currentTicket.departmentHistory && currentTicket.departmentHistory.length > 1) && !userType
                       }
                       className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-slate-300"
                     >
@@ -1444,47 +1440,57 @@ const ReceptionistPage: React.FC = () => {
               )}
             </Card>
 
-            {/* Held Tickets Section - changed from amber to green */}
-            <Card className="border-none shadow-md overflow-hidden h-full">
-              <CardHeader className="bg-green-600 text-white py-4">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <PauseCircle className="h-5 w-5" />
-                  Held Tickets
-                </CardTitle>
-                <CardDescription className="text-green-100">
-                  {heldTickets.length} ticket{heldTickets.length !== 1 ? "s" : ""} on hold
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6 bg-white overflow-auto max-h-[600px]">
-                {heldTickets.length > 0 ? (
-                  <div className="space-y-4">
-                    {heldTickets.map((ticket) => (
-                      <Card key={ticket._id} className="border-l-4 border-l-green-400 bg-green-50/30 shadow-sm">
-                        <CardContent className="p-4">
-                          <div>
-                            <h3 className="font-semibold mb-1 text-[#0e4480]">{ticket.ticketNo}</h3>
-                            {ticket.reasonforVisit && (
-                              <p className="text-sm text-slate-600 mb-2">{ticket.reasonforVisit}</p>
-                            )}
-                          </div>
-                          {ticket.receptionistNote && (
-                            <div className="mt-3 p-3 bg-white rounded-md text-sm border border-green-100">
-                              <p className="font-medium mb-1 text-slate-700">Notes:</p>
-                              <p className="text-slate-600">{ticket.receptionistNote}</p>
+            {/* Two Column Layout for Held and Insurance Tickets */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Held Tickets Section */}
+              <Card className="border-none shadow-md overflow-hidden">
+                <CardHeader className="bg-green-600 text-white py-4">
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <PauseCircle className="h-5 w-5" />
+                    Held Tickets
+                  </CardTitle>
+                  <CardDescription className="text-green-100">
+                    {heldTickets.length} ticket{heldTickets.length !== 1 ? "s" : ""} on hold
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 bg-white overflow-auto max-h-[600px]">
+                  {heldTickets.length > 0 ? (
+                    <div className="space-y-4">
+                      {heldTickets.map((ticket) => (
+                        <Card key={ticket._id} className="border-l-4 border-l-green-400 bg-green-50/30 shadow-sm">
+                          <CardContent className="p-4">
+                            <div>
+                              <h3 className="font-semibold mb-1 text-[#0e4480]">{ticket.ticketNo}</h3>
+                              {ticket.reasonforVisit && (
+                                <p className="text-sm text-slate-600 mb-2">{ticket.reasonforVisit}</p>
+                              )}
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                    <PauseCircle className="h-12 w-12 mb-4 opacity-30" />
-                    <p>No tickets are currently on hold</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                            {ticket.receptionistNote && (
+                              <div className="mt-3 p-3 bg-white rounded-md text-sm border border-green-100">
+                                <p className="font-medium mb-1 text-slate-700">Notes:</p>
+                                <p className="text-slate-600">{ticket.receptionistNote}</p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                      <PauseCircle className="h-12 w-12 mb-4 opacity-30" />
+                      <p>No tickets are currently on hold</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Insurance Tickets Section - Now using the component */}
+              <InsuranceTicketsSection
+                insuranceTickets={insuranceTickets}
+                departments={departments}
+                onRefresh={async () => { await fetchTickets() }}
+              />
+            </div>
           </div>
 
           <DepartmentSelectionDialog

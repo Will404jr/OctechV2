@@ -59,6 +59,7 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
   const [andBack, setAndBack] = useState(false)
   const [todaysRooms, setTodaysRooms] = useState<Record<string, any[]>>({})
   const [loadingRooms, setLoadingRooms] = useState<Record<string, boolean>>({})
+  const [departmentOrder, setDepartmentOrder] = useState<string[]>([])
 
   const fetchTodaysRooms = async (departmentId: string) => {
     if (todaysRooms[departmentId] || loadingRooms[departmentId]) {
@@ -94,6 +95,7 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
       setAndBack(false)
       setTodaysRooms({})
       setLoadingRooms({})
+      setDepartmentOrder([]) // Add this line
     }
   }, [isOpen])
 
@@ -103,16 +105,19 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
       [departmentId]: checked,
     }))
 
-    // Clear room selection if department is unchecked
-    if (!checked) {
+    // Update order tracking
+    if (checked) {
+      setDepartmentOrder((prev) => [...prev, departmentId])
+      // Fetch today's rooms when department is selected
+      fetchTodaysRooms(departmentId)
+    } else {
+      setDepartmentOrder((prev) => prev.filter((id) => id !== departmentId))
+      // Clear room selection if department is unchecked
       setSelectedRooms((prev) => {
         const newRooms = { ...prev }
         delete newRooms[departmentId]
         return newRooms
       })
-    } else {
-      // Fetch today's rooms when department is selected
-      fetchTodaysRooms(departmentId)
     }
   }
 
@@ -124,13 +129,11 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
   }
 
   const handleSubmit = () => {
-    const selectedDeptIds = Object.keys(selectedDepartments).filter((id) => selectedDepartments[id])
-
-    if (selectedDeptIds.length === 0) {
+    if (departmentOrder.length === 0) {
       return
     }
 
-    let departmentSelections = selectedDeptIds.map((departmentId) => ({
+    let departmentSelections = departmentOrder.map((departmentId) => ({
       departmentId,
       roomId: selectedRooms[departmentId],
     }))
@@ -150,7 +153,7 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
     onClose()
   }
 
-  const selectedCount = Object.values(selectedDepartments).filter(Boolean).length
+  const selectedCount = departmentOrder.length
 
   return (
     <TooltipProvider>
@@ -167,7 +170,7 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
           <div className="space-y-4 py-4">
             {selectedCount > 0 && (
               <div className="bg-blue-50 p-3 rounded-lg">
-                <div className="text-sm text-blue-800">
+                <div className="text-sm text-blue-800 mb-2">
                   Selected {selectedCount} department{selectedCount > 1 ? "s" : ""}
                   {andBack && currentDepartment && (
                     <span className="ml-2">
@@ -177,6 +180,27 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
                     </span>
                   )}
                 </div>
+                {departmentOrder.length > 1 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-blue-600 font-medium mb-1">Processing Order:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {departmentOrder.map((deptId, index) => {
+                        const dept = departments.find((d) => d._id === deptId)
+                        return (
+                          <Badge
+                            key={deptId}
+                            className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1"
+                          >
+                            <span className="bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                              {index + 1}
+                            </span>
+                            {dept?.icon} {dept?.title}
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -184,11 +208,18 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
               {departments.map((department) => (
                 <div key={department._id} className="border rounded-lg p-4">
                   <div className="flex items-center space-x-3 mb-3">
-                    <Checkbox
-                      id={department._id}
-                      checked={selectedDepartments[department._id] || false}
-                      onCheckedChange={(checked) => handleDepartmentToggle(department._id, checked as boolean)}
-                    />
+                    <div className="relative">
+                      <Checkbox
+                        id={department._id}
+                        checked={selectedDepartments[department._id] || false}
+                        onCheckedChange={(checked) => handleDepartmentToggle(department._id, checked as boolean)}
+                      />
+                      {selectedDepartments[department._id] && departmentOrder.length > 1 && (
+                        <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                          {departmentOrder.indexOf(department._id) + 1}
+                        </div>
+                      )}
+                    </div>
                     <label htmlFor={department._id} className="flex items-center gap-2 font-medium cursor-pointer">
                       <span className="text-lg">{department.icon}</span>
                       {department.title}

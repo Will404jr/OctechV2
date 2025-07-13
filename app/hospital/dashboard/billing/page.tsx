@@ -17,13 +17,16 @@ import {
   Building2,
   TicketIcon as Queue,
   Settings,
+  Users,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SessionData } from "@/lib/session"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { CashTicketsSection } from "@/components/hospital/CashTicketsSection"
 import {
   Dialog,
   DialogContent,
@@ -353,7 +356,8 @@ const formatDuration = (seconds: number | undefined): string => {
 }
 
 const BillingPage: React.FC = () => {
-  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [pendingPaymentTickets, setPendingPaymentTickets] = useState<Ticket[]>([])
+  const [cashTickets, setCashTickets] = useState<Ticket[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [session, setSession] = useState<SessionData | null>(null)
@@ -412,13 +416,40 @@ const BillingPage: React.FC = () => {
         (a: Ticket, b: Ticket) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       )
 
-      setTickets(pendingPaymentTickets)
+      setPendingPaymentTickets(pendingPaymentTickets)
       return pendingPaymentTickets
     } catch (error) {
       console.error("Error fetching pending payment tickets:", error)
       toast({
         title: "Error",
         description: "Failed to fetch pending payment tickets",
+        variant: "destructive",
+      })
+      return []
+    }
+  }, [toast])
+
+  // Fetch all cash tickets
+  const fetchCashTickets = useCallback(async () => {
+    try {
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split("T")[0]
+
+      // Fetch cash tickets for today
+      const response = await fetch(`/api/hospital/ticket?userType=Cash&date=${today}&completed=false`)
+      if (!response.ok) throw new Error("Failed to fetch cash tickets")
+      const cashData = await response.json()
+
+      // Filter to ensure only Cash userType tickets are included
+      const filteredCashTickets = cashData.filter((ticket: Ticket) => ticket.userType === "Cash")
+      setCashTickets(filteredCashTickets)
+
+      return filteredCashTickets
+    } catch (error) {
+      console.error("Error fetching cash tickets:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch cash tickets",
         variant: "destructive",
       })
       return []
@@ -442,6 +473,11 @@ const BillingPage: React.FC = () => {
     }
   }, [toast])
 
+  // Fetch all data
+  const fetchAllData = useCallback(async () => {
+    await Promise.all([fetchPendingPaymentTickets(), fetchCashTickets(), fetchDepartments()])
+  }, [fetchPendingPaymentTickets, fetchCashTickets, fetchDepartments])
+
   // Clear queue payment for a ticket
   const handleClearQueuePayment = async (ticketId: string) => {
     if (processingTickets.has(ticketId)) return
@@ -449,7 +485,7 @@ const BillingPage: React.FC = () => {
     setProcessingTickets((prev) => new Set(prev).add(ticketId))
 
     try {
-      const ticket = tickets.find((t) => t._id === ticketId)
+      const ticket = pendingPaymentTickets.find((t) => t._id === ticketId)
       if (!ticket) throw new Error("Ticket not found")
 
       const response = await fetch(`/api/hospital/ticket/${ticketId}/clear-queue-payment`, {
@@ -470,7 +506,7 @@ const BillingPage: React.FC = () => {
       })
 
       // Refresh the tickets list
-      await fetchPendingPaymentTickets()
+      await fetchAllData()
     } catch (error: any) {
       console.error("Error clearing queue payment:", error)
       toast({
@@ -518,7 +554,7 @@ const BillingPage: React.FC = () => {
 
       // Close dialog and refresh tickets
       setSelectiveDialog({ isOpen: false, ticket: null })
-      await fetchPendingPaymentTickets()
+      await fetchAllData()
     } catch (error: any) {
       console.error("Error clearing selective payment:", error)
       toast({
@@ -542,7 +578,7 @@ const BillingPage: React.FC = () => {
     setProcessingTickets((prev) => new Set(prev).add(ticketId))
 
     try {
-      const ticket = tickets.find((t) => t._id === ticketId)
+      const ticket = pendingPaymentTickets.find((t) => t._id === ticketId)
       if (!ticket) throw new Error("Ticket not found")
 
       const response = await fetch(`/api/hospital/ticket/${ticketId}/clear-payment`, {
@@ -562,7 +598,7 @@ const BillingPage: React.FC = () => {
       })
 
       // Refresh the tickets list
-      await fetchPendingPaymentTickets()
+      await fetchAllData()
     } catch (error: any) {
       console.error("Error clearing individual payment:", error)
       toast({
@@ -593,7 +629,7 @@ const BillingPage: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
-      await Promise.all([fetchPendingPaymentTickets(), fetchDepartments()])
+      await fetchAllData()
       setIsLoading(false)
     }
 
@@ -601,13 +637,13 @@ const BillingPage: React.FC = () => {
 
     // Set up polling interval to refresh tickets every 5 seconds
     const pollingInterval = setInterval(async () => {
-      console.log("Auto-refreshing pending payment tickets (5s interval)")
-      await fetchPendingPaymentTickets()
+      console.log("Auto-refreshing billing tickets (5s interval)")
+      await fetchAllData()
     }, 5000)
 
     // Clean up interval on component unmount
     return () => clearInterval(pollingInterval)
-  }, [fetchPendingPaymentTickets, fetchDepartments])
+  }, [fetchAllData])
 
   // Fetch session data
   useEffect(() => {
@@ -624,11 +660,11 @@ const BillingPage: React.FC = () => {
 
   const refreshTickets = async () => {
     setIsLoading(true)
-    await fetchPendingPaymentTickets()
+    await fetchAllData()
     setIsLoading(false)
     toast({
       title: "Refreshed",
-      description: "Pending payment tickets have been updated",
+      description: "Billing tickets have been updated",
     })
   }
 
@@ -637,7 +673,7 @@ const BillingPage: React.FC = () => {
       <div className="container mx-auto p-4 flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-2">
           <QueueSpinner size="lg" color="bg-[#0e4480]" dotCount={12} />
-          <p className="text-slate-500">Loading pending payments...</p>
+          <p className="text-slate-500">Loading billing data...</p>
         </div>
       </div>
     )
@@ -666,13 +702,17 @@ const BillingPage: React.FC = () => {
                   Billing & Payments
                 </h1>
                 <p className="text-slate-500 text-sm sm:text-base">
-                  Clear payments for cash patients before they can be served
+                  Manage cash patient payments and ticket processing
                 </p>
               </div>
               <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                 <div className="flex items-center gap-2 bg-[#0e4480]/10 px-3 py-2 rounded-full flex-1 sm:flex-none">
                   <DollarSign className="h-4 w-4 text-[#0e4480]" />
-                  <span className="font-medium text-[#0e4480] text-sm">{tickets.length} pending</span>
+                  <span className="font-medium text-[#0e4480] text-sm">{pendingPaymentTickets.length} pending</span>
+                </div>
+                <div className="flex items-center gap-2 bg-green-100 px-3 py-2 rounded-full flex-1 sm:flex-none">
+                  <Users className="h-4 w-4 text-green-600" />
+                  <span className="font-medium text-green-600 text-sm">{cashTickets.length} cash</span>
                 </div>
                 <Button
                   variant="outline"
@@ -687,104 +727,168 @@ const BillingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Pending Payments List */}
+          {/* Tabs Section */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-[#0e4480]" />
-                Pending Payment Clearance
-              </h2>
-              <p className="text-slate-500 text-sm mt-1">
-                Cash patients waiting for payment clearance before they can be served
-              </p>
-            </div>
+            <Tabs defaultValue="pending" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 bg-slate-100 m-4 rounded-lg">
+                <TabsTrigger value="pending" className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Pending Payment Clearance
+                  {pendingPaymentTickets.length > 0 && (
+                    <Badge className="bg-amber-100 text-amber-800 border-amber-200 ml-1">
+                      {pendingPaymentTickets.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="cash" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Cash Tickets
+                  {cashTickets.length > 0 && (
+                    <Badge className="bg-green-100 text-green-800 border-green-200 ml-1">{cashTickets.length}</Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
 
-            <div className="p-4 sm:p-6">
-              {tickets.length > 0 ? (
-                <div className="space-y-4">
-                  {tickets.map((ticket) => {
-                    const isProcessing = processingTickets.has(ticket._id)
-                    const hasQueue = ticket.departmentQueue && ticket.departmentQueue.length > 0
+              <TabsContent value="pending" className="p-4 sm:p-6 pt-0">
+                {/* <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-[#0e4480]" />
+                    Pending Payment Clearance
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">
+                    Cash patients waiting for payment clearance before they can be served
+                  </p>
+                </div> */}
 
-                    // Count pending departments
-                    let pendingCount = 0
-                    if (hasQueue) {
-                      pendingCount = ticket.departmentQueue?.filter(
-                        (queueItem) => !queueItem.processed && queueItem.clearPayment !== "Cleared",
-                      ).length || 0
-                    } else {
-                      pendingCount =
-                        ticket.departmentHistory?.filter(
-                          (history) =>
-                            !history.completed &&
-                            history.department !== "Reception" &&
-                            (history.cashCleared === null || history.cashCleared === undefined),
-                        ).length || 0
-                    }
+                {pendingPaymentTickets.length > 0 ? (
+                  <div className="space-y-4">
+                    {pendingPaymentTickets.map((ticket) => {
+                      const isProcessing = processingTickets.has(ticket._id)
+                      const hasQueue = ticket.departmentQueue && ticket.departmentQueue.length > 0
 
-                    const hasMultipleDepartments = pendingCount > 1
+                      // Count pending departments
+                      let pendingCount = 0
+                      if (hasQueue) {
+                        pendingCount =
+                          ticket.departmentQueue?.filter(
+                            (queueItem) => !queueItem.processed && queueItem.clearPayment !== "Cleared",
+                          ).length || 0
+                      } else {
+                        pendingCount =
+                          ticket.departmentHistory?.filter(
+                            (history) =>
+                              !history.completed &&
+                              history.department !== "Reception" &&
+                              (history.cashCleared === null || history.cashCleared === undefined),
+                          ).length || 0
+                      }
 
-                    return (
-                      <Card
-                        key={ticket._id}
-                        className="border-l-4 border-l-amber-400 bg-amber-50/30 hover:shadow-lg transition-all duration-200"
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex flex-col gap-4">
-                            {/* Header */}
-                            <div className="flex items-center gap-3 mb-3">
-                              <Badge className="bg-[#0e4480] text-white px-3 py-1 text-base font-mono">
-                                {ticket.ticketNo}
-                              </Badge>
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
-                                Cash Payment
-                              </Badge>
-                              {ticket.emergency && (
-                                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1">
-                                  <AlertCircle className="h-3 w-3" />
-                                  EMERGENCY
+                      const hasMultipleDepartments = pendingCount > 1
+
+                      return (
+                        <Card
+                          key={ticket._id}
+                          className="border-l-4 border-l-amber-400 bg-amber-50/30 hover:shadow-lg transition-all duration-200"
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex flex-col gap-4">
+                              {/* Header */}
+                              <div className="flex items-center gap-3 mb-3">
+                                <Badge className="bg-[#0e4480] text-white px-3 py-1 text-base font-mono">
+                                  {ticket.ticketNo}
                                 </Badge>
-                              )}
-                              {hasQueue && (
-                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
-                                  <Queue className="h-3 w-3" />
-                                  Queue ({pendingCount} pending)
+                                <Badge className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
+                                  <DollarSign className="h-3 w-3" />
+                                  Cash Payment
                                 </Badge>
-                              )}
-                              {!hasQueue && hasMultipleDepartments && (
-                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
-                                  <Building2 className="h-3 w-3" />
-                                  {pendingCount} Departments
-                                </Badge>
-                              )}
-                            </div>
-
-                            {/* Patient Info */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                              <div>
-                                <p className="text-xs text-slate-500 font-medium">Patient Name</p>
-                                <p className="font-medium">{ticket.patientName || "Not provided"}</p>
+                                {ticket.emergency && (
+                                  <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex items-center gap-1">
+                                    <AlertCircle className="h-3 w-3" />
+                                    EMERGENCY
+                                  </Badge>
+                                )}
+                                {hasQueue && (
+                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
+                                    <Queue className="h-3 w-3" />
+                                    Queue ({pendingCount} pending)
+                                  </Badge>
+                                )}
+                                {!hasQueue && hasMultipleDepartments && (
+                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 flex items-center gap-1">
+                                    <Building2 className="h-3 w-3" />
+                                    {pendingCount} Departments
+                                  </Badge>
+                                )}
                               </div>
-                              <div>
-                                <p className="text-xs text-slate-500 font-medium">Reason for Visit</p>
-                                <p className="text-sm">{ticket.reasonforVisit || "Not provided"}</p>
+
+                              {/* Patient Info */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                <div>
+                                  <p className="text-xs text-slate-500 font-medium">Patient Name</p>
+                                  <p className="font-medium">{ticket.patientName || "Not provided"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-500 font-medium">Reason for Visit</p>
+                                  <p className="text-sm">{ticket.reasonforVisit || "Not provided"}</p>
+                                </div>
                               </div>
-                            </div>
 
-                            {/* Pending Departments Summary */}
-                            <div className="mb-3">
-                              <p className="text-xs text-slate-500 font-medium mb-1">
-                                {hasQueue ? "Queue Status" : `Pending Payment Clearance (${pendingCount})`}
-                              </p>
-                              <PendingDepartmentsList ticket={ticket} />
-                            </div>
+                              {/* Pending Departments Summary */}
+                              <div className="mb-3">
+                                <p className="text-xs text-slate-500 font-medium mb-1">
+                                  {hasQueue ? "Queue Status" : `Pending Payment Clearance (${pendingCount})`}
+                                </p>
+                                <PendingDepartmentsList ticket={ticket} />
+                              </div>
 
-                            {/* Action Buttons */}
-                            <div className="flex flex-col gap-2 pt-2 border-t border-amber-200">
-                              {hasMultipleDepartments ? (
-                                <div className="flex flex-col sm:flex-row gap-2">
-                                  {/* Clear All Button */}
+                              {/* Action Buttons */}
+                              <div className="flex flex-col gap-2 pt-2 border-t border-amber-200">
+                                {hasMultipleDepartments ? (
+                                  <div className="flex flex-col sm:flex-row gap-2">
+                                    {/* Clear All Button */}
+                                    <Button
+                                      onClick={() =>
+                                        hasQueue
+                                          ? handleClearQueuePayment(ticket._id)
+                                          : handleClearIndividualPayment(
+                                              ticket._id,
+                                              ticket.departmentHistory?.find(
+                                                (h) =>
+                                                  !h.completed &&
+                                                  h.department !== "Reception" &&
+                                                  (h.cashCleared === null || h.cashCleared === undefined),
+                                              )?.department || "",
+                                            )
+                                      }
+                                      disabled={isProcessing}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1"
+                                    >
+                                      {isProcessing ? (
+                                        <>
+                                          <QueueSpinner size="sm" color="bg-white" dotCount={3} />
+                                          <span className="ml-2">Processing...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                                          Clear All ({pendingCount})
+                                        </>
+                                      )}
+                                    </Button>
+
+                                    {/* Selective Clear Button */}
+                                    <Button
+                                      onClick={() => openSelectiveDialog(ticket)}
+                                      disabled={isProcessing}
+                                      variant="outline"
+                                      className="border-blue-300 text-blue-600 hover:bg-blue-50 flex-1 sm:flex-none"
+                                    >
+                                      <Settings className="h-4 w-4 mr-2" />
+                                      Select Departments
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  // Single department - just show clear button
                                   <Button
                                     onClick={() =>
                                       hasQueue
@@ -800,7 +904,7 @@ const BillingPage: React.FC = () => {
                                           )
                                     }
                                     disabled={isProcessing}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
                                   >
                                     {isProcessing ? (
                                       <>
@@ -810,79 +914,43 @@ const BillingPage: React.FC = () => {
                                     ) : (
                                       <>
                                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                                        Clear All ({pendingCount})
+                                        Clear Payment
                                       </>
                                     )}
                                   </Button>
+                                )}
+                              </div>
 
-                                  {/* Selective Clear Button */}
-                                  <Button
-                                    onClick={() => openSelectiveDialog(ticket)}
-                                    disabled={isProcessing}
-                                    variant="outline"
-                                    className="border-blue-300 text-blue-600 hover:bg-blue-50 flex-1 sm:flex-none"
-                                  >
-                                    <Settings className="h-4 w-4 mr-2" />
-                                    Select Departments
-                                  </Button>
-                                </div>
-                              ) : (
-                                // Single department - just show clear button
-                                <Button
-                                  onClick={() =>
-                                    hasQueue
-                                      ? handleClearQueuePayment(ticket._id)
-                                      : handleClearIndividualPayment(
-                                          ticket._id,
-                                          ticket.departmentHistory?.find(
-                                            (h) =>
-                                              !h.completed &&
-                                              h.department !== "Reception" &&
-                                              (h.cashCleared === null || h.cashCleared === undefined),
-                                          )?.department || "",
-                                        )
-                                  }
-                                  disabled={isProcessing}
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                >
-                                  {isProcessing ? (
-                                    <>
-                                      <QueueSpinner size="sm" color="bg-white" dotCount={3} />
-                                      <span className="ml-2">Processing...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                                      Clear Payment
-                                    </>
+                              {/* Waiting Time */}
+                              <div className="flex items-center gap-2 text-sm text-slate-600 pt-2">
+                                <Clock className="h-4 w-4" />
+                                <span>
+                                  Total waiting time:{" "}
+                                  {formatDuration(
+                                    Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000),
                                   )}
-                                </Button>
-                              )}
+                                </span>
+                              </div>
                             </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <Alert className="bg-slate-50 border-slate-100">
+                    <CheckCircle2 className="h-4 w-4 text-slate-600" />
+                    <AlertDescription className="text-slate-700">
+                      No cash patients are currently waiting for payment clearance.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </TabsContent>
 
-                            {/* Waiting Time */}
-                            <div className="flex items-center gap-2 text-sm text-slate-600 pt-2">
-                              <Clock className="h-4 w-4" />
-                              <span>
-                                Total waiting time:{" "}
-                                {formatDuration(Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000))}
-                              </span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-              ) : (
-                <Alert className="bg-slate-50 border-slate-100">
-                  <CheckCircle2 className="h-4 w-4 text-slate-600" />
-                  <AlertDescription className="text-slate-700">
-                    No cash patients are currently waiting for payment clearance.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
+              <TabsContent value="cash" className="p-4 sm:p-6 pt-0">
+                <CashTicketsSection cashTickets={cashTickets} departments={departments} onRefresh={fetchAllData} />
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
 
