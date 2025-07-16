@@ -31,6 +31,8 @@ import {
   DollarSign,
   Route,
   DoorOpen,
+  Ticket,
+  TicketIcon as Queue,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
@@ -38,9 +40,11 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SessionData } from "@/lib/session"
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import QueueDisplay from "@/components/hospital/QueueDisplay"
 
 interface Room {
   _id: string
@@ -86,7 +90,7 @@ interface DepartmentQueueEntry {
   order: number
 }
 
-interface Ticket {
+interface TicketType {
   _id: string
   ticketNo: string
   patientName?: string
@@ -271,7 +275,7 @@ const RealTimeDuration = ({
 }
 
 // Component to display ticket status
-const TicketStatusBadge = ({ ticket }: { ticket: Ticket }) => {
+const TicketStatusBadge = ({ ticket }: { ticket: TicketType }) => {
   // Check for pending payment (cash tickets that haven't been cleared)
   if (ticket.userType === "Cash" && !ticket.completed && !ticket.noShow) {
     const currentDept = ticket.departmentHistory?.find(
@@ -348,7 +352,7 @@ const TicketStatusBadge = ({ ticket }: { ticket: Ticket }) => {
 }
 
 // Component to display current department
-const CurrentDepartmentBadge = ({ ticket }: { ticket: Ticket }) => {
+const CurrentDepartmentBadge = ({ ticket }: { ticket: TicketType }) => {
   // Find the current active department (not completed)
   const currentDept = ticket.departmentHistory?.find((history) => !history.completed)
 
@@ -386,7 +390,7 @@ const CurrentDepartmentBadge = ({ ticket }: { ticket: Ticket }) => {
 }
 
 // Component to display department queue
-const DepartmentQueueBadge = ({ ticket }: { ticket: Ticket }) => {
+const DepartmentQueueBadge = ({ ticket }: { ticket: TicketType }) => {
   if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
     return null
   }
@@ -427,7 +431,7 @@ const DepartmentQueueBadge = ({ ticket }: { ticket: Ticket }) => {
 }
 
 // Quick Stats Component
-const QuickStats = ({ tickets }: { tickets: Ticket[] }) => {
+const QuickStats = ({ tickets }: { tickets: TicketType[] }) => {
   const stats = {
     total: tickets.length,
     waiting: tickets.filter(
@@ -772,15 +776,15 @@ const MobileFiltersSheet = ({
 }
 
 const TicketsPage: React.FC = () => {
-  const [tickets, setTickets] = useState<Ticket[]>([])
-  const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([])
+  const [tickets, setTickets] = useState<TicketType[]>([])
+  const [filteredTickets, setFilteredTickets] = useState<TicketType[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [session, setSession] = useState<SessionData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterDepartment, setFilterDepartment] = useState<string>("all")
   const [activeTab, setActiveTab] = useState<string>("active")
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+  const [selectedTicket, setSelectedTicket] = useState<TicketType | null>(null)
   const [showTicketDetailsDialog, setShowTicketDetailsDialog] = useState(false)
   const [showNextStepDialog, setShowNextStepDialog] = useState(false)
   const [departmentNote, setDepartmentNote] = useState("")
@@ -811,8 +815,11 @@ const TicketsPage: React.FC = () => {
   const [todaysRooms, setTodaysRooms] = useState<Record<string, Room[]>>({})
   const [selectedRoom, setSelectedRoom] = useState<string>("all")
 
+  // Tab state
+  const [activeMainTab, setActiveMainTab] = useState("tickets")
+
   // Helper function to check if ticket is at the last department in queue
-  const isAtLastDepartmentInQueue = (ticket: Ticket): boolean => {
+  const isAtLastDepartmentInQueue = (ticket: TicketType): boolean => {
     if (!ticket.departmentQueue || ticket.departmentQueue.length === 0) {
       return false
     }
@@ -1091,7 +1098,7 @@ const TicketsPage: React.FC = () => {
     }))
   }
 
-  const handleViewTicketDetails = (ticket: Ticket) => {
+  const handleViewTicketDetails = (ticket: TicketType) => {
     setSelectedTicket(ticket)
     setShowTicketDetailsDialog(true)
     setDepartmentNote(ticket.departmentNote || "")
@@ -1529,7 +1536,7 @@ const TicketsPage: React.FC = () => {
     }
   }
 
-  const handleServeTicket = async (ticket: Ticket) => {
+  const handleServeTicket = async (ticket: TicketType) => {
     // Find the current department for this ticket (one that's not completed and has no roomId)
     const currentDept = ticket.departmentHistory?.find((history) => !history.completed && !history.roomId)
 
@@ -1704,7 +1711,9 @@ const TicketsPage: React.FC = () => {
               <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                 <div className="flex items-center gap-2 bg-[#0e4480]/10 px-3 py-2 rounded-full flex-1 sm:flex-none">
                   <Users className="h-4 w-4 text-[#0e4480]" />
-                  <span className="font-medium text-[#0e4480] text-sm">{filteredTickets.length} tickets</span>
+                  <span className="font-medium text-[#0e4480] text-sm">
+                    {activeMainTab === "tickets" ? filteredTickets.length : "All"} {activeMainTab}
+                  </span>
                 </div>
                 <Button
                   variant="outline"
@@ -1719,257 +1728,281 @@ const TicketsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <QuickStats tickets={tickets} />
-
-          {/* Search and Filter Section */}
-          <div className="bg-white/80 backdrop-blur-sm p-4 sm:p-6 rounded-2xl shadow-lg border border-white/20">
-            <div className="flex flex-col lg:flex-row gap-4">
-              {/* Search - Full width on mobile */}
-              <div className="relative flex-1 lg:flex-2">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                <Input
-                  placeholder="Search by ticket number, patient name, or reason..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50"
-                />
-                {searchQuery && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6"
-                    onClick={() => setSearchQuery("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-
-              {/* Desktop Filters */}
-              <div className="hidden lg:flex gap-4">
-                <div className="relative min-w-[200px]">
-                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                    <SelectTrigger className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50">
-                      <SelectValue placeholder="Filter by department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Departments</SelectItem>
-                      {departments.map((dept) => (
-                        <SelectItem key={dept._id} value={dept.title}>
-                          {dept.icon} {dept.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Room Filter */}
-                <Select value={selectedRoom} onValueChange={setSelectedRoom} disabled={filterDepartment === "all"}>
-                  <SelectTrigger>
-                    <div className="flex items-center gap-2">
-                      <DoorOpen className="h-4 w-4 text-slate-500" />
-                      <SelectValue placeholder="All Rooms" />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Rooms</SelectItem>
-                    {getCurrentDepartmentRooms().map((room) => (
-                      <SelectItem key={room._id} value={room._id}>
-                        <div className="flex items-center justify-between w-full">
-                          <span>Room {room.roomNumber}</span>
-                          <span className="text-sm text-slate-500 ml-2">
-                            {room.staff.firstName} {room.staff.lastName}
-                          </span>
-                          <Badge variant="secondary" className="ml-2 text-xs bg-blue-100 text-blue-800">
-                            Created: {new Date(room.createdAt).toLocaleDateString()}
-                          </Badge>
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {getCurrentDepartmentRooms().length === 0 && filterDepartment !== "all" && (
-                      <SelectItem value="no-rooms" disabled>
-                        No rooms created on {new Date(selectedDate).toLocaleDateString()}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-
-                {/* Status Category Tabs - Now in filter section */}
-                <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 min-w-[320px]">
-                  <Button
-                    variant={activeTab === "active" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setActiveTab("active")}
-                    className="text-xs px-3"
-                  >
-                    Active
-                  </Button>
-                  <Button
-                    variant={activeTab === "held" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setActiveTab("held")}
-                    className="text-xs px-3"
-                  >
-                    On Hold
-                  </Button>
-                  <Button
-                    variant={activeTab === "completed" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setActiveTab("completed")}
-                    className="text-xs px-3"
-                  >
-                    Completed
-                  </Button>
-                  <Button
-                    variant={activeTab === "all" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setActiveTab("all")}
-                    className="text-xs px-3"
-                  >
-                    All
-                  </Button>
-                </div>
-              </div>
-
-              {/* Mobile/Tablet Controls */}
-              <div className="flex items-center gap-2 lg:hidden">
-                <MobileFiltersSheet
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  filterDepartment={filterDepartment}
-                  setFilterDepartment={setFilterDepartment}
-                  activeTab={activeTab}
-                  setActiveTab={setActiveTab}
-                  departments={departments}
-                  sortBy={sortBy}
-                  setSortBy={setSortBy}
-                  sortOrder={sortOrder}
-                  setSortOrder={setSortOrder}
-                  filterStatus={filterStatus}
-                  setFilterStatus={setFilterStatus}
-                  selectedDepartment={filterDepartment}
-                  selectedRoom={selectedRoom}
-                  setSelectedRoom={setSelectedRoom}
-                  getCurrentDepartmentRooms={getCurrentDepartmentRooms}
-                />
-              </div>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
-                <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                  className="h-8 w-8 p-0"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className="h-8 w-8 p-0"
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Tickets List */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-slate-200">
-              {/* Status Filter Navbar - Now vertical like tabs */}
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-800">Tickets</h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant={filterStatus === "all" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilterStatus("all")}
-                  className="text-xs px-3"
-                >
-                  All Statuses
-                </Button>
-                <Button
-                  variant={filterStatus === "waiting" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilterStatus("waiting")}
-                  className="text-xs px-3"
-                >
-                  <Timer className="h-3 w-3 mr-1" />
-                  Waiting
-                </Button>
-                <Button
-                  variant={filterStatus === "serving" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilterStatus("serving")}
-                  className="text-xs px-3"
-                >
-                  <UserCheck className="h-3 w-3 mr-1" />
-                  Being Served
-                </Button>
-                <Button
-                  variant={filterStatus === "held" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilterStatus("held")}
-                  className="text-xs px-3"
-                >
-                  <PauseCircle className="h-3 w-3 mr-1" />
-                  On Hold
-                </Button>
-                <Button
-                  variant={filterStatus === "completed" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilterStatus("completed")}
-                  className="text-xs px-3"
-                >
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Completed
-                </Button>
-                <Button
-                  variant={filterStatus === "noshow" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilterStatus("noshow")}
-                  className="text-xs px-3"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  No Show
-                </Button>
-              </div>
+          {/* Main Tabs */}
+          <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
+            <div className="bg-white/80 backdrop-blur-sm p-4 sm:p-6 rounded-2xl shadow-lg border border-white/20">
+              <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto">
+                <TabsTrigger value="tickets" className="flex items-center gap-2">
+                  <Ticket className="h-4 w-4" />
+                  Tickets
+                </TabsTrigger>
+                <TabsTrigger value="queues" className="flex items-center gap-2">
+                  <Queue className="h-4 w-4" />
+                  Queues
+                </TabsTrigger>
+              </TabsList>
             </div>
 
-            <div className="p-4 sm:p-6">
-              {filteredTickets.length > 0 ? (
-                <div
-                  className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"}
-                >
-                  {filteredTickets.map((ticket) => (
-                    <TicketCard
-                      key={ticket._id}
-                      ticket={ticket}
-                      isExpanded={!!expandedTickets[ticket._id]}
-                      onToggleExpand={() => toggleTicketExpansion(ticket._id)}
-                      onViewDetails={() => handleViewTicketDetails(ticket)}
-                      onUnhold={() => handleUnholdTicket(ticket._id)}
-                      onServe={() => handleServeTicket(ticket)}
-                      viewMode={viewMode}
+            <TabsContent value="tickets" className="space-y-6">
+              {/* Quick Stats */}
+              <QuickStats tickets={tickets} />
+
+              {/* Search and Filter Section */}
+              <div className="bg-white/80 backdrop-blur-sm p-4 sm:p-6 rounded-2xl shadow-lg border border-white/20">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  {/* Search - Full width on mobile */}
+                  <div className="relative flex-1 lg:flex-2">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                    <Input
+                      placeholder="Search by ticket number, patient name, or reason..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50"
                     />
-                  ))}
+                    {searchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Desktop Filters */}
+                  <div className="hidden lg:flex gap-4">
+                    <div className="relative min-w-[200px]">
+                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                      <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                        <SelectTrigger className="pl-10 border-slate-300 focus:ring-[#0e4480] bg-white/50">
+                          <SelectValue placeholder="Filter by department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Departments</SelectItem>
+                          {departments.map((dept) => (
+                            <SelectItem key={dept._id} value={dept.title}>
+                              {dept.icon} {dept.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Room Filter */}
+                    <Select value={selectedRoom} onValueChange={setSelectedRoom} disabled={filterDepartment === "all"}>
+                      <SelectTrigger>
+                        <div className="flex items-center gap-2">
+                          <DoorOpen className="h-4 w-4 text-slate-500" />
+                          <SelectValue placeholder="All Rooms" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Rooms</SelectItem>
+                        {getCurrentDepartmentRooms().map((room) => (
+                          <SelectItem key={room._id} value={room._id}>
+                            <div className="flex items-center justify-between w-full">
+                              <span>Room {room.roomNumber}</span>
+                              <span className="text-sm text-slate-500 ml-2">
+                                {room.staff.firstName} {room.staff.lastName}
+                              </span>
+                              <Badge variant="secondary" className="ml-2 text-xs bg-blue-100 text-blue-800">
+                                Created: {new Date(room.createdAt).toLocaleDateString()}
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))}
+                        {getCurrentDepartmentRooms().length === 0 && filterDepartment !== "all" && (
+                          <SelectItem value="no-rooms" disabled>
+                            No rooms created on {new Date(selectedDate).toLocaleDateString()}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Status Category Tabs - Now in filter section */}
+                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 min-w-[320px]">
+                      <Button
+                        variant={activeTab === "active" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setActiveTab("active")}
+                        className="text-xs px-3"
+                      >
+                        Active
+                      </Button>
+                      <Button
+                        variant={activeTab === "held" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setActiveTab("held")}
+                        className="text-xs px-3"
+                      >
+                        On Hold
+                      </Button>
+                      <Button
+                        variant={activeTab === "completed" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setActiveTab("completed")}
+                        className="text-xs px-3"
+                      >
+                        Completed
+                      </Button>
+                      <Button
+                        variant={activeTab === "all" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setActiveTab("all")}
+                        className="text-xs px-3"
+                      >
+                        All
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Mobile/Tablet Controls */}
+                  <div className="flex items-center gap-2 lg:hidden">
+                    <MobileFiltersSheet
+                      searchQuery={searchQuery}
+                      setSearchQuery={setSearchQuery}
+                      filterDepartment={filterDepartment}
+                      setFilterDepartment={setFilterDepartment}
+                      activeTab={activeTab}
+                      setActiveTab={setActiveTab}
+                      departments={departments}
+                      sortBy={sortBy}
+                      setSortBy={setSortBy}
+                      sortOrder={sortOrder}
+                      setSortOrder={setSortOrder}
+                      filterStatus={filterStatus}
+                      setFilterStatus={setFilterStatus}
+                      selectedDepartment={filterDepartment}
+                      selectedRoom={selectedRoom}
+                      setSelectedRoom={setSelectedRoom}
+                      getCurrentDepartmentRooms={getCurrentDepartmentRooms}
+                    />
+                  </div>
+
+                  {/* View Mode Toggle */}
+                  <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                    <Button
+                      variant={viewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("list")}
+                      className="h-8 w-8 p-0"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === "grid" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("grid")}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Grid3X3 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              ) : (
-                <Alert className="bg-slate-50 border-slate-100">
-                  <AlertCircle className="h-4 w-4 text-slate-600" />
-                  <AlertDescription className="text-slate-700">
-                    No tickets found matching your filters.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </div>
+              </div>
+
+              {/* Tickets List */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+                <div className="p-4 sm:p-6 border-b border-slate-200">
+                  {/* Status Filter Navbar - Now vertical like tabs */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-slate-800">Tickets</h2>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant={filterStatus === "all" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilterStatus("all")}
+                      className="text-xs px-3"
+                    >
+                      All Statuses
+                    </Button>
+                    <Button
+                      variant={filterStatus === "waiting" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilterStatus("waiting")}
+                      className="text-xs px-3"
+                    >
+                      <Timer className="h-3 w-3 mr-1" />
+                      Waiting
+                    </Button>
+                    <Button
+                      variant={filterStatus === "serving" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilterStatus("serving")}
+                      className="text-xs px-3"
+                    >
+                      <UserCheck className="h-3 w-3 mr-1" />
+                      Being Served
+                    </Button>
+                    <Button
+                      variant={filterStatus === "held" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilterStatus("held")}
+                      className="text-xs px-3"
+                    >
+                      <PauseCircle className="h-3 w-3 mr-1" />
+                      On Hold
+                    </Button>
+                    <Button
+                      variant={filterStatus === "completed" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilterStatus("completed")}
+                      className="text-xs px-3"
+                    >
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Completed
+                    </Button>
+                    <Button
+                      variant={filterStatus === "noshow" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilterStatus("noshow")}
+                      className="text-xs px-3"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      No Show
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-4 sm:p-6">
+                  {filteredTickets.length > 0 ? (
+                    <div
+                      className={
+                        viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-4"
+                      }
+                    >
+                      {filteredTickets.map((ticket) => (
+                        <TicketCard
+                          key={ticket._id}
+                          ticket={ticket}
+                          isExpanded={!!expandedTickets[ticket._id]}
+                          onToggleExpand={() => toggleTicketExpansion(ticket._id)}
+                          onViewDetails={() => handleViewTicketDetails(ticket)}
+                          onUnhold={() => handleUnholdTicket(ticket._id)}
+                          onServe={() => handleServeTicket(ticket)}
+                          viewMode={viewMode}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <Alert className="bg-slate-50 border-slate-100">
+                      <AlertCircle className="h-4 w-4 text-slate-600" />
+                      <AlertDescription className="text-slate-700">
+                        No tickets found matching your filters.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="queues" className="space-y-6">
+              <QueueDisplay />
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Ticket Details Dialog */}
@@ -2583,7 +2616,7 @@ const TicketsPage: React.FC = () => {
 }
 
 const TicketCard: React.FC<{
-  ticket: Ticket
+  ticket: TicketType
   isExpanded: boolean
   onToggleExpand: () => void
   onViewDetails: () => void
@@ -2660,11 +2693,13 @@ const TicketCard: React.FC<{
 
             {/* Expandable Content */}
             {isExpanded && (
-              <div className="space-y-3 pt-3 border-t border-slate-200">
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Reason for Visit</p>
-                  <p className="text-sm">{ticket.reasonforVisit || "Not provided"}</p>
-                </div>
+              <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+                {ticket.reasonforVisit && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Reason for Visit</p>
+                    <p className="text-sm">{ticket.reasonforVisit}</p>
+                  </div>
+                )}
 
                 {ticket.receptionistNote && (
                   <div>
@@ -2673,11 +2708,21 @@ const TicketCard: React.FC<{
                   </div>
                 )}
 
-                {/* Time Information */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {ticket.departmentNote && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Department Note</p>
+                    <p className="text-sm p-2 bg-slate-50 rounded-md">{ticket.departmentNote}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Created</p>
+                    <p>{new Date(ticket.createdAt).toLocaleString()}</p>
+                  </div>
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Total Time</p>
-                    <p className="font-medium">
+                    <p>
                       {ticket.completed ? (
                         formatDuration(ticket.totalDuration)
                       ) : (
@@ -2689,127 +2734,45 @@ const TicketCard: React.FC<{
                       )}
                     </p>
                   </div>
-
-                  {/* Current department processing time */}
-                  {currentDept && currentDept.startedAt && (
-                    <div>
-                      <p className="text-xs text-slate-500 font-medium">Processing Time</p>
-                      <p className="font-medium">
-                        <RealTimeDuration
-                          startTime={currentDept.startedAt}
-                          endTime={currentDept.completedAt}
-                          isActive={!currentDept.completed}
-                        />
-                      </p>
-                    </div>
-                  )}
                 </div>
-
-                {/* Department History Summary */}
-                {ticket.departmentHistory && ticket.departmentHistory.length > 0 && (
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium mb-2">Department Journey</p>
-                    <div className="flex flex-wrap gap-1">
-                      {ticket.departmentHistory.map((history, index) => (
-                        <Badge
-                          key={index}
-                          className={`text-xs ${
-                            history.completed
-                              ? "bg-green-100 text-green-800 border-green-200"
-                              : "bg-blue-100 text-blue-800 border-blue-200"
-                          }`}
-                        >
-                          {history.icon} {history.department}
-                          {history.completed && <CheckCircle2 className="h-3 w-3 ml-1" />}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Department Queue Summary */}
-                {ticket.departmentQueue && ticket.departmentQueue.length > 0 && (
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium mb-2">Remaining Queue</p>
-                    <div className="flex flex-wrap gap-1">
-                      {ticket.departmentQueue
-                        .slice(ticket.currentQueueIndex || 0)
-                        .slice(0, 3)
-                        .map((dept, index) => (
-                          <Badge
-                            key={dept.departmentId}
-                            className={`text-xs ${
-                              index === 0
-                                ? "bg-blue-100 text-blue-800 border-blue-200"
-                                : "bg-gray-100 text-gray-600 border-gray-200"
-                            }`}
-                          >
-                            {dept.departmentName}
-                            {index === 0 && " (Next)"}
-                          </Badge>
-                        ))}
-                      {ticket.departmentQueue.length - (ticket.currentQueueIndex || 0) > 3 && (
-                        <Badge className="bg-gray-100 text-gray-600 border-gray-200 text-xs">
-                          +{ticket.departmentQueue.length - (ticket.currentQueueIndex || 0) - 3} more
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-2 min-w-[120px]">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onToggleExpand}
-              className="flex items-center gap-2 bg-transparent"
-            >
-              {isExpanded ? (
-                <>
-                  <X className="h-4 w-4" />
-                  <span className="hidden sm:inline">Collapse</span>
-                </>
-              ) : (
-                <>
-                  <ArrowRight className="h-4 w-4" />
-                  <span className="hidden sm:inline">Expand</span>
-                </>
-              )}
+            <Button variant="outline" size="sm" onClick={onViewDetails} className="text-xs bg-transparent">
+              <User className="h-3 w-3 mr-1" />
+              Details
             </Button>
 
-            <Button
-              onClick={onViewDetails}
-              size="sm"
-              className="bg-[#0e4480] hover:bg-blue-800 text-white flex items-center gap-2"
-            >
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Details</span>
-            </Button>
-
-            {/* Conditional Action Buttons */}
-            {ticket.held && !ticket.completed && (
+            {ticket.held && (
               <Button
-                onClick={onUnhold}
+                variant="outline"
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
+                onClick={onUnhold}
+                className="text-xs border-green-400 text-green-600 hover:bg-green-50 bg-transparent"
               >
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Unhold</span>
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Unhold
               </Button>
             )}
 
             {canBeServed && (
               <Button
-                onClick={onServe}
+                variant="outline"
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                onClick={onServe}
+                className="text-xs border-blue-400 text-blue-600 hover:bg-blue-50 bg-transparent"
               >
-                <UserCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">Serve</span>
+                <UserCheck className="h-3 w-3 mr-1" />
+                Serve
+              </Button>
+            )}
+
+            {viewMode === "list" && (
+              <Button variant="ghost" size="sm" onClick={onToggleExpand} className="text-xs">
+                {isExpanded ? "Less" : "More"}
               </Button>
             )}
           </div>

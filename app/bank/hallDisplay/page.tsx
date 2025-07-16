@@ -464,8 +464,8 @@ export default function HallDisplay() {
           <p className="text-black font-bold text-center">{alert.message}</p>
         </div>
       )}
-      <header className="bg-[#0e4480] text-white p-4 flex justify-between items-center">
-        <div className="text-2xl font-bold">Octech</div>
+      <header className="bg-[#be0028] text-white p-4 flex justify-between items-center">
+        <div className="text-2xl font-bold">Absa Bank Uganda Limited</div>
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -514,7 +514,7 @@ export default function HallDisplay() {
                     <TableRow key={ticket._id}>
                       <TableCell>{ticket.ticketNo}</TableCell>
                       <TableCell className="text-center">
-                        <ArrowRight className="mx-auto text-blue-500" />
+                        <ArrowRight className="mx-auto text-[#be0028]" />
                       </TableCell>
                       <TableCell>
                         {ticket.counterId
@@ -535,7 +535,7 @@ export default function HallDisplay() {
           </CardContent>
         </Card>
 
-        <div className="w-3/5 overflow-hidden">
+        <div className="w-3/5 overflow-hidden bg-[#9c042b]">
           <Carousel className="w-full h-full">
             <CarouselContent className="h-full">
               {ads.length > 0 ? (
@@ -601,7 +601,7 @@ export default function HallDisplay() {
         </Card>
       </main>
 
-      <footer className="bg-[#0e4480] text-white p-2 overflow-hidden">
+      <footer className="bg-[#be0028] text-white p-2 overflow-hidden">
         <Marquee
           text={settings?.notificationText || "Welcome to our service"}
         />

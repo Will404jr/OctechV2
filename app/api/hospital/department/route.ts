@@ -1,88 +1,79 @@
-import { type NextRequest, NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
-import { Department } from "@/lib/models/hospital";
+import { NextResponse } from "next/server"
+import dbConnect from "@/lib/db"
+import { Department } from "@/lib/models/hospital"
+import departmentsData from "@/data/departments"
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    await dbConnect();
-    const { searchParams } = new URL(req.url);
-    const title = searchParams.get("title");
+    await dbConnect()
 
-    if (title) {
-      const department = await Department.findOne({ title }).lean();
+    const departments = await Department.find({})
+      .populate({
+        path: "rooms.staff",
+        select: "firstName lastName username",
+      })
+      .lean()
 
-      if (!department) {
-        return NextResponse.json(
-          { error: "Department not found" },
-          { status: 404 }
-        );
-      }
-      return NextResponse.json(department);
-    } else {
-      const departments = await Department.find().lean();
-      return NextResponse.json(departments);
-    }
+    // Ensure all rooms have the available field explicitly set
+    const departmentsWithAvailability = departments.map((dept: any) => ({
+      ...dept,
+      rooms: dept.rooms.map((room: any) => ({
+        ...room,
+        available: room.available === true,
+      })),
+    }))
+
+    return NextResponse.json(departmentsWithAvailability)
   } catch (error) {
-    console.error("Error fetching departments:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error("Error fetching departments:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    await dbConnect();
-    const body = await req.json();
-    const { departmentTitle } = body;
+    await dbConnect()
+    const body = await req.json()
+    const { departmentTitle } = body
 
-    // Validate input
     if (!departmentTitle) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Department title is required" }, { status: 400 })
     }
 
     // Check if department already exists
     const existingDepartment = await Department.findOne({
       title: departmentTitle,
-    });
+    })
     if (existingDepartment) {
-      return NextResponse.json(
-        { error: "Department already exists" },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Department already exists" }, { status: 409 })
     }
 
-    // Get icon from the departments array
-    const { default: departmentsData } = await import("@/data/departments");
-    const deptData = departmentsData.find((d) => d.title === departmentTitle);
-
-    if (!deptData) {
-      return NextResponse.json(
-        { error: "Department not found in reference data" },
-        { status: 404 }
-      );
+    // Find the department data from the master list
+    const departmentData = departmentsData.find((dept) => dept.title === departmentTitle)
+    if (!departmentData) {
+      return NextResponse.json({ error: "Invalid department title" }, { status: 400 })
     }
 
-    // Create new department without initial room
-    const newDepartment = await Department.create({
-      title: departmentTitle,
-      icon: deptData.icon,
-      rooms: [],
-    });
+    // Create new department
+    const newDepartment = new Department({
+      title: departmentData.title,
+      icon: departmentData.icon,
+      rooms: [], // Start with no rooms
+    })
 
-    return NextResponse.json(
-      { success: true, data: newDepartment },
-      { status: 201 }
-    );
+    await newDepartment.save()
+
+    // Populate the staff information before returning
+    const populatedDepartment = await Department.findById(newDepartment._id)
+      .populate({
+        path: "rooms.staff",
+        select: "firstName lastName username",
+      })
+      .lean()
+
+    return NextResponse.json({ success: true, data: populatedDepartment })
   } catch (error) {
-    console.error("Error creating department:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to create department" },
-      { status: 500 }
-    );
+    console.error("Error creating department:", error)
+    return NextResponse.json({ success: false, error: "Failed to create department" }, { status: 500 })
   }
 }

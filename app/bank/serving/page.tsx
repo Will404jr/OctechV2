@@ -730,7 +730,7 @@ export default function ServingPage() {
               <CardTitle>Current Token</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-blue-600">
+              <div className="text-4xl font-bold text-[#be0028]">
                 {currentTicket ? currentTicket.ticketNo : "N/A"}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
@@ -792,7 +792,7 @@ export default function ServingPage() {
                 <div className="flex items-center bg-gray-50 p-1 rounded-lg">
                   <span className="px-3 font-medium text-gray-500">
                     Current Ticket:{" "}
-                    <span className="text-blue-600">
+                    <span className="text-[#be0028]">
                       {currentTicket.ticketNo}
                     </span>
                   </span>

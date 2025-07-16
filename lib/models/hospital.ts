@@ -316,6 +316,7 @@ export const Ticket = mongoose.models.Ticket || mongoose.model("Ticket", ticketS
 const roomSchema = new mongoose.Schema(
   {
     roomNumber: { type: String, required: true },
+    label: { type: String, required: false, default: "" },
     staff: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Staff",

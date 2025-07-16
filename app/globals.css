@@ -87,6 +87,7 @@
 .marquee-container {
   width: 100%;
   overflow: hidden;
+  background-color: #be0028;
 }
 
 .marquee-content {
@@ -96,7 +97,7 @@
 }
 
 .top-center-toast {
-  background-color: #0e4480 !important; /* Use your preferred background color */
+  background-color: #be0028 !important; /* Use your preferred background color */
   color: white !important;
   border: 2px solid #ffffff;
   border-radius: 8px;

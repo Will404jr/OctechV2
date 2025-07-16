@@ -36,6 +36,7 @@ interface Staff {
 interface Room {
   _id: string
   roomNumber: string
+  label: string
   staff: Staff
   available: boolean
   currentTicket?: string
@@ -69,7 +70,17 @@ const DepartmentsComponent = () => {
   const [selectedDepartmentForRoom, setSelectedDepartmentForRoom] = useState<string | null>(null)
   const [allStaff, setAllStaff] = useState<Staff[]>([])
   const [newRoomNumber, setNewRoomNumber] = useState("")
+  const [newRoomLabel, setNewRoomLabel] = useState("")
   const [selectedStaffId, setSelectedStaffId] = useState("")
+
+  // Edit room states
+  const [isEditingRoom, setIsEditingRoom] = useState(false)
+  const [editRoomDialogOpen, setEditRoomDialogOpen] = useState(false)
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null)
+  const [editRoomNumber, setEditRoomNumber] = useState("")
+  const [editRoomLabel, setEditRoomLabel] = useState("")
+  const [editSelectedStaffId, setEditSelectedStaffId] = useState("")
+  const [editDepartmentId, setEditDepartmentId] = useState("")
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -336,6 +347,7 @@ const DepartmentsComponent = () => {
           staffId: selectedStaffId,
           department: selectedDepartmentForRoom,
           roomNumber: newRoomNumber,
+          label: newRoomLabel,
           available: false,
         }),
       })
@@ -358,6 +370,7 @@ const DepartmentsComponent = () => {
 
       // Reset form and close dialog
       setNewRoomNumber("")
+      setNewRoomLabel("")
       setSelectedStaffId("")
       setSelectedDepartmentForRoom(null)
       setCreateRoomDialogOpen(false)
@@ -373,9 +386,81 @@ const DepartmentsComponent = () => {
     }
   }
 
+  const handleEditRoom = async () => {
+    if (!editingRoom || !editRoomNumber || !editSelectedStaffId || !editDepartmentId) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsEditingRoom(true)
+
+    try {
+      const response = await fetch(`/api/hospital/department/${editDepartmentId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "updateRoom",
+          roomId: editingRoom._id,
+          roomData: {
+            roomNumber: editRoomNumber,
+            label: editRoomLabel,
+            staff: editSelectedStaffId,
+            available: editingRoom.available, // Keep the current availability status
+          },
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update room")
+      }
+
+      toast({
+        title: "Success",
+        description: `Room ${editRoomNumber} updated successfully`,
+      })
+
+      // Update the rooms data for this department
+      const updatedRooms = await fetchDepartmentRooms(editDepartmentId)
+      setDepartmentRooms((prev) => ({ ...prev, [editDepartmentId]: updatedRooms }))
+
+      // Reset form and close dialog
+      setEditingRoom(null)
+      setEditRoomNumber("")
+      setEditRoomLabel("")
+      setEditSelectedStaffId("")
+      setEditDepartmentId("")
+      setEditRoomDialogOpen(false)
+    } catch (error: any) {
+      console.error("Error updating room:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update room",
+        variant: "destructive",
+      })
+    } finally {
+      setIsEditingRoom(false)
+    }
+  }
+
   const openCreateRoomDialog = (departmentId: string) => {
     setSelectedDepartmentForRoom(departmentId)
     setCreateRoomDialogOpen(true)
+  }
+
+  const openEditRoomDialog = (room: Room, departmentId: string) => {
+    setEditingRoom(room)
+    setEditRoomNumber(room.roomNumber)
+    setEditRoomLabel(room.label || "")
+    setEditSelectedStaffId(room.staff._id)
+    setEditDepartmentId(departmentId)
+    setEditRoomDialogOpen(true)
   }
 
   // Format staff name
@@ -470,52 +555,17 @@ const DepartmentsComponent = () => {
 
   return (
     <ProtectedRoute requiredPermission="Departments">
-    <div className="container mx-auto py-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Hospital Departments</h1>
-          <p className="text-muted-foreground mt-1">Today's rooms ({getTodayDate()})</p>
-        </div>
+      <div className="container mx-auto py-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Hospital Departments</h1>
+            <p className="text-muted-foreground mt-1">Today's rooms ({getTodayDate()})</p>
+          </div>
 
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="mt-4 md:mt-0 bg-[#0e4480]">
-              <Plus size={16} className="mr-2" /> Create Department
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create New Department</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">{renderDepartmentCombobox(true)}</div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="flex items-center mb-6 relative">
-        <Search className="absolute left-3 text-gray-400" size={18} />
-        <Input
-          placeholder="Search active departments..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      {isLoading && activeDepartments.length === 0 ? (
-        <div className="flex justify-center items-center h-40">
-          <p className="text-muted-foreground">Loading departments...</p>
-        </div>
-      ) : filteredActiveDepartments.length === 0 ? (
-        <div className="flex flex-col justify-center items-center h-40 space-y-4">
-          <Building2 size={48} className="text-muted-foreground" />
-          <p className="text-muted-foreground">
-            {searchQuery ? "No departments match your search" : "No departments have been created yet"}
-          </p>
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="bg-[#0e4480]">
-                <Plus size={16} className="mr-2" /> Create Your First Department
+              <Button className="mt-4 md:mt-0 bg-[#0e4480]">
+                <Plus size={16} className="mr-2" /> Create Department
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
@@ -526,229 +576,354 @@ const DepartmentsComponent = () => {
             </DialogContent>
           </Dialog>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredActiveDepartments.map((department) => {
-            const todaysRooms = departmentRooms[department._id] || []
 
-            return (
-              <Card key={department._id} className="hover:shadow-md transition-all">
-                <CardHeader className="pb-2 flex flex-row items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="flex items-center text-lg">
-                      <span className="text-2xl mr-2">{department.icon}</span>
-                      {department.title}
-                    </CardTitle>
-                    <CardDescription className="flex items-center gap-2 mt-1">
-                      <Clock className="h-3 w-3" />
-                      {todaysRooms.length} room{todaysRooms.length !== 1 ? "s" : ""} today
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => openCreateRoomDialog(department._id)}
-                    >
-                      <Plus size={16} />
-                    </Button>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="destructive" size="icon" className="h-8 w-8">
-                          <X size={16} />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Delete Department</DialogTitle>
-                        </DialogHeader>
-                        <div className="py-4">
-                          <p>
-                            Are you sure you want to delete the <strong>{department.title}</strong> department?
-                          </p>
-                          <p className="text-muted-foreground mt-2">This action cannot be undone.</p>
-                        </div>
-                        <DialogFooter>
-                          <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                          </DialogClose>
-                          <Button
-                            variant="destructive"
-                            onClick={() => handleDeleteDepartment(department._id)}
-                            disabled={isLoading}
-                          >
-                            {isLoading ? "Deleting..." : "Delete Department"}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </CardHeader>
-
-                {todaysRooms.length > 0 && (
-                  <>
-                    <Separator />
-                    <CardContent className="pt-4">
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-muted-foreground mb-3">Today's Rooms</h4>
-                        {todaysRooms.map((room) => (
-                          <div key={room._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-medium text-sm">Room {room.roomNumber}</span>
-                                <Badge
-                                  variant={room.available ? "default" : "secondary"}
-                                  className={`text-xs ${
-                                    room.available ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
-                                  }`}
-                                >
-                                  {room.available ? "Available" : "Unavailable"}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <User className="h-3 w-3" />
-                                <span>{formatStaffName(room.staff)}</span>
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Created: {new Date(room.createdAt).toLocaleTimeString()}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 ml-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => {
-                                  toast({
-                                    title: "Edit Room",
-                                    description: "Edit functionality to be implemented",
-                                  })
-                                }}
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Delete Room</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="py-4">
-                                    <p>
-                                      Are you sure you want to delete <strong>Room {room.roomNumber}</strong>?
-                                    </p>
-                                    <p className="text-muted-foreground mt-2">This action cannot be undone.</p>
-                                  </div>
-                                  <DialogFooter>
-                                    <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
-                                    </DialogClose>
-                                    <Button
-                                      variant="destructive"
-                                      onClick={() => handleDeleteRoom(department._id, room._id, room.roomNumber)}
-                                      disabled={isDeletingRoom === room._id}
-                                    >
-                                      {isDeletingRoom === room._id ? "Deleting..." : "Delete Room"}
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </>
-                )}
-              </Card>
-            )
-          })}
+        <div className="flex items-center mb-6 relative">
+          <Search className="absolute left-3 text-gray-400" size={18} />
+          <Input
+            placeholder="Search active departments..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
-      )}
 
-      {/* Create Room Dialog */}
-      <Dialog open={createRoomDialogOpen} onOpenChange={setCreateRoomDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Create New Room</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="room-number">Room Number</Label>
-              <Input
-                id="room-number"
-                placeholder="Enter room number (e.g., 101, A-205)"
-                value={newRoomNumber}
-                onChange={(e) => setNewRoomNumber(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="staff-select">Assign Staff</Label>
-              <Command className="rounded-lg border shadow-md">
-                <CommandInput placeholder="Search staff members..." />
-                <CommandList className="max-h-[200px] overflow-y-auto">
-                  <CommandEmpty>No staff members found.</CommandEmpty>
-                  <CommandGroup>
-                    {allStaff.map((staff) => (
-                      <CommandItem
-                        key={staff._id}
-                        value={`${staff.firstName} ${staff.lastName}`}
-                        onSelect={() => {
-                          setSelectedStaffId(staff._id)
-                        }}
-                        className="flex items-center cursor-pointer"
-                      >
-                        <User className="mr-2 h-4 w-4" />
-                        <span>{formatStaffName(staff)}</span>
-                        {selectedStaffId === staff._id && <Check className="ml-auto h-4 w-4 text-green-600" />}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </div>
-
-            {selectedStaffId && (
-              <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
-                <div className="flex items-center">
-                  <User className="mr-2 h-4 w-4" />
-                  <span className="font-medium">
-                    {formatStaffName(allStaff.find((s) => s._id === selectedStaffId)!)}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedStaffId("")}
-                  className="h-8 w-8 p-0 rounded-full"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
+        {isLoading && activeDepartments.length === 0 ? (
+          <div className="flex justify-center items-center h-40">
+            <p className="text-muted-foreground">Loading departments...</p>
           </div>
+        ) : filteredActiveDepartments.length === 0 ? (
+          <div className="flex flex-col justify-center items-center h-40 space-y-4">
+            <Building2 size={48} className="text-muted-foreground" />
+            <p className="text-muted-foreground">
+              {searchQuery ? "No departments match your search" : "No departments have been created yet"}
+            </p>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="bg-[#0e4480]">
+                  <Plus size={16} className="mr-2" /> Create Your First Department
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle>Create New Department</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">{renderDepartmentCombobox(true)}</div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredActiveDepartments.map((department) => {
+              const todaysRooms = departmentRooms[department._id] || []
 
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button onClick={handleCreateRoom} disabled={isCreatingRoom || !newRoomNumber || !selectedStaffId}>
-              {isCreatingRoom ? "Creating..." : "Create Room"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+              return (
+                <Card key={department._id} className="hover:shadow-md transition-all">
+                  <CardHeader className="pb-2 flex flex-row items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="flex items-center text-lg">
+                        <span className="text-2xl mr-2">{department.icon}</span>
+                        {department.title}
+                      </CardTitle>
+                      <CardDescription className="flex items-center gap-2 mt-1">
+                        <Clock className="h-3 w-3" />
+                        {todaysRooms.length} room{todaysRooms.length !== 1 ? "s" : ""} today
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 bg-transparent"
+                        onClick={() => openCreateRoomDialog(department._id)}
+                      >
+                        <Plus size={16} />
+                      </Button>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="destructive" size="icon" className="h-8 w-8">
+                            <X size={16} />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Delete Department</DialogTitle>
+                          </DialogHeader>
+                          <div className="py-4">
+                            <p>
+                              Are you sure you want to delete the <strong>{department.title}</strong> department?
+                            </p>
+                            <p className="text-muted-foreground mt-2">This action cannot be undone.</p>
+                          </div>
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <Button variant="outline">Cancel</Button>
+                            </DialogClose>
+                            <Button
+                              variant="destructive"
+                              onClick={() => handleDeleteDepartment(department._id)}
+                              disabled={isLoading}
+                            >
+                              {isLoading ? "Deleting..." : "Delete Department"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+
+                  {todaysRooms.length > 0 && (
+                    <>
+                      <Separator />
+                      <CardContent className="pt-4">
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-muted-foreground mb-3">Today's Rooms</h4>
+                          {todaysRooms.map((room) => (
+                            <div key={room._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium text-sm">Room {room.roomNumber}</span>
+                                  {room.label && <span className="text-xs text-muted-foreground">({room.label})</span>}
+                                  <Badge
+                                    variant={room.available ? "default" : "secondary"}
+                                    className={`text-xs ${
+                                      room.available ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                                    }`}
+                                  >
+                                    {room.available ? "Available" : "Unavailable"}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <User className="h-3 w-3" />
+                                  <span>{formatStaffName(room.staff)}</span>
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Created: {new Date(room.createdAt).toLocaleTimeString()}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 ml-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => openEditRoomDialog(room, department._id)}
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Delete Room</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="py-4">
+                                      <p>
+                                        Are you sure you want to delete <strong>Room {room.roomNumber}</strong>?
+                                      </p>
+                                      <p className="text-muted-foreground mt-2">This action cannot be undone.</p>
+                                    </div>
+                                    <DialogFooter>
+                                      <DialogClose asChild>
+                                        <Button variant="outline">Cancel</Button>
+                                      </DialogClose>
+                                      <Button
+                                        variant="destructive"
+                                        onClick={() => handleDeleteRoom(department._id, room._id, room.roomNumber)}
+                                        disabled={isDeletingRoom === room._id}
+                                      >
+                                        {isDeletingRoom === room._id ? "Deleting..." : "Delete Room"}
+                                      </Button>
+                                    </DialogFooter>
+                                  </DialogContent>
+                                </Dialog>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </>
+                  )}
+                </Card>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Create Room Dialog */}
+        <Dialog open={createRoomDialogOpen} onOpenChange={setCreateRoomDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Create New Room</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="room-number">Room Number *</Label>
+                <Input
+                  id="room-number"
+                  placeholder="Enter room number (e.g., 101, A-205)"
+                  value={newRoomNumber}
+                  onChange={(e) => setNewRoomNumber(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="room-label">Room Label (Optional)</Label>
+                <Input
+                  id="room-label"
+                  placeholder="Enter room label (e.g., Surgery Room, Consultation)"
+                  value={newRoomLabel}
+                  onChange={(e) => setNewRoomLabel(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="staff-select">Assign Staff *</Label>
+                <Command className="rounded-lg border shadow-md">
+                  <CommandInput placeholder="Search staff members..." />
+                  <CommandList className="max-h-[200px] overflow-y-auto">
+                    <CommandEmpty>No staff members found.</CommandEmpty>
+                    <CommandGroup>
+                      {allStaff.map((staff) => (
+                        <CommandItem
+                          key={staff._id}
+                          value={`${staff.firstName} ${staff.lastName}`}
+                          onSelect={() => {
+                            setSelectedStaffId(staff._id)
+                          }}
+                          className="flex items-center cursor-pointer"
+                        >
+                          <User className="mr-2 h-4 w-4" />
+                          <span>{formatStaffName(staff)}</span>
+                          {selectedStaffId === staff._id && <Check className="ml-auto h-4 w-4 text-green-600" />}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </div>
+
+              {selectedStaffId && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
+                  <div className="flex items-center">
+                    <User className="mr-2 h-4 w-4" />
+                    <span className="font-medium">
+                      {formatStaffName(allStaff.find((s) => s._id === selectedStaffId)!)}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedStaffId("")}
+                    className="h-8 w-8 p-0 rounded-full"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleCreateRoom} disabled={isCreatingRoom || !newRoomNumber || !selectedStaffId}>
+                {isCreatingRoom ? "Creating..." : "Create Room"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Room Dialog */}
+        <Dialog open={editRoomDialogOpen} onOpenChange={setEditRoomDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Room</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-room-number">Room Number *</Label>
+                <Input
+                  id="edit-room-number"
+                  placeholder="Enter room number (e.g., 101, A-205)"
+                  value={editRoomNumber}
+                  onChange={(e) => setEditRoomNumber(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-room-label">Room Label (Optional)</Label>
+                <Input
+                  id="edit-room-label"
+                  placeholder="Enter room label (e.g., Surgery Room, Consultation)"
+                  value={editRoomLabel}
+                  onChange={(e) => setEditRoomLabel(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-staff-select">Assign Staff *</Label>
+                <Command className="rounded-lg border shadow-md">
+                  <CommandInput placeholder="Search staff members..." />
+                  <CommandList className="max-h-[200px] overflow-y-auto">
+                    <CommandEmpty>No staff members found.</CommandEmpty>
+                    <CommandGroup>
+                      {allStaff.map((staff) => (
+                        <CommandItem
+                          key={staff._id}
+                          value={`${staff.firstName} ${staff.lastName}`}
+                          onSelect={() => {
+                            setEditSelectedStaffId(staff._id)
+                          }}
+                          className="flex items-center cursor-pointer"
+                        >
+                          <User className="mr-2 h-4 w-4" />
+                          <span>{formatStaffName(staff)}</span>
+                          {editSelectedStaffId === staff._id && <Check className="ml-auto h-4 w-4 text-green-600" />}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </div>
+
+              {editSelectedStaffId && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
+                  <div className="flex items-center">
+                    <User className="mr-2 h-4 w-4" />
+                    <span className="font-medium">
+                      {formatStaffName(allStaff.find((s) => s._id === editSelectedStaffId)!)}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditSelectedStaffId("")}
+                    className="h-8 w-8 p-0 rounded-full"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleEditRoom} disabled={isEditingRoom || !editRoomNumber || !editSelectedStaffId}>
+                {isEditingRoom ? "Updating..." : "Update Room"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </ProtectedRoute>
   )
 }

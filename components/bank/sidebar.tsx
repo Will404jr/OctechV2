@@ -17,7 +17,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import Octech from "@/public/octech.jpg";
+import Octech from "@/public/absa.png";
 import { QueueSpinner } from "@/components/queue-spinner";
 
 const routes = [

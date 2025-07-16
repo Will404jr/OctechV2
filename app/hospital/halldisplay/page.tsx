@@ -53,6 +53,7 @@ interface Ticket {
 interface Room {
   _id: string
   roomNumber: string
+  label?: string
   staff: {
     _id: string
     firstName: string
@@ -88,6 +89,8 @@ interface WaitingTicket {
   emergency?: boolean
   held?: boolean
   position: number
+  roomNumber?: string
+  roomLabel?: string
 }
 
 interface HeldTicket {
@@ -537,8 +540,15 @@ export default function HallDisplay() {
       // Filter for waiting tickets with improved logic
       const waitingTicketsData: WaitingTicket[] = []
 
-      // Group tickets by department
-      const ticketsByDepartment: { [key: string]: { tickets: Ticket[]; icon: string } } = {}
+      // Group tickets by department and room
+      const ticketsByDepartmentAndRoom: {
+        [key: string]: {
+          tickets: Ticket[]
+          icon: string
+          roomNumber?: string
+          roomLabel?: string
+        }
+      } = {}
 
       for (const ticket of allTickets) {
         // Skip completed, held, or tickets without department history
@@ -570,24 +580,54 @@ export default function HallDisplay() {
           continue
         }
 
-        // This is a waiting ticket (either no room assigned or assigned but not started)
-        if (!ticketsByDepartment[currentDept.department]) {
-          ticketsByDepartment[currentDept.department] = {
-            tickets: [],
-            icon: currentDept.icon || "🏥",
+        // Find room details if roomId exists
+        let roomNumber = ""
+        let roomLabel = ""
+
+        if (currentDept.roomId) {
+          // Find the room details from departments
+          for (const dept of departments) {
+            if (dept.title === currentDept.department) {
+              const room = dept.rooms.find((r) => r._id === currentDept.roomId)
+              if (room) {
+                roomNumber = room.roomNumber
+                roomLabel = room.label || ""
+                break
+              }
+            }
           }
         }
 
-        ticketsByDepartment[currentDept.department].tickets.push(ticket)
+        // Create unique key for department + room combination
+        const departmentRoomKey = currentDept.roomId
+          ? `${currentDept.department}-Room-${roomNumber}`
+          : `${currentDept.department}-General`
+
+        // This is a waiting ticket (either no room assigned or assigned but not started)
+        if (!ticketsByDepartmentAndRoom[departmentRoomKey]) {
+          ticketsByDepartmentAndRoom[departmentRoomKey] = {
+            tickets: [],
+            icon: currentDept.icon || "🏥",
+            roomNumber: roomNumber || undefined,
+            roomLabel: roomLabel || undefined,
+          }
+        }
+
+        ticketsByDepartmentAndRoom[departmentRoomKey].tickets.push(ticket)
       }
 
       // Convert to waiting tickets with position and waiting time
-      for (const [department, data] of Object.entries(ticketsByDepartment)) {
+      for (const [departmentRoomKey, data] of Object.entries(ticketsByDepartmentAndRoom)) {
         // Sort by creation time (oldest first)
         data.tickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
         data.tickets.forEach((ticket, index) => {
           const waitingTime = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000)
+
+          // Extract department name from key
+          const department = departmentRoomKey.includes("-Room-")
+            ? departmentRoomKey.split("-Room-")[0]
+            : departmentRoomKey.replace("-General", "")
 
           waitingTicketsData.push({
             ticketId: ticket._id,
@@ -599,6 +639,8 @@ export default function HallDisplay() {
             emergency: ticket.emergency,
             held: ticket.held,
             position: index + 1,
+            roomNumber: data.roomNumber,
+            roomLabel: data.roomLabel,
           })
         })
       }
@@ -607,7 +649,7 @@ export default function HallDisplay() {
     } catch (error) {
       console.error("Error fetching waiting tickets:", error)
     }
-  }, [])
+  }, [departments])
 
   const fetchHeldTickets = useCallback(async () => {
     try {
@@ -941,7 +983,7 @@ export default function HallDisplay() {
             </CardContent>
           </Card>
 
-          {/* Waiting Tickets Display - Shows All Departments */}
+          {/* Waiting Tickets Display - Shows All Departments and Rooms */}
           <div className="w-3/5 overflow-hidden">
             <Card className="h-full">
               <CardHeader className="pb-3">
@@ -962,74 +1004,102 @@ export default function HallDisplay() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {Object.entries(waitingTicketsByDepartment).map(([department, tickets]) => (
-                      <div key={department} className="bg-white rounded-lg border border-gray-200 p-4">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
-                          <span className="text-2xl">{tickets[0]?.departmentIcon || "🏥"}</span>
-                          <h3 className="text-lg font-semibold text-gray-800">{department}</h3>
-                          <Badge variant="outline" className="ml-auto">
-                            {tickets.length} waiting
-                          </Badge>
-                        </div>
+                    {(() => {
+                      // Group tickets by department and room
+                      const groupedTickets: { [key: string]: WaitingTicket[] } = {}
 
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {tickets.slice(0, 6).map((ticket, index) => (
-                            <div
-                              key={ticket.ticketId}
-                              className={`
-                                flex items-center justify-between p-2 rounded-md transition-all duration-300
-                                ${
-                                  ticket.emergency
-                                    ? "bg-red-50 border border-red-200"
-                                    : index === 0
-                                      ? "bg-blue-50 border border-blue-200"
-                                      : "bg-gray-50 border border-gray-100"
-                                }
-                              `}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={`
-                                    w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
-                                    ${
-                                      ticket.emergency
-                                        ? "bg-red-500 text-white"
-                                        : index === 0
-                                          ? "bg-blue-500 text-white"
-                                          : "bg-gray-400 text-white"
-                                    }
-                                  `}
+                      waitingTickets.forEach((ticket) => {
+                        const key = ticket.roomNumber
+                          ? `${ticket.department} - Room ${ticket.roomNumber}`
+                          : ticket.department
+
+                        if (!groupedTickets[key]) {
+                          groupedTickets[key] = []
+                        }
+                        groupedTickets[key].push(ticket)
+                      })
+
+                      return Object.entries(groupedTickets).map(([departmentRoom, tickets]) => (
+                        <div key={departmentRoom} className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                            <span className="text-2xl">{tickets[0]?.departmentIcon || "🏥"}</span>
+                            <div className="flex flex-col flex-1">
+                              <h3 className="text-lg font-semibold text-gray-800">{departmentRoom}</h3>
+                              {tickets[0]?.roomLabel && (
+                                <Badge
+                                  variant="outline"
+                                  className="w-fit mt-1 font-bold text-md bg-yellow-50 border-yellow-200 text-yellow-800"
                                 >
-                                  {ticket.position}
-                                </div>
+                                  {tickets[0].roomLabel}
+                                </Badge>
+                              )}
+                            </div>
+                            <Badge variant="outline" className="ml-auto">
+                              {tickets.length} waiting
+                            </Badge>
+                          </div>
 
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-2xl font-bold text-gray-800">{ticket.ticketNo}</span>
-                                    {ticket.emergency && (
-                                      <Badge variant="destructive" className="text-xs animate-pulse">
-                                        EMG
-                                      </Badge>
-                                    )}
-                                    {index === 0 && (
-                                      <Badge variant="default" className="text-xs bg-blue-500">
-                                        NEXT
-                                      </Badge>
-                                    )}
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {tickets.slice(0, 6).map((ticket, index) => (
+                              <div
+                                key={ticket.ticketId}
+                                className={`
+                                  flex items-center justify-between p-2 rounded-md transition-all duration-300
+                                  ${
+                                    ticket.emergency
+                                      ? "bg-red-50 border border-red-200"
+                                      : index === 0
+                                        ? "bg-blue-50 border border-blue-200"
+                                        : "bg-gray-50 border border-gray-100"
+                                  }
+                                `}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className={`
+                                      w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+                                      ${
+                                        ticket.emergency
+                                          ? "bg-red-500 text-white"
+                                          : index === 0
+                                            ? "bg-blue-500 text-white"
+                                            : "bg-gray-400 text-white"
+                                      }
+                                    `}
+                                  >
+                                    {ticket.position}
+                                  </div>
+
+                                  <div className="flex flex-col">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-2xl font-bold text-gray-800">{ticket.ticketNo}</span>
+                                      {ticket.emergency && (
+                                        <Badge variant="destructive" className="text-xs animate-pulse">
+                                          EMG
+                                        </Badge>
+                                      )}
+                                      {index === 0 && (
+                                        <Badge variant="default" className="text-xs bg-blue-500">
+                                          NEXT
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </div>
-                          ))}
 
-                          {tickets.length > 6 && (
-                            <div className="text-center py-2 text-gray-500">
-                              <p className="text-xs">+ {tickets.length - 6} more</p>
-                            </div>
-                          )}
+                                {/* <div className="text-xs text-gray-500">{formatTime(ticket.waitingTime)}</div> */}
+                              </div>
+                            ))}
+
+                            {tickets.length > 6 && (
+                              <div className="text-center py-2 text-gray-500">
+                                <p className="text-xs">+ {tickets.length - 6} more</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    })()}
                   </div>
                 )}
               </CardContent>

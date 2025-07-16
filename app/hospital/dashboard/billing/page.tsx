@@ -130,10 +130,7 @@ const PendingDepartmentsList = ({ ticket }: { ticket: Ticket }) => {
   // Fallback to checking department history
   const pendingDepartments =
     ticket.departmentHistory?.filter(
-      (history) =>
-        !history.completed &&
-        history.department !== "Reception" &&
-        (history.cashCleared === null || history.cashCleared === undefined),
+      (history) => !history.completed && history.department !== "Reception" && history.cashCleared !== "Cleared",
     ) || []
 
   if (pendingDepartments.length === 0) {
@@ -189,11 +186,7 @@ const SelectiveClearingDialog = ({
     // Fallback to history if no queue items
     if (pending.length === 0 && ticket.departmentHistory) {
       ticket.departmentHistory.forEach((historyItem) => {
-        if (
-          !historyItem.completed &&
-          historyItem.department !== "Reception" &&
-          (historyItem.cashCleared === null || historyItem.cashCleared === undefined)
-        ) {
+        if (!historyItem.completed && historyItem.department !== "Reception" && historyItem.cashCleared !== "Cleared") {
           pending.push({
             name: historyItem.department,
             icon: historyItem.icon,
@@ -400,12 +393,11 @@ const BillingPage: React.FC = () => {
           if (hasUncleared) return true
         }
 
-        // Fallback: check department history for pending payments
+        // Check department history for pending payments
+        // A ticket needs payment clearance if it has any non-completed department
+        // (except Reception) that doesn't have cashCleared set to "Cleared"
         const hasPendingPayment = ticket.departmentHistory?.some(
-          (history) =>
-            !history.completed &&
-            history.department !== "Reception" &&
-            (history.cashCleared === null || history.cashCleared === undefined),
+          (history) => !history.completed && history.department !== "Reception" && history.cashCleared !== "Cleared",
         )
 
         return hasPendingPayment
@@ -414,6 +406,18 @@ const BillingPage: React.FC = () => {
       // Sort by creation time (oldest first)
       pendingPaymentTickets.sort(
         (a: Ticket, b: Ticket) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      )
+
+      console.log(
+        "Filtered pending payment tickets:",
+        pendingPaymentTickets.map((t: { ticketNo: any; departmentHistory: any[] }) => ({
+          ticketNo: t.ticketNo,
+          departmentHistory: t.departmentHistory?.map((h: { department: any; completed: any; cashCleared: any }) => ({
+            department: h.department,
+            completed: h.completed,
+            cashCleared: h.cashCleared,
+          })),
+        })),
       )
 
       setPendingPaymentTickets(pendingPaymentTickets)
@@ -750,7 +754,7 @@ const BillingPage: React.FC = () => {
               </TabsList>
 
               <TabsContent value="pending" className="p-4 sm:p-6 pt-0">
-                {/* <div className="mb-4">
+                <div className="mb-4">
                   <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                     <CreditCard className="h-5 w-5 text-[#0e4480]" />
                     Pending Payment Clearance
@@ -758,7 +762,7 @@ const BillingPage: React.FC = () => {
                   <p className="text-slate-500 text-sm mt-1">
                     Cash patients waiting for payment clearance before they can be served
                   </p>
-                </div> */}
+                </div>
 
                 {pendingPaymentTickets.length > 0 ? (
                   <div className="space-y-4">
@@ -779,7 +783,7 @@ const BillingPage: React.FC = () => {
                             (history) =>
                               !history.completed &&
                               history.department !== "Reception" &&
-                              (history.cashCleared === null || history.cashCleared === undefined),
+                              history.cashCleared !== "Cleared",
                           ).length || 0
                       }
 
@@ -856,7 +860,7 @@ const BillingPage: React.FC = () => {
                                                 (h) =>
                                                   !h.completed &&
                                                   h.department !== "Reception" &&
-                                                  (h.cashCleared === null || h.cashCleared === undefined),
+                                                  h.cashCleared !== "Cleared",
                                               )?.department || "",
                                             )
                                       }
@@ -899,7 +903,7 @@ const BillingPage: React.FC = () => {
                                               (h) =>
                                                 !h.completed &&
                                                 h.department !== "Reception" &&
-                                                (h.cashCleared === null || h.cashCleared === undefined),
+                                                h.cashCleared !== "Cleared",
                                             )?.department || "",
                                           )
                                     }

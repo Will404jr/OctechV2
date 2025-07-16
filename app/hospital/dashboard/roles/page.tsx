@@ -41,6 +41,7 @@ const menuItems = [
   "UpcomingEvents",
   "Ads",
   "Settings",
+  "Billing"
 ];
 
 export default function RolesPage() {
