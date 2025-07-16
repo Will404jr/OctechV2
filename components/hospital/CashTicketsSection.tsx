@@ -5,7 +5,8 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, ArrowRight, Clock, User, Volume2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Users, ArrowRight, Clock, User, Volume2, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DepartmentSelectionDialog } from "./DepartmentSelectionDialog"
@@ -199,6 +200,7 @@ export const CashTicketsSection: React.FC<CashTicketsSectionProps> = ({ cashTick
   const [selectedCashTicket, setSelectedCashTicket] = useState<Ticket | null>(null)
   const [showCashDetailsDialog, setShowCashDetailsDialog] = useState(false)
   const [showCashClearDialog, setShowCashClearDialog] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
 
   const handleEndCashVisit = async (ticketId: string) => {
@@ -314,8 +316,19 @@ export const CashTicketsSection: React.FC<CashTicketsSectionProps> = ({ cashTick
     }
   }
 
-  // Filter to ensure only Cash userType tickets are included
-  const filteredCashTickets = cashTickets.filter((ticket) => ticket.userType === "Cash")
+  // Filter to ensure only Cash userType tickets are included and apply search
+  const filteredCashTickets = cashTickets
+    .filter((ticket) => ticket.userType === "Cash")
+    .filter((ticket) => {
+      if (!searchTerm) return true
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        ticket.ticketNo.toLowerCase().includes(searchLower) ||
+        ticket.patientName?.toLowerCase().includes(searchLower) ||
+        ticket.reasonforVisit?.toLowerCase().includes(searchLower) ||
+        ticket.departmentHistory?.some((dept) => dept.department.toLowerCase().includes(searchLower))
+      )
+    })
 
   return (
     <>
@@ -329,166 +342,180 @@ export const CashTicketsSection: React.FC<CashTicketsSectionProps> = ({ cashTick
             {filteredCashTickets.length} cash ticket{filteredCashTickets.length !== 1 ? "s" : ""} in system
           </CardDescription>
         </CardHeader> */}
-        <CardContent className="p-6 bg-white overflow-auto max-h-[600px]">
-          {filteredCashTickets.length > 0 ? (
-            <div className="space-y-4">
-              {filteredCashTickets.map((ticket) => {
-                const currentDept = ticket.departmentHistory?.find((h) => !h.completed)
-                const waitingTime = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000)
+        <CardContent className="p-6 bg-white">
+          {/* Search Bar */}
+          <div className="mb-4 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search by ticket number, patient name, reason, or department..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            />
+          </div>
 
-                return (
-                  <Card key={ticket._id} className="border-l-4 border-l-green-400 bg-green-50/30 shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-[#0e4480]">{ticket.ticketNo}</h3>
-                            <Badge className="bg-green-100 text-green-800 border-green-200">Cash</Badge>
-                            {ticket.emergency && (
-                              <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">
-                                🚨 EMERGENCY
+          <div className="overflow-auto max-h-[600px]">
+            {filteredCashTickets.length > 0 ? (
+              <div className="space-y-4">
+                {filteredCashTickets.map((ticket) => {
+                  const currentDept = ticket.departmentHistory?.find((h) => !h.completed)
+                  const waitingTime = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 1000)
+
+                  return (
+                    <Card key={ticket._id} className="border-l-4 border-l-green-400 bg-green-50/30 shadow-sm">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-semibold text-[#0e4480]">{ticket.ticketNo}</h3>
+                              <Badge className="bg-green-100 text-green-800 border-green-200">Cash</Badge>
+                              {ticket.emergency && (
+                                <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">
+                                  🚨 EMERGENCY
+                                </Badge>
+                              )}
+                              {ticket.call && (
+                                <Badge className="bg-emerald-100 text-emerald-700 px-3 py-1 text-xs">Called</Badge>
+                              )}
+                            </div>
+
+                            {ticket.patientName && (
+                              <p className="text-sm text-slate-600 mb-1">Patient: {ticket.patientName}</p>
+                            )}
+
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm text-slate-500">Status:</span>
+                              <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                {currentDept ? currentDept.department : "Completed"}
                               </Badge>
-                            )}
-                            {ticket.call && (
-                              <Badge className="bg-emerald-100 text-emerald-700 px-3 py-1 text-xs">Called</Badge>
-                            )}
+                              {currentDept?.cashCleared === "Cleared" && (
+                                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                                  Payment Cleared
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                              <Clock className="h-4 w-4" />
+                              <span>Waiting: {formatDuration(waitingTime)}</span>
+                            </div>
                           </div>
 
-                          {ticket.patientName && (
-                            <p className="text-sm text-slate-600 mb-1">Patient: {ticket.patientName}</p>
-                          )}
-
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm text-slate-500">Status:</span>
-                            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                              {currentDept ? currentDept.department : "Completed"}
-                            </Badge>
-                            {currentDept?.cashCleared === "Cleared" && (
-                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
-                                Payment Cleared
-                              </Badge>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <Clock className="h-4 w-4" />
-                            <span>Waiting: {formatDuration(waitingTime)}</span>
-                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => callTicket(ticket._id)}
+                            disabled={ticket.call}
+                            className="border-[#0e4480] text-[#0e4480] hover:bg-blue-50 bg-transparent"
+                          >
+                            <Volume2 className="h-4 w-4 mr-1" />
+                            Call
+                          </Button>
                         </div>
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => callTicket(ticket._id)}
-                          disabled={ticket.call}
-                          className="border-[#0e4480] text-[#0e4480] hover:bg-blue-50 bg-transparent"
-                        >
-                          <Volume2 className="h-4 w-4 mr-1" />
-                          Call
-                        </Button>
-                      </div>
-
-                      {/* Ticket Journey */}
-                      {ticket.departmentHistory && ticket.departmentHistory.length > 0 && (
-                        <div className="mb-3 p-3 bg-blue-50 rounded-lg">
-                          <h4 className="font-medium text-blue-800 mb-2 text-sm">Journey</h4>
-                          <div className="space-y-2">
-                            {ticket.departmentHistory.map((history, index) => (
-                              <div key={index} className="flex items-center justify-between text-sm">
-                                <span className="flex items-center gap-1">
-                                  {history.icon && <span className="text-sm">{history.icon}</span>}
-                                  {history.department}
-                                  {history.completed && (
-                                    <Badge className="ml-1 bg-green-100 text-green-800 border-green-200 text-xs">
-                                      ✓
-                                    </Badge>
-                                  )}
-                                  {!history.completed && (
-                                    <Badge className="ml-1 bg-blue-100 text-blue-800 border-blue-200 text-xs">
-                                      Current
-                                    </Badge>
-                                  )}
-                                  {history.cashCleared === "Cleared" && (
-                                    <Badge className="ml-1 bg-emerald-100 text-emerald-800 border-emerald-200 text-xs">
-                                      Paid
-                                    </Badge>
-                                  )}
-                                  {history.roomId && (
-                                    <DepartmentRoomBadge
-                                      department={history.department}
-                                      roomIdPartial={(() => {
-                                        if (!history.roomId) return "unknown"
-                                        if (typeof history.roomId === "string") {
-                                          return history.roomId.substring(0, 6)
-                                        }
-                                        if (typeof history.roomId === "object") {
-                                          if (history.roomId && "oid" in history.roomId) {
-                                            return (history.roomId as any).$oid.substring(0, 6)
+                        {/* Ticket Journey */}
+                        {ticket.departmentHistory && ticket.departmentHistory.length > 0 && (
+                          <div className="mb-3 p-3 bg-blue-50 rounded-lg">
+                            <h4 className="font-medium text-blue-800 mb-2 text-sm">Journey</h4>
+                            <div className="space-y-2">
+                              {ticket.departmentHistory.map((history, index) => (
+                                <div key={index} className="flex items-center justify-between text-sm">
+                                  <span className="flex items-center gap-1">
+                                    {history.icon && <span className="text-sm">{history.icon}</span>}
+                                    {history.department}
+                                    {history.completed && (
+                                      <Badge className="ml-1 bg-green-100 text-green-800 border-green-200 text-xs">
+                                        ✓
+                                      </Badge>
+                                    )}
+                                    {!history.completed && (
+                                      <Badge className="ml-1 bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                                        Current
+                                      </Badge>
+                                    )}
+                                    {history.cashCleared === "Cleared" && (
+                                      <Badge className="ml-1 bg-emerald-100 text-emerald-800 border-emerald-200 text-xs">
+                                        Paid
+                                      </Badge>
+                                    )}
+                                    {history.roomId && (
+                                      <DepartmentRoomBadge
+                                        department={history.department}
+                                        roomIdPartial={(() => {
+                                          if (!history.roomId) return "unknown"
+                                          if (typeof history.roomId === "string") {
+                                            return history.roomId.substring(0, 6)
                                           }
-                                          return JSON.stringify(history.roomId).substring(0, 6)
-                                        }
-                                        return String(history.roomId).substring(0, 6)
-                                      })()}
-                                    />
-                                  )}
-                                </span>
-                                <span className="text-xs text-slate-500">
-                                  {new Date(history.timestamp).toLocaleTimeString()}
-                                </span>
-                              </div>
-                            ))}
+                                          if (typeof history.roomId === "object") {
+                                            if (history.roomId && "oid" in history.roomId) {
+                                              return (history.roomId as any).$oid.substring(0, 6)
+                                            }
+                                            return JSON.stringify(history.roomId).substring(0, 6)
+                                          }
+                                          return String(history.roomId).substring(0, 6)
+                                        })()}
+                                      />
+                                    )}
+                                  </span>
+                                  <span className="text-xs text-slate-500">
+                                    {new Date(history.timestamp).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2 mt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedCashTicket(ticket)
-                            setShowCashDetailsDialog(true)
-                          }}
-                          className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                        >
-                          More Details
-                        </Button>
-                        {currentDept && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedCashTicket(ticket)
-                                setShowCashClearDialog(true)
-                              }}
-                              className="border-amber-300 text-amber-600 hover:bg-amber-50"
-                            >
-                              <ArrowRight className="h-4 w-4 mr-1" />
-                              Clear
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEndCashVisit(ticket._id)}
-                              className="border-green-300 text-green-600 hover:bg-green-50"
-                            >
-                              End Visit
-                            </Button>
-                          </>
                         )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-              <Users className="h-12 w-12 mb-4 opacity-30" />
-              <p>No cash tickets in the system</p>
-            </div>
-          )}
+
+                        <div className="flex gap-2 mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedCashTicket(ticket)
+                              setShowCashDetailsDialog(true)
+                            }}
+                            className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                          >
+                            More Details
+                          </Button>
+                          {currentDept && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedCashTicket(ticket)
+                                  setShowCashClearDialog(true)
+                                }}
+                                className="border-amber-300 text-amber-600 hover:bg-amber-50"
+                              >
+                                <ArrowRight className="h-4 w-4 mr-1" />
+                                Clear
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEndCashVisit(ticket._id)}
+                                className="border-green-300 text-green-600 hover:bg-green-50"
+                              >
+                                End Visit
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                <Users className="h-12 w-12 mb-4 opacity-30" />
+                <p>{searchTerm ? "No cash tickets found matching your search" : "No cash tickets in the system"}</p>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

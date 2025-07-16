@@ -49,7 +49,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
           roomId: departments[i].roomId || null,
           processed: false,
           order: i,
-          clearPayment: null, // Initialize as null
+          clearPayment: cashCleared === "Cleared" ? "Cleared" : null, // Set clearPayment based on cashCleared
         })
       }
 
@@ -161,12 +161,19 @@ async function processNextDepartment(ticket: any, department: any, roomId: strin
     })
   }
 
-  // Check if this department is in the queue and get its clearPayment status
+  // Check if this department is in the queue and update its clearPayment status
   let queueClearPaymentStatus = null
   if (ticket.departmentQueue && ticket.departmentQueue.length > 0) {
     const queueItem = ticket.departmentQueue.find((item: any) => item.departmentName === department.title)
     if (queueItem) {
       queueClearPaymentStatus = queueItem.clearPayment
+
+      // FIXED: If cashCleared is explicitly set to "Cleared", update the queue item
+      if (cashCleared === "Cleared") {
+        queueItem.clearPayment = "Cleared"
+        console.log(`Updated queue clearPayment for ${department.title} to "Cleared"`)
+        queueClearPaymentStatus = "Cleared"
+      }
     }
   }
 
@@ -225,6 +232,7 @@ async function processNextDepartment(ticket: any, department: any, roomId: strin
 
   console.log(`Ticket ${ticket._id} successfully moved to ${department.title}`)
   console.log(`Cash cleared status: ${newCashCleared}`)
+  console.log(`Queue clearPayment status: ${queueClearPaymentStatus}`)
 
   return NextResponse.json({ success: true, ticket }, { status: 200 })
 }
