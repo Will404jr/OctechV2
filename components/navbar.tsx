@@ -88,7 +88,8 @@ export function Navbar({ userId }: NavbarProps) {
   };
 
   return (
-    <nav className="bg-[#be0028] border-b border-[#be0028]">
+    // <nav className="bg-[#1155a3] border-b-4 border-[#8dc63f]">
+      <nav className="bg-gradient-to-br from-blue-800 via-green-400 to-blue-800">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <Link
@@ -106,7 +107,7 @@ export function Navbar({ userId }: NavbarProps) {
                   className="flex items-center gap-2 text-white hover:bg-blue-700 hover:text-white"
                 >
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-white text-[#be0028]">
+                    <AvatarFallback className="bg-white text-[#1155a3]">
                       {userData ? getInitials(userData.username) : "..."}
                     </AvatarFallback>
                   </Avatar>

@@ -20,6 +20,7 @@ import {
   User,
   RefreshCw,
   ArrowLeft,
+  Menu,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
@@ -28,6 +29,17 @@ import type { SessionData } from "@/lib/session"
 import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelectionDialog"
 import { Navbar } from "@/components/hospitalNavbar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer"
+import QueueDisplay from "@/components/hospital/QueueDisplay"
 
 interface DepartmentHistoryEntry {
   department: string
@@ -1281,6 +1293,28 @@ const ServingPage: React.FC = () => {
                   <Users className="h-4 w-4" />
                   <span className="hidden sm:inline">Control Panel</span>
                 </Button>
+                <Drawer>
+                  <DrawerTrigger asChild>
+                    <Button variant="outline" className="gap-2 bg-transparent shrink-0">
+                      <Menu className="h-4 w-4" />
+                      <span className="hidden sm:inline">View Queues</span>
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent className="max-h-[90vh]">
+                    <DrawerHeader>
+                      <DrawerTitle>Department Queues</DrawerTitle>
+                      <DrawerDescription>Real-time view of all department and room queues</DrawerDescription>
+                    </DrawerHeader>
+                    <div className="px-4 pb-4 overflow-y-auto">
+                      <QueueDisplay />
+                    </div>
+                    <DrawerFooter>
+                      <DrawerClose asChild>
+                        <Button variant="outline">Close</Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
               </div>
             </div>
           </div>
@@ -1520,9 +1554,9 @@ const ServingPage: React.FC = () => {
                       <Users className="h-4 w-4 mr-2" />
                       {currentTicket.departmentQueue && currentTicket.departmentQueue.length > 0
                         ? isAtLastDepartmentInQueue(currentTicket)
-                          ? "Clear"
-                          : "Clear"
-                        : "Clear"}
+                          ? "Next Step"
+                          : "Next in Queue"
+                        : "Next Step"}
                     </Button>
 
                     {/* Clear Ticket Button */}
@@ -1531,7 +1565,7 @@ const ServingPage: React.FC = () => {
                       className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      End Visit
+                      Clear Ticket
                     </Button>
                   </div>
                 </CardFooter>

@@ -21,6 +21,7 @@ import {
   ArrowRight,
   User,
   ArrowLeft,
+  Menu,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QueueSpinner } from "@/components/queue-spinner"
@@ -30,6 +31,17 @@ import { DepartmentSelectionDialog } from "@/components/hospital/DepartmentSelec
 import { InsuranceTicketsSection } from "@/components/hospital/InsuranceTicketsSection"
 import { Navbar } from "@/components/hospitalNavbar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer"
+import QueueDisplay from "@/components/hospital/QueueDisplay"
 
 interface Ticket {
   createdAt: string | number | Date
@@ -49,6 +61,8 @@ interface Ticket {
     note?: string
     completed?: boolean
     roomId?: string
+    cashCleared?: string | null
+    paidAt?: string | null
   }[]
   userType?: string
   departmentQueue?: string[]
@@ -1167,6 +1181,28 @@ const ReceptionistPage: React.FC = () => {
                   Control Panel
                 </Button>
               )}
+              <Drawer>
+                <DrawerTrigger asChild>
+                  <Button variant="outline" className="gap-2 bg-transparent">
+                    <Menu className="h-4 w-4" />
+                    View Queues
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent className="max-h-[90vh]">
+                  <DrawerHeader>
+                    <DrawerTitle>Department Queues</DrawerTitle>
+                    <DrawerDescription>Real-time view of all department and room queues</DrawerDescription>
+                  </DrawerHeader>
+                  <div className="px-4 pb-4 overflow-y-auto">
+                    <QueueDisplay />
+                  </div>
+                  <DrawerFooter>
+                    <DrawerClose asChild>
+                      <Button variant="outline">Close</Button>
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
             </div>
           </div>
 
@@ -1488,7 +1524,7 @@ const ReceptionistPage: React.FC = () => {
               <InsuranceTicketsSection
                 insuranceTickets={insuranceTickets}
                 departments={departments}
-                onRefresh={async () => { await fetchTickets() }}
+                onRefresh={async () => { await fetchTickets(); }}
               />
             </div>
           </div>

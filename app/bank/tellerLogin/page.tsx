@@ -224,7 +224,7 @@ export default function TellerLoginPage() {
                   )}
                 />
               </div>
-              <Button type="submit" className="w-full bg-[#be0028]">
+              <Button type="submit" className="w-full text-lg bg-gradient-to-br from-blue-800 via-green-400 to-blue-800">
                 Login
               </Button>
             </form>
@@ -277,7 +277,7 @@ export default function TellerLoginPage() {
                   )}
                 />
               </div>
-              <Button type="submit" className="w-full bg-[#be0028]">
+              <Button type="submit" className="w-full text-lg bg-[#1155a3]">
                 Start Serving
               </Button>
             </form>

@@ -17,7 +17,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import Octech from "@/public/absa.png";
+import Octech from "@/public/ftb.png";
 import { QueueSpinner } from "@/components/queue-spinner";
 
 const routes = [
@@ -116,7 +116,7 @@ export function Sidebar() {
 
   return (
     <div className="space-y-4 py-4 flex flex-col h-full bg-white border-r">
-      <div className="px-3 py-2">
+      <div className="px-3 py-2items-center flex justify-center">
         <Link href="/bank/dashboard">
           <Image src={Octech} alt="octech logo" height={100} />
         </Link>

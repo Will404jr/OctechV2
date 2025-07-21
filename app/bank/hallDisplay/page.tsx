@@ -464,8 +464,8 @@ export default function HallDisplay() {
           <p className="text-black font-bold text-center">{alert.message}</p>
         </div>
       )}
-      <header className="bg-[#be0028] text-white p-4 flex justify-between items-center">
-        <div className="text-2xl font-bold">Absa Bank Uganda Limited</div>
+      <header className="bg-[#1155a3] border-b-4 border-[#8dc63f] text-white p-4 flex justify-between items-center">
+        <div className="text-2xl font-bold">Finance Trust Bank</div>
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -514,7 +514,7 @@ export default function HallDisplay() {
                     <TableRow key={ticket._id}>
                       <TableCell>{ticket.ticketNo}</TableCell>
                       <TableCell className="text-center">
-                        <ArrowRight className="mx-auto text-[#be0028]" />
+                        <ArrowRight className="mx-auto text-[#1155a3]" />
                       </TableCell>
                       <TableCell>
                         {ticket.counterId

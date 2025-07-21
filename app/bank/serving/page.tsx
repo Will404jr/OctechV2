@@ -730,7 +730,7 @@ export default function ServingPage() {
               <CardTitle>Current Token</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-[#be0028]">
+              <div className="text-4xl font-bold text-[#1155a3]">
                 {currentTicket ? currentTicket.ticketNo : "N/A"}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
@@ -792,7 +792,7 @@ export default function ServingPage() {
                 <div className="flex items-center bg-gray-50 p-1 rounded-lg">
                   <span className="px-3 font-medium text-gray-500">
                     Current Ticket:{" "}
-                    <span className="text-[#be0028]">
+                    <span className="text-[#1155a3]">
                       {currentTicket.ticketNo}
                     </span>
                   </span>
@@ -800,7 +800,7 @@ export default function ServingPage() {
                     <Button
                       onClick={clearTicket}
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700 flex items-center px-3"
+                      className="bg-green-600 hover:bg-[#8dc63f] flex items-center px-3"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -821,7 +821,7 @@ export default function ServingPage() {
                     <Button
                       onClick={callAgain}
                       size="sm"
-                      className="bg-blue-600 hover:bg-blue-700 flex items-center"
+                      className="bg-blue-600 hover:bg-[#1155a3] flex items-center"
                     >
                       <PhoneCall className="mr-1 h-4 w-4" />
                       Call Again
